@@ -13,5 +13,6 @@ export const queryKeys = {
   sessionCommands: (id: string) => ['sessions', id, 'commands'] as const,
   rules: ['command-rules'] as const,
   gateway: ['gateway-info'] as const,
+  directory: ['directory'] as const,
   users: { all: ['users'] as const, list: (q: PageQuery) => ['users', 'list', q] as const },
 };

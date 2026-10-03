@@ -50,7 +50,36 @@ class User(Base):
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(TZ)
     last_login_at: Mapped[datetime | None] = mapped_column(TZ)
+    auth_source: Mapped[str] = mapped_column(String(10), default="local")
+    external_id: Mapped[str | None] = mapped_column(Text)
+    directory_synced_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
+
+
+class DirectoryConfig(Base):
+    __tablename__ = "directory_config"
+    __table_args__ = {"schema": "iam"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    server_url: Mapped[str] = mapped_column(Text)
+    start_tls: Mapped[bool] = mapped_column(Boolean, default=False)
+    verify_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    ca_cert_pem: Mapped[str | None] = mapped_column(Text)
+    bind_dn: Mapped[str] = mapped_column(Text)
+    bind_secret_version: Mapped[int | None] = mapped_column(Integer)
+    user_base_dn: Mapped[str] = mapped_column(Text)
+    user_filter: Mapped[str] = mapped_column(Text)
+    attr_username: Mapped[str] = mapped_column(String(64))
+    attr_email: Mapped[str] = mapped_column(String(64), default="mail")
+    attr_full_name: Mapped[str] = mapped_column(String(64), default="displayName")
+    group_base_dn: Mapped[str | None] = mapped_column(Text)
+    group_filter: Mapped[str | None] = mapped_column(Text)
+    role_mappings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    default_role: Mapped[str | None] = mapped_column(String(20))
+    timeout_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
 
 

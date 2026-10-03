@@ -17,6 +17,13 @@ Same stack as MonetX so engineers move between them freely.
   recovery codes, wrong codes count towards lockout. `WARDX_MFA_REQUIRED_ROLES=["admin"]` forces
   enrolment: those users can only reach the Security page until MFA is on. Admins can reset a
   user's MFA (lost phone). The gateway drops a connection after 3 failed auth attempts.
+- **Directory sign-in (LDAP / Active Directory):** configured in the console (Directory page, AD and
+  OpenLDAP presets, "test a user" lookup). Search-then-bind with RFC 4515 filter escaping; empty
+  passwords refused before any bind; ambiguous matches refused. Groups (AD `memberOf`, or a group
+  search for OpenLDAP `groupOfNames`) map to WardX roles, highest wins, refreshed every sign-in —
+  removing someone from the group locks them out at their next sign-in. Users are created on first
+  sign-in; local accounts always win a name clash. Lockout, MFA and audit apply; the service
+  account's password is kept in the vault. Works for console and SSH gateway logins alike.
 - **Vault:** envelope encryption — AES-256-GCM per secret version with its own data key, wrapped by
   a key-encryption key (KEK). Owner + version bound as associated data, so a ciphertext moved to
   another account fails to open. KEK rotation via retired keys. HSM / KMS slot in behind `Keyring`.
@@ -81,5 +88,6 @@ cd Frontend && npm run build                  # tsc strict + vite build
 1. Telnet through the gateway; vendor-aware prompts for enable/privilege levels (Cisco, Huawei).
 2. Password rotation drivers (network devices via Netmiko, Linux, Windows/AD) with verify + rollback.
 3. Discovery (subnets, AD, MonetX device registry sync via `targets.external_ref`).
-4. WebAuthn / passkeys; LDAP / SAML / OIDC sign-in.
+4. WebAuthn / passkeys; SAML / OIDC single sign-on; scheduled directory sync (disable leavers
+   without waiting for their next sign-in).
 5. RDP gateway (guacd), break-glass, SIEM export.

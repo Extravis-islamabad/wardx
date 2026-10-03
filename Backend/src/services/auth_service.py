@@ -20,9 +20,10 @@ from src.core.security import (
     needs_rehash,
     verify_password,
 )
-from src.errors.exceptions import AccountLockedError, UnauthorizedError
+from src.directory.ldap_client import DirectoryAuthFailed
+from src.errors.exceptions import AccountLockedError, ConflictError, UnauthorizedError
 from src.models import User, utcnow
-from src.services import audit_service, mfa_service
+from src.services import audit_service, directory_service, mfa_service
 
 _BAD_LOGIN = "Invalid username or password"
 
@@ -85,34 +86,74 @@ async def authenticate(
         )
         await session.commit()
 
-    if user is None:
+    # Directory users (and unknown names, when a directory is on) go to LDAP;
+    # local accounts never do, so a directory cannot take one over.
+    use_directory = (user is None or user.auth_source == "ldap") and (
+        await directory_service.is_enabled(session)
+    )
+
+    if user is None and not use_directory:
         await burn_password_check(password)
         await _fail("unknown_user")
         raise UnauthorizedError(_BAD_LOGIN)
 
-    if user.locked_until and user.locked_until > now:
+    if user is not None and user.locked_until and user.locked_until > now:
         await _fail("locked")
         raise AccountLockedError(
             "Account is temporarily locked after repeated failed logins",
             {"locked_until": user.locked_until.isoformat()},
         )
 
-    password_ok = await verify_password(user.password_hash, password)
-    if not password_ok or not user.is_active:
-        reason = "inactive" if password_ok else "bad_password"
-        if not password_ok:
+    reason = "bad_password"
+    if use_directory:
+        try:
+            found = await directory_service.authenticate(session, username, password)
+        except DirectoryAuthFailed as exc:
+            password_ok, reason = False, f"directory: {exc}"
+        except directory_service.DirectoryUnavailable:
+            await _fail("directory_unavailable")
+            raise
+        else:
+            if user is None:
+                # The directory's canonical name may differ from what was typed.
+                user = (
+                    await session.execute(
+                        select(User)
+                        .where(func.lower(User.username) == found.username.lower())
+                        .with_for_update()
+                    )
+                ).scalar_one_or_none()
+                if user is not None and user.auth_source != "ldap":
+                    await _fail("directory_name_taken_by_local_user")
+                    raise UnauthorizedError(_BAD_LOGIN)
+            user = await directory_service.upsert_user(session, user, found)
+            actor = Actor(
+                id=user.id, username=user.username, role=Role(user.role), source_ip=source_ip
+            )
+            password_ok = True
+    elif user.auth_source == "ldap":
+        # Directory switched off: directory users cannot sign in with anything.
+        await burn_password_check(password)
+        password_ok, reason = False, "directory_disabled"
+    else:
+        password_ok = await verify_password(user.password_hash, password)
+
+    if not password_ok or user is None or not user.is_active:
+        if password_ok and user is not None:
+            reason = "inactive"
+        elif user is not None:
             user.failed_logins += 1
             if user.failed_logins >= settings.login_max_failures:
                 user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
                 user.failed_logins = 0
-                reason = "bad_password_locked"
+                reason += " (locked)"
         await _fail(reason)
         raise UnauthorizedError(_BAD_LOGIN)
 
     user.failed_logins = 0
     user.locked_until = None
     user.last_login_at = now
-    if needs_rehash(user.password_hash):
+    if user.auth_source == "local" and needs_rehash(user.password_hash):
         user.password_hash = await hash_password(password)
     await audit_service.record(
         session,
@@ -120,7 +161,7 @@ async def authenticate(
         "auth.login",
         object_type="user",
         object_id=user.id,
-        details={"channel": channel},
+        details={"channel": channel, "source": user.auth_source},
     )
     await session.commit()
     return user
@@ -201,6 +242,8 @@ async def change_password(
     session: AsyncSession, settings: Settings, actor: Actor, *, current: str, new: str
 ) -> TokenPair:
     user = await session.get(User, actor.id, with_for_update=True)
+    if user.auth_source != "local":
+        raise ConflictError("Your password is managed by the company directory")
     if not await verify_password(user.password_hash, current):
         await audit_service.record(
             session,

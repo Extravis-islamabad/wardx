@@ -114,7 +114,14 @@ export default function UsersPage() {
         dataSource={data?.data}
         pagination={pagination(data?.total)}
         columns={[
-          { title: 'Username', dataIndex: 'username' },
+          {
+            title: 'Username',
+            render: (_, u) => (
+              <>
+                {u.username} {u.auth_source === 'ldap' && <Tag color="purple">directory</Tag>}
+              </>
+            ),
+          },
           { title: 'Name', dataIndex: 'full_name', render: (v: string | null) => v ?? '—' },
           {
             title: 'Role',

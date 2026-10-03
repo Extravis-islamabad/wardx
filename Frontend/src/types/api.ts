@@ -36,6 +36,7 @@ export interface User {
   is_active: boolean;
   locked_until: string | null;
   last_login_at: string | null;
+  auth_source: 'local' | 'ldap';
   created_at: string;
 }
 
@@ -233,4 +234,43 @@ export interface MfaStatus {
   pending: boolean;
   required: boolean;
   recovery_codes_left: number;
+}
+
+export interface RoleMapping {
+  group_dn: string;
+  role: Role;
+}
+
+export interface DirectoryConfig {
+  enabled: boolean;
+  server_url: string;
+  start_tls: boolean;
+  verify_tls: boolean;
+  ca_cert_pem: string | null;
+  bind_dn: string;
+  has_bind_password: boolean;
+  user_base_dn: string;
+  user_filter: string;
+  attr_username: string;
+  attr_email: string;
+  attr_full_name: string;
+  group_base_dn: string | null;
+  group_filter: string | null;
+  role_mappings: RoleMapping[];
+  default_role: Role | null;
+  timeout_seconds: number;
+  updated_at: string;
+}
+
+export type DirectoryConfigInput = Omit<DirectoryConfig, 'has_bind_password' | 'updated_at'> & {
+  bind_password?: string;
+};
+
+export interface DirectoryTestResult {
+  dn: string;
+  username: string;
+  email: string | null;
+  full_name: string | null;
+  groups: string[];
+  role: Role | null;
 }

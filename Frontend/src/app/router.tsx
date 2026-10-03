@@ -17,6 +17,7 @@ const SessionsPage = lazy(() => import('@/pages/SessionsPage'));
 const CommandRulesPage = lazy(() => import('@/pages/CommandRulesPage'));
 const UsersPage = lazy(() => import('@/pages/UsersPage'));
 const SecurityPage = lazy(() => import('@/pages/SecurityPage'));
+const DirectoryPage = lazy(() => import('@/pages/DirectoryPage'));
 
 const Loading = () => (
   <div className="flex min-h-[50vh] items-center justify-center">
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       },
       { path: '/security', element: page(<SecurityPage />) },
       { path: '/users', element: <RequireAuth roles={[Role.Admin]}>{page(<UsersPage />)}</RequireAuth> },
+      { path: '/directory', element: <RequireAuth roles={[Role.Admin]}>{page(<DirectoryPage />)}</RequireAuth> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

@@ -8,6 +8,9 @@ import type {
   Checkout,
   CommandRule,
   DashboardSummary,
+  DirectoryConfig,
+  DirectoryConfigInput,
+  DirectoryTestResult,
   GatewayInfo,
   GatewaySession,
   LoginResult,
@@ -141,4 +144,10 @@ export const rulesApi = {
       'command-rules/test',
       { command, account_id },
     ),
+};
+
+export const directoryApi = {
+  get: () => get<ApiResponse<DirectoryConfig | null>>('directory'),
+  save: (body: DirectoryConfigInput) => put<ApiResponse<DirectoryConfig>>('directory', body),
+  test: (username: string) => post<ApiResponse<DirectoryTestResult>>('directory/test', { username }),
 };

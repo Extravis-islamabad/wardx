@@ -126,6 +126,8 @@ async def reset_password(
     session: AsyncSession, actor: Actor, user_id: uuid.UUID, new_password: str
 ) -> None:
     user = await get_user(session, user_id, lock=True)
+    if user.auth_source != "local":
+        raise ConflictError("This user signs in through the directory; reset it there")
     user.password_hash = await hash_password(new_password)
     user.token_version += 1
     user.failed_logins = 0

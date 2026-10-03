@@ -1,6 +1,7 @@
 import {
   AuditOutlined,
   CloudServerOutlined,
+  ApartmentOutlined,
   CodeOutlined,
   DesktopOutlined,
   DashboardOutlined,
@@ -38,6 +39,7 @@ export const NAV: NavItem[] = [
   { key: '/policy', label: 'Command policy', icon: <CodeOutlined />, roles: [Role.Admin, Role.Auditor] },
   { key: '/audit', label: 'Audit', icon: <AuditOutlined />, roles: [Role.Admin, Role.Auditor] },
   { key: '/users', label: 'Users', icon: <TeamOutlined />, roles: [Role.Admin] },
+  { key: '/directory', label: 'Directory', icon: <ApartmentOutlined />, roles: [Role.Admin] },
 ];
 
 export function AppLayout() {

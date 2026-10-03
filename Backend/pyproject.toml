@@ -18,3 +18,5 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+# ldap3 imports names pyasn1 has deprecated; not ours to fix.
+filterwarnings = ["ignore:.*is deprecated. Please use:DeprecationWarning:ldap3"]

@@ -125,4 +125,5 @@ class UserOut(BaseModel):
     is_active: bool
     locked_until: datetime | None
     last_login_at: datetime | None
+    auth_source: str = "local"
     created_at: datetime
