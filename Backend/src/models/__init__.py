@@ -94,6 +94,11 @@ class Account(Base):
     exclusive_checkout: Mapped[bool] = mapped_column(Boolean, default=True)
     max_checkout_minutes: Mapped[int] = mapped_column(Integer, default=60)
     secret_updated_at: Mapped[datetime | None] = mapped_column(TZ)
+    rotation_interval_days: Mapped[int | None] = mapped_column(Integer)
+    rotate_after_checkin: Mapped[bool] = mapped_column(Boolean, default=False)
+    password_length: Mapped[int] = mapped_column(Integer, default=24)
+    last_rotated_at: Mapped[datetime | None] = mapped_column(TZ)
+    last_rotation_status: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
 
@@ -255,6 +260,37 @@ class SessionCommand(Base):
     command: Mapped[str] = mapped_column(Text)
     verdict: Mapped[str] = mapped_column(String(10))
     rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class RotationJob(Base):
+    __tablename__ = "rotation_jobs"
+    __table_args__ = {"schema": "access"}
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory.accounts.id", ondelete="CASCADE")
+    )
+    reason: Mapped[str] = mapped_column(String(20))
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("iam.users.id")
+    )
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    not_before: Mapped[datetime] = mapped_column(TZ, default=utcnow)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    claimed_by: Mapped[str | None] = mapped_column(String(100))
+    started_at: Mapped[datetime | None] = mapped_column(TZ)
+    finished_at: Mapped[datetime | None] = mapped_column(TZ)
+    from_version: Mapped[int | None] = mapped_column(Integer)
+    candidate_version: Mapped[int | None] = mapped_column(Integer)
+    driver: Mapped[str | None] = mapped_column(String(40))
+    detail: Mapped[str | None] = mapped_column(Text)
+    transcript: Mapped[str | None] = mapped_column(Text)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("iam.users.id")
+    )
+    created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
+
+    account: Mapped[Account] = relationship(lazy="joined", innerjoin=True)
 
 
 # ── Audit ──
