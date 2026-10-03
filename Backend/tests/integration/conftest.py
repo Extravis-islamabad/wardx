@@ -28,8 +28,9 @@ def database_url(tmp_path_factory) -> str:
 
 
 @pytest.fixture(scope="session")
-async def app(database_url):
+async def app(database_url, tmp_path_factory):
     os.environ.update(
+        WARDX_RECORDING_DIR=str(tmp_path_factory.mktemp("recordings")),
         WARDX_ENVIRONMENT="test",
         WARDX_DATABASE_URL=database_url,
         WARDX_JWT_SECRET=secrets.token_urlsafe(48),

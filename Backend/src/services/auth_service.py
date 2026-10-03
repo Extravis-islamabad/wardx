@@ -49,14 +49,16 @@ def issue_tokens(user: User, settings: Settings) -> TokenPair:
     )
 
 
-async def login(
+async def authenticate(
     session: AsyncSession,
     settings: Settings,
     *,
     username: str,
     password: str,
     source_ip: str | None,
-) -> TokenPair:
+    channel: str = "web",
+) -> User:
+    """Check a password with lockout and auditing; commits, returns the user or raises."""
     # The row lock makes the failure counter exact under parallel guessing.
     user = (
         await session.execute(
@@ -71,25 +73,25 @@ async def login(
     )
     now = utcnow()
 
-    if user is None:
-        await burn_password_check(password)
-        await audit_service.record(
-            session, actor, "auth.login", outcome="failure", details={"reason": "unknown_user"}
-        )
-        await session.commit()
-        raise UnauthorizedError(_BAD_LOGIN)
-
-    if user.locked_until and user.locked_until > now:
+    async def _fail(reason: str) -> None:
         await audit_service.record(
             session,
             actor,
             "auth.login",
-            object_type="user",
-            object_id=user.id,
+            object_type="user" if user else None,
+            object_id=user.id if user else None,
             outcome="failure",
-            details={"reason": "locked"},
+            details={"reason": reason, "channel": channel},
         )
         await session.commit()
+
+    if user is None:
+        await burn_password_check(password)
+        await _fail("unknown_user")
+        raise UnauthorizedError(_BAD_LOGIN)
+
+    if user.locked_until and user.locked_until > now:
+        await _fail("locked")
         raise AccountLockedError(
             "Account is temporarily locked after repeated failed logins",
             {"locked_until": user.locked_until.isoformat()},
@@ -104,16 +106,7 @@ async def login(
                 user.locked_until = now + timedelta(minutes=settings.login_lockout_minutes)
                 user.failed_logins = 0
                 reason = "bad_password_locked"
-        await audit_service.record(
-            session,
-            actor,
-            "auth.login",
-            object_type="user",
-            object_id=user.id,
-            outcome="failure",
-            details={"reason": reason},
-        )
-        await session.commit()
+        await _fail(reason)
         raise UnauthorizedError(_BAD_LOGIN)
 
     user.failed_logins = 0
@@ -121,8 +114,29 @@ async def login(
     user.last_login_at = now
     if needs_rehash(user.password_hash):
         user.password_hash = await hash_password(password)
-    await audit_service.record(session, actor, "auth.login", object_type="user", object_id=user.id)
+    await audit_service.record(
+        session,
+        actor,
+        "auth.login",
+        object_type="user",
+        object_id=user.id,
+        details={"channel": channel},
+    )
     await session.commit()
+    return user
+
+
+async def login(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    username: str,
+    password: str,
+    source_ip: str | None,
+) -> TokenPair:
+    user = await authenticate(
+        session, settings, username=username, password=password, source_ip=source_ip
+    )
     return issue_tokens(user, settings)
 
 

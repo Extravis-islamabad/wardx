@@ -1,4 +1,4 @@
-import { DeleteOutlined, EditOutlined, KeyOutlined, LockOutlined, PlusOutlined, UnlockOutlined } from '@ant-design/icons';
+import { CodeOutlined, DeleteOutlined, EditOutlined, KeyOutlined, LockOutlined, PlusOutlined, UnlockOutlined } from '@ant-design/icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -29,7 +29,7 @@ import { usePaging } from '@/hooks/usePaging';
 import { errorMessage } from '@/lib/apiClient';
 import { fromNow } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
-import { accountsApi, checkoutsApi, requestsApi, targetsApi } from '@/services/api';
+import { accountsApi, checkoutsApi, requestsApi, sessionsApi, targetsApi } from '@/services/api';
 import type { Account, Checkout } from '@/types/api';
 
 // ── Admin: create / edit ──
@@ -252,6 +252,27 @@ function AccessModal({
   );
 }
 
+function ConnectModal({ account, onClose }: { account: Account; onClose: () => void }) {
+  const { user } = useAuth();
+  const info = useQuery({ queryKey: queryKeys.gateway, queryFn: async () => (await sessionsApi.gatewayInfo()).data });
+  const command = info.data
+    ? `ssh -p ${info.data.port} ${user?.username}%${account.username}%${account.target.name}@${info.data.host}`
+    : '';
+  return (
+    <Modal open title={`Connect to ${account.username}@${account.target.name}`} onCancel={onClose} footer={<Button onClick={onClose}>Close</Button>}>
+      <Typography.Paragraph>Run this in your terminal and sign in with your WardX password:</Typography.Paragraph>
+      <Typography.Paragraph code copyable className="!text-base">{command}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">
+        The gateway logs you in with the vaulted credential; you never see it. The session is
+        recorded and command policy applies.{' '}
+        {account.requires_approval
+          ? 'This account needs an approved request first.'
+          : 'The account is checked out for the session and checked back in when you disconnect.'}
+      </Typography.Paragraph>
+    </Modal>
+  );
+}
+
 export default function AccountsPage() {
   const { hasRole } = useAuth();
   const isAdmin = hasRole(Role.Admin);
@@ -262,6 +283,7 @@ export default function AccountsPage() {
   const [settingSecret, setSettingSecret] = useState<Account | null>(null);
   const [accessing, setAccessing] = useState<Account | null>(null);
   const [revealing, setRevealing] = useState<Checkout | null>(null);
+  const [connecting, setConnecting] = useState<Account | null>(null);
   const { page, page_size, setPage, pagination } = usePaging();
   const q = { page, page_size, search: search || undefined };
   const { data, isLoading } = useQuery({ queryKey: queryKeys.accounts.list(q), queryFn: () => accountsApi.list(q) });
@@ -290,7 +312,7 @@ export default function AccountsPage() {
         dataSource={data?.data}
         pagination={pagination(data?.total)}
         columns={[
-          { title: 'Account', render: (_, a) => <Typography.Text strong>{a.username}</Typography.Text> },
+          { title: 'Account', render: (_, a) => <Typography.Text strong className="whitespace-nowrap">{a.username}</Typography.Text> },
           { title: 'Target', render: (_, a) => <>{a.target.name} <Typography.Text type="secondary">{a.target.address}</Typography.Text></> },
           { title: 'Platform', render: (_, a) => platformLabel(a.target.platform) },
           {
@@ -317,7 +339,7 @@ export default function AccountsPage() {
           { title: 'In use', dataIndex: 'active_checkouts', render: (n: number) => (n ? <Tag color="blue">{n} active</Tag> : '—') },
           {
             title: '',
-            width: 220,
+            width: 260,
             render: (_, a) => (
               <Space>
                 <Button
@@ -329,6 +351,11 @@ export default function AccountsPage() {
                 >
                   {a.requires_approval ? 'Request' : 'Check out'}
                 </Button>
+                {a.target.protocol === 'ssh' && (
+                  <Tooltip title="Connect through the session gateway">
+                    <Button size="small" icon={<CodeOutlined />} disabled={!a.has_secret} onClick={() => setConnecting(a)} />
+                  </Tooltip>
+                )}
                 {isAdmin && (
                   <>
                     <Tooltip title="Set secret"><Button size="small" icon={<KeyOutlined />} onClick={() => setSettingSecret(a)} /></Tooltip>
@@ -347,6 +374,7 @@ export default function AccountsPage() {
       <SecretModal account={settingSecret} onClose={() => setSettingSecret(null)} />
       {accessing && <AccessModal account={accessing} onClose={() => setAccessing(null)} onCheckedOut={setRevealing} />}
       <RevealModal checkout={revealing} onClose={() => setRevealing(null)} />
+      {connecting && <ConnectModal account={connecting} onClose={() => setConnecting(null)} />}
     </>
   );
 }

@@ -6,10 +6,14 @@ import type {
   AuditEvent,
   ChainVerification,
   Checkout,
+  CommandRule,
   DashboardSummary,
+  GatewayInfo,
+  GatewaySession,
   PageQuery,
   Paginated,
   RevealedSecret,
+  SessionCommand,
   Target,
   TokenPair,
   User,
@@ -39,6 +43,7 @@ export const targetsApi = {
   create: (body: Partial<Target>) => post<ApiResponse<Target>>('targets', body),
   update: (id: string, body: Partial<Target>) => patch<ApiResponse<Target>>(`targets/${id}`, body),
   remove: (id: string) => del<ApiResponse<null>>(`targets/${id}`),
+  resetHostKey: (id: string) => post<ApiResponse<Target>>(`targets/${id}/host-key/reset`),
 };
 
 export interface AccountInput {
@@ -92,4 +97,36 @@ export const usersApi = {
     patch<ApiResponse<User>>(`users/${id}`, body),
   resetPassword: (id: string, new_password: string) =>
     post<ApiResponse<null>>(`users/${id}/reset-password`, { new_password }),
+};
+
+export const sessionsApi = {
+  gatewayInfo: () => get<ApiResponse<GatewayInfo>>('gateway/info'),
+  list: (q: PageQuery) => get<Paginated<GatewaySession>>('sessions', q),
+  commands: (id: string) => get<ApiResponse<SessionCommand[]>>(`sessions/${id}/commands`),
+  recording: async (id: string) => {
+    const r = await apiClient.get<string>(`sessions/${id}/recording`, { responseType: 'text' });
+    return { text: r.data, verified: r.headers['x-wardx-recording-verified'] === 'true' };
+  },
+  terminate: (id: string) => post<ApiResponse<GatewaySession>>(`sessions/${id}/terminate`),
+};
+
+export interface RuleInput {
+  pattern: string;
+  description?: string;
+  account_id?: string;
+  target_id?: string;
+  platform?: string;
+}
+
+export const rulesApi = {
+  list: () => get<ApiResponse<CommandRule[]>>('command-rules'),
+  create: (body: RuleInput) => post<ApiResponse<CommandRule>>('command-rules', body),
+  update: (id: string, body: Partial<RuleInput & { is_active: boolean }>) =>
+    patch<ApiResponse<CommandRule>>(`command-rules/${id}`, body),
+  remove: (id: string) => del<ApiResponse<null>>(`command-rules/${id}`),
+  test: (command: string, account_id?: string) =>
+    post<ApiResponse<{ blocked: boolean; rule_id: string | null; description: string | null }>>(
+      'command-rules/test',
+      { command, account_id },
+    ),
 };

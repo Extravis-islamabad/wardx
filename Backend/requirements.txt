@@ -10,3 +10,4 @@ cryptography>=42
 structlog>=24.1
 apscheduler>=3.10,<4
 email-validator>=2.1
+asyncssh>=2.17

@@ -45,5 +45,10 @@ export const STATUS_COLORS: Record<string, string> = {
   returned: 'default',
   revoked: 'red',
   success: 'green',
+  closed: 'default',
+  terminated: 'red',
+  failed: 'orange',
+  allowed: 'green',
+  blocked: 'red',
   failure: 'red',
 };

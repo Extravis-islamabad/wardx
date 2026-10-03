@@ -1,4 +1,7 @@
-"""Entry point: ``uvicorn main:app`` (API) or ``python main.py`` with WARDX_APP_ROLE=scheduler."""
+"""Entry point: ``uvicorn main:app`` (API), or ``python main.py`` for the other roles.
+
+WARDX_APP_ROLE=scheduler runs the workers, WARDX_APP_ROLE=gateway the SSH session gateway.
+"""
 
 from __future__ import annotations
 
@@ -31,6 +34,10 @@ async def run_scheduler_only() -> None:
 if __name__ == "__main__":
     if settings.app_role == "scheduler":
         asyncio.run(run_scheduler_only())
+    elif settings.app_role == "gateway":
+        from src.gateway.server import run_gateway
+
+        asyncio.run(run_gateway(settings))
     else:
         import uvicorn
 

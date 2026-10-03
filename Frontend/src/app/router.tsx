@@ -13,6 +13,8 @@ const CheckoutsPage = lazy(() => import('@/pages/CheckoutsPage'));
 const RequestsPage = lazy(() => import('@/pages/RequestsPage'));
 const TargetsPage = lazy(() => import('@/pages/TargetsPage'));
 const AuditPage = lazy(() => import('@/pages/AuditPage'));
+const SessionsPage = lazy(() => import('@/pages/SessionsPage'));
+const CommandRulesPage = lazy(() => import('@/pages/CommandRulesPage'));
 const UsersPage = lazy(() => import('@/pages/UsersPage'));
 
 const Loading = () => (
@@ -45,6 +47,11 @@ export const router = createBrowserRouter([
       { path: '/checkouts', element: page(<CheckoutsPage />) },
       { path: '/requests', element: page(<RequestsPage />) },
       { path: '/targets', element: page(<TargetsPage />) },
+      { path: '/sessions', element: page(<SessionsPage />) },
+      {
+        path: '/policy',
+        element: <RequireAuth roles={[Role.Admin, Role.Auditor]}>{page(<CommandRulesPage />)}</RequireAuth>,
+      },
       {
         path: '/audit',
         element: <RequireAuth roles={[Role.Admin, Role.Auditor]}>{page(<AuditPage />)}</RequireAuth>,

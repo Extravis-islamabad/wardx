@@ -50,6 +50,8 @@ export interface Target {
   tags: string[];
   external_ref: string | null;
   is_active: boolean;
+  ssh_host_key_fingerprint: string | null;
+  ssh_host_key_learned_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -159,4 +161,59 @@ export interface PageQuery {
   page?: number;
   page_size?: number;
   [key: string]: string | number | boolean | undefined;
+}
+
+export type SessionStatus = 'active' | 'closed' | 'terminated' | 'failed';
+
+export interface GatewaySession {
+  id: string;
+  user_id: string;
+  username: string;
+  account_id: string | null;
+  account_username: string;
+  target_id: string | null;
+  target_name: string;
+  target_address: string;
+  protocol: string;
+  mode: 'shell' | 'exec';
+  exec_command: string | null;
+  client_ip: string | null;
+  gateway_node: string | null;
+  status: SessionStatus;
+  started_at: string;
+  ended_at: string | null;
+  close_reason: string | null;
+  terminate_requested_at: string | null;
+  has_recording: boolean;
+  recording_sha256: string | null;
+  recording_bytes: number | null;
+  bytes_from_target: number;
+  commands_count: number;
+  blocked_count: number;
+}
+
+export interface SessionCommand {
+  id: number;
+  occurred_at: string;
+  offset_seconds: number;
+  command: string;
+  verdict: 'allowed' | 'blocked';
+  rule_id: string | null;
+}
+
+export interface CommandRule {
+  id: string;
+  pattern: string;
+  description: string | null;
+  account_id: string | null;
+  target_id: string | null;
+  platform: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface GatewayInfo {
+  host: string;
+  port: number;
+  login_format: string;
 }

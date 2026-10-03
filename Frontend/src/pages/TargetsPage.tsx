@@ -1,7 +1,7 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -115,6 +115,15 @@ export default function TargetsPage() {
     onError: (e) => message.error(errorMessage(e)),
   });
 
+  const resetKey = useMutation({
+    mutationFn: (id: string) => targetsApi.resetHostKey(id),
+    onSuccess: () => {
+      message.success('Host key cleared; the next session pins the key the device presents');
+      void qc.invalidateQueries({ queryKey: queryKeys.targets.all });
+    },
+    onError: (e) => message.error(errorMessage(e)),
+  });
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -134,14 +143,38 @@ export default function TargetsPage() {
           { title: 'Address', render: (_, t) => `${t.address}:${t.port}` },
           { title: 'Platform', dataIndex: 'platform', render: platformLabel },
           { title: 'Protocol', dataIndex: 'protocol', render: (p: string) => <Tag>{p.toUpperCase()}</Tag> },
+          {
+            title: 'Host key',
+            render: (_, t) =>
+              t.ssh_host_key_fingerprint ? (
+                <Tooltip title={`${t.ssh_host_key_fingerprint} — pinned ${t.ssh_host_key_learned_at ?? ''}`}>
+                  <Tag icon={<KeyOutlined />} color="green">pinned</Tag>
+                </Tooltip>
+              ) : t.protocol === 'ssh' ? (
+                <Tooltip title="Pinned on the first gateway session (trust on first use)">
+                  <Tag>not yet seen</Tag>
+                </Tooltip>
+              ) : (
+                '—'
+              ),
+          },
           { title: 'Tags', dataIndex: 'tags', render: (tags: string[]) => tags.map((t) => <Tag key={t}>{t}</Tag>) },
           ...(isAdmin
             ? [{
                 title: '',
-                width: 100,
+                width: 140,
                 render: (_: unknown, t: Target) => (
                   <Space>
                     <Button size="small" icon={<EditOutlined />} onClick={() => setEditing(t)} />
+                    {t.ssh_host_key_fingerprint && (
+                      <Popconfirm
+                        title="Reset the pinned host key?"
+                        description="Only after confirming the device's key really changed."
+                        onConfirm={() => resetKey.mutate(t.id)}
+                      >
+                        <Tooltip title="Reset host key"><Button size="small" icon={<KeyOutlined />} /></Tooltip>
+                      </Popconfirm>
+                    )}
                     <Popconfirm
                       title="Delete target?"
                       description="Its accounts and stored secrets are deleted too."

@@ -229,12 +229,28 @@ async def test_audit_chain_verifies_and_is_append_only(client, admin):
         await session.rollback()
 
         # Someone bypassing the trigger (superuser) is still caught by the chain.
-        await session.execute(text("ALTER TABLE audit.events DISABLE TRIGGER trg_audit_no_update"))
-        await session.execute(
-            text("UPDATE audit.events SET details = '{\"forged\": true}' WHERE seq = 3")
-        )
-        await session.execute(text("ALTER TABLE audit.events ENABLE TRIGGER trg_audit_no_update"))
-        await session.commit()
+        original = (
+            await session.execute(text("SELECT details::text FROM audit.events WHERE seq = 3"))
+        ).scalar_one()
 
+        async def set_details(value: str) -> None:
+            await session.execute(
+                text("ALTER TABLE audit.events DISABLE TRIGGER trg_audit_no_update")
+            )
+            await session.execute(
+                text("UPDATE audit.events SET details = CAST(:d AS jsonb) WHERE seq = 3"),
+                {"d": value},
+            )
+            await session.execute(
+                text("ALTER TABLE audit.events ENABLE TRIGGER trg_audit_no_update")
+            )
+            await session.commit()
+
+        await set_details('{"forged": true}')
+        data = (await client.post("/audit/verify", headers=admin)).json()["data"]
+        assert data["ok"] is False and data["broken_at_seq"] == 3
+
+        # Restored, the chain verifies again (and later test files see a clean chain).
+        await set_details(original)
     data = (await client.post("/audit/verify", headers=admin)).json()["data"]
-    assert data["ok"] is False and data["broken_at_seq"] == 3
+    assert data["ok"] is True

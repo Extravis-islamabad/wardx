@@ -1,6 +1,8 @@
 import {
   AuditOutlined,
   CloudServerOutlined,
+  CodeOutlined,
+  DesktopOutlined,
   DashboardOutlined,
   KeyOutlined,
   LogoutOutlined,
@@ -30,7 +32,9 @@ export const NAV: NavItem[] = [
   { key: '/accounts', label: 'Accounts', icon: <KeyOutlined /> },
   { key: '/checkouts', label: 'Check-outs', icon: <UnlockOutlined /> },
   { key: '/requests', label: 'Requests', icon: <SafetyCertificateOutlined /> },
+  { key: '/sessions', label: 'Sessions', icon: <DesktopOutlined /> },
   { key: '/targets', label: 'Targets', icon: <CloudServerOutlined /> },
+  { key: '/policy', label: 'Command policy', icon: <CodeOutlined />, roles: [Role.Admin, Role.Auditor] },
   { key: '/audit', label: 'Audit', icon: <AuditOutlined />, roles: [Role.Admin, Role.Auditor] },
   { key: '/users', label: 'Users', icon: <TeamOutlined />, roles: [Role.Admin] },
 ];

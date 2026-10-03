@@ -5,3 +5,4 @@ __pycache__/
 .wardx/
 .pytest_cache/
 .ruff_cache/
+recordings/

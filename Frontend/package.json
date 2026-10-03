@@ -14,6 +14,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-query": "^5.90.20",
     "antd": "^6.2.3",
+    "asciinema-player": "^3.17.0",
     "axios": "^1.7.9",
     "dayjs": "^1.11.13",
     "react": "^18.3.1",

@@ -6,7 +6,17 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import ARRAY, BigInteger, Boolean, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    ARRAY,
+    BigInteger,
+    Boolean,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -61,6 +71,9 @@ class Target(Base):
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     external_ref: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    ssh_host_key: Mapped[str | None] = mapped_column(Text)
+    ssh_host_key_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    ssh_host_key_learned_at: Mapped[datetime | None] = mapped_column(TZ)
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
 
@@ -162,6 +175,86 @@ class Checkout(Base):
 
     account: Mapped[Account] = relationship(lazy="joined", innerjoin=True)
     user: Mapped[User] = relationship(foreign_keys=[user_id], lazy="joined", innerjoin=True)
+
+
+# ── Sessions ──
+
+
+class CommandRule(Base):
+    __tablename__ = "command_rules"
+    __table_args__ = {"schema": "access"}
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory.accounts.id", ondelete="CASCADE")
+    )
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory.targets.id", ondelete="CASCADE")
+    )
+    platform: Mapped[str | None] = mapped_column(String(40))
+    pattern: Mapped[str] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(String(10), default="deny")
+    description: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
+
+
+class GatewaySession(Base):
+    __tablename__ = "sessions"
+    __table_args__ = {"schema": "access"}
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    checkout_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("access.checkouts.id", ondelete="SET NULL")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("iam.users.id"))
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory.accounts.id", ondelete="SET NULL")
+    )
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory.targets.id", ondelete="SET NULL")
+    )
+    account_username: Mapped[str] = mapped_column(String(255))
+    target_name: Mapped[str] = mapped_column(String(255))
+    target_address: Mapped[str] = mapped_column(String(255))
+    protocol: Mapped[str] = mapped_column(String(10))
+    mode: Mapped[str] = mapped_column(String(10), default="shell")
+    exec_command: Mapped[str | None] = mapped_column(Text)
+    client_ip: Mapped[str | None] = mapped_column(String(64))
+    gateway_node: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    started_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(TZ)
+    close_reason: Mapped[str | None] = mapped_column(Text)
+    terminate_requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("iam.users.id")
+    )
+    terminate_requested_at: Mapped[datetime | None] = mapped_column(TZ)
+    recording_path: Mapped[str | None] = mapped_column(Text)
+    recording_sha256: Mapped[str | None] = mapped_column(String(64))
+    recording_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    bytes_from_target: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_from_user: Mapped[int] = mapped_column(BigInteger, default=0)
+    commands_count: Mapped[int] = mapped_column(Integer, default=0)
+    blocked_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    user: Mapped[User] = relationship(foreign_keys=[user_id], lazy="joined", innerjoin=True)
+
+
+class SessionCommand(Base):
+    __tablename__ = "session_commands"
+    __table_args__ = {"schema": "access"}
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("access.sessions.id", ondelete="CASCADE")
+    )
+    occurred_at: Mapped[datetime] = mapped_column(TZ)
+    offset_seconds: Mapped[float] = mapped_column(Float)
+    command: Mapped[str] = mapped_column(Text)
+    verdict: Mapped[str] = mapped_column(String(10))
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
 
 # ── Audit ──
