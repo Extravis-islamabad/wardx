@@ -1,0 +1,71 @@
+"""Session, current-user and role dependencies."""
+
+from __future__ import annotations
+
+import uuid
+from typing import Annotated
+
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.core.config import get_settings, resolve_jwt_secret
+from src.core.context import Actor
+from src.core.db import get_session
+from src.core.enums import Role
+from src.core.security import decode_token
+from src.errors.exceptions import ForbiddenError, UnauthorizedError
+from src.models import User
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+_bearer = HTTPBearer(auto_error=False)
+
+
+def client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+async def get_current_user(
+    session: SessionDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> User:
+    if credentials is None:
+        raise UnauthorizedError("Not authenticated")
+    claims = decode_token(
+        credentials.credentials, secret=resolve_jwt_secret(get_settings()), expected_type="access"
+    )
+    try:
+        user_id = uuid.UUID(claims["sub"])
+    except ValueError as exc:
+        raise UnauthorizedError("Invalid token") from exc
+    user = await session.get(User, user_id)
+    if user is None or not user.is_active or user.token_version != claims["tv"]:
+        raise UnauthorizedError("Session is no longer valid")
+    return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_actor(user: CurrentUser, request: Request) -> Actor:
+    return Actor(
+        id=user.id, username=user.username, role=Role(user.role), source_ip=client_ip(request)
+    )
+
+
+ActorDep = Annotated[Actor, Depends(get_actor)]
+
+
+def require_roles(*roles: Role):
+    async def _check(actor: ActorDep) -> Actor:
+        if not actor.has_role(*roles):
+            raise ForbiddenError("Your role does not allow this action")
+        return actor
+
+    return _check
+
+
+AdminActor = Annotated[Actor, Depends(require_roles(Role.ADMIN))]
+ApproverActor = Annotated[Actor, Depends(require_roles(Role.ADMIN, Role.APPROVER))]
+AuditReader = Annotated[Actor, Depends(require_roles(Role.ADMIN, Role.AUDITOR))]

@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+
+/* antd owns component styling; Tailwind is for layout utilities. */
+@layer base {
+  html,
+  body,
+  #root {
+    margin: 0;
+    min-height: 100%;
+  }
+  html[data-theme='dark'] body {
+    background: #141414;
+  }
+  html[data-theme='light'] body {
+    background: #f5f5f5;
+  }
+}
