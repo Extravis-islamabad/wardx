@@ -11,6 +11,7 @@ import type {
   DirectoryConfig,
   DirectoryConfigInput,
   DirectoryTestResult,
+  SyncResult,
   GatewayInfo,
   GatewaySession,
   LoginResult,
@@ -150,4 +151,6 @@ export const directoryApi = {
   get: () => get<ApiResponse<DirectoryConfig | null>>('directory'),
   save: (body: DirectoryConfigInput) => put<ApiResponse<DirectoryConfig>>('directory', body),
   test: (username: string) => post<ApiResponse<DirectoryTestResult>>('directory/test', { username }),
+  sync: (dry_run: boolean, force = false) =>
+    post<ApiResponse<SyncResult>>('directory/sync', { dry_run, force }),
 };

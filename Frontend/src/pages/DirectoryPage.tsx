@@ -23,7 +23,8 @@ import { FormField } from '@/components/FormField';
 import { errorMessage } from '@/lib/apiClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { directoryApi } from '@/services/api';
-import type { DirectoryConfig, DirectoryTestResult } from '@/types/api';
+import type { DirectoryConfig, DirectoryTestResult, SyncResult } from '@/types/api';
+import { fromNow } from '@/lib/format';
 
 const PRESETS = {
   ad: {
@@ -67,6 +68,8 @@ const schema = z.object({
   role_mappings: z.array(z.object({ group_dn: z.string().min(3, 'Group DN'), role: z.enum(ROLE_VALUES) })),
   default_role: z.enum(ROLE_VALUES).nullable(),
   timeout_seconds: z.number().int().min(1).max(60),
+  sync_interval_minutes: z.number().int().min(0).max(1440).refine((v) => v === 0 || v >= 5, '0 (off) or at least 5'),
+  sync_max_disable_percent: z.number().int().min(1).max(100),
 });
 type Values = z.infer<typeof schema>;
 
@@ -88,6 +91,8 @@ const toValues = (c: DirectoryConfig | null): Values => ({
   role_mappings: c?.role_mappings ?? [],
   default_role: c?.default_role ?? null,
   timeout_seconds: c?.timeout_seconds ?? 10,
+  sync_interval_minutes: c?.sync_interval_minutes ?? 60,
+  sync_max_disable_percent: c?.sync_max_disable_percent ?? 20,
 });
 
 const text = (f: { value: unknown; onChange: (v: unknown) => void }, placeholder?: string, mono = true) => (
@@ -123,6 +128,86 @@ function TestUser() {
             {r.role ? <Tag color="blue">{r.role}</Tag> : <Tag color="red">none — sign-in refused</Tag>}
           </Descriptions.Item>
         </Descriptions>
+      )}
+    </Card>
+  );
+}
+
+function SyncPanel({ config }: { config: DirectoryConfig }) {
+  const { message, modal } = App.useApp();
+  const qc = useQueryClient();
+  const [shown, setShown] = useState<SyncResult | null>(null);
+  const run = useMutation({
+    mutationFn: async ({ dryRun, force }: { dryRun: boolean; force?: boolean }) =>
+      (await directoryApi.sync(dryRun, force)).data,
+    onSuccess: (r) => {
+      setShown(r);
+      if (!r.dry_run) void qc.invalidateQueries({ queryKey: queryKeys.directory });
+      void qc.invalidateQueries({ queryKey: queryKeys.users.all });
+    },
+    onError: (e) => message.error(errorMessage(e)),
+  });
+  const r = shown ?? config.last_sync_summary;
+  const color = { ok: 'green', needs_review: 'orange', failed: 'red' } as const;
+
+  return (
+    <Card
+      size="small"
+      className="!mt-4"
+      title="Directory sync"
+      extra={
+        <Space>
+          <Button size="small" loading={run.isPending} disabled={!config.enabled} onClick={() => run.mutate({ dryRun: true })}>
+            Preview
+          </Button>
+          <Button size="small" type="primary" loading={run.isPending} disabled={!config.enabled} onClick={() => run.mutate({ dryRun: false })}>
+            Run now
+          </Button>
+        </Space>
+      }
+    >
+      <Typography.Text type="secondary">
+        {config.sync_interval_minutes ? `Every ${config.sync_interval_minutes} min` : 'Schedule off'} · last run{' '}
+        {config.last_sync_at ? fromNow(config.last_sync_at) : 'never'}
+      </Typography.Text>
+      {r && (
+        <div className="mt-3 space-y-2">
+          <Space wrap>
+            <Tag color={color[r.status]}>{r.dry_run ? `preview: ${r.status}` : r.status}</Tag>
+            <span>{r.checked} checked</span>
+          </Space>
+          {r.disabled.length > 0 && (
+            <div>
+              <b>{r.dry_run || r.status !== 'ok' ? 'Would disable' : 'Disabled'}:</b>{' '}
+              {r.disabled.map((d) => <Tag key={d.username} color="red" title={d.reason}>{d.username}</Tag>)}
+            </div>
+          )}
+          {r.enabled.length > 0 && <div><b>Re-enabled:</b> {r.enabled.map((u) => <Tag key={u} color="green">{u}</Tag>)}</div>}
+          {r.role_changes.length > 0 && (
+            <div><b>Role changes:</b> {r.role_changes.map((c) => <Tag key={c.username}>{c.username}: {c.from} → {c.to}</Tag>)}</div>
+          )}
+          {(r.revoked_checkouts > 0 || r.killed_sessions > 0) && (
+            <div>Revoked {r.revoked_checkouts} check-out(s), ended {r.killed_sessions} live session(s).</div>
+          )}
+          {r.problems.map((p) => <Alert key={p} type={r.status === 'ok' ? 'info' : 'warning'} showIcon title={p} />)}
+          {r.status === 'needs_review' && !r.dry_run && (
+            <Button
+              danger
+              size="small"
+              onClick={() =>
+                modal.confirm({
+                  title: `Disable ${r.disabled.length} users?`,
+                  content: 'Only if you have checked the list and these people really left.',
+                  okText: 'Apply anyway',
+                  okButtonProps: { danger: true },
+                  onOk: () => run.mutateAsync({ dryRun: false, force: true }),
+                })
+              }
+            >
+              Apply anyway
+            </Button>
+          )}
+        </div>
       )}
     </Card>
   );
@@ -252,6 +337,21 @@ function ConfigForm({ config }: { config: DirectoryConfig | null }) {
         </div>
       </Card>
 
+      <Card title="Scheduled sync" className="!mb-4">
+        <Typography.Paragraph type="secondary">
+          Checks every directory user with the service account. People who left the directory or
+          every mapped group are disabled at once: signed out, check-outs revoked, live sessions killed.
+        </Typography.Paragraph>
+        <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
+          <FormField control={control} name="sync_interval_minutes" label="Run every (minutes)" extra="0 turns the schedule off" render={(f) => (
+            <InputNumber className="!w-full" min={0} max={1440} value={f.value as number} onChange={f.onChange} />
+          )} />
+          <FormField control={control} name="sync_max_disable_percent" label="Stop if a run would disable more than (%)" extra="Protects against a wrong search base locking everyone out" render={(f) => (
+            <InputNumber className="!w-full" min={1} max={100} value={f.value as number} onChange={f.onChange} />
+          )} />
+        </div>
+      </Card>
+
       <Button type="primary" htmlType="submit" loading={save.isPending}>Save</Button>
     </Form>
   );
@@ -268,7 +368,10 @@ export default function DirectoryPage() {
       </Typography.Paragraph>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
         <div>{!isLoading && <ConfigForm config={data ?? null} />}</div>
-        <div>{data && <TestUser />}</div>
+        <div>
+          {data && <TestUser />}
+          {data && <SyncPanel config={data} />}
+        </div>
       </div>
     </>
   );

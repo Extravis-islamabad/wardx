@@ -187,6 +187,10 @@ async def upsert_user(session: AsyncSession, existing: User | None, found: Direc
     elif user.role != found.role:
         # A role change ends existing sessions, like an admin edit would.
         user.token_version += 1
+    if user.disabled_reason == "directory_sync":
+        # Disabled only because the directory had dropped them; it vouches for them again.
+        user.is_active = True
+        user.disabled_reason = None
     user.role = found.role
     user.email = found.email
     user.full_name = found.full_name

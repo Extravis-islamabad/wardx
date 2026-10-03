@@ -37,6 +37,7 @@ export interface User {
   locked_until: string | null;
   last_login_at: string | null;
   auth_source: 'local' | 'ldap';
+  disabled_reason: string | null;
   created_at: string;
 }
 
@@ -259,10 +260,31 @@ export interface DirectoryConfig {
   role_mappings: RoleMapping[];
   default_role: Role | null;
   timeout_seconds: number;
+  sync_interval_minutes: number;
+  sync_max_disable_percent: number;
+  last_sync_at: string | null;
+  last_sync_status: 'ok' | 'needs_review' | 'failed' | null;
+  last_sync_summary: SyncResult | null;
   updated_at: string;
 }
 
-export type DirectoryConfigInput = Omit<DirectoryConfig, 'has_bind_password' | 'updated_at'> & {
+export interface SyncResult {
+  status: 'ok' | 'needs_review' | 'failed';
+  dry_run: boolean;
+  checked: number;
+  disabled: { username: string; reason: string }[];
+  enabled: string[];
+  role_changes: { username: string; from: string; to: string }[];
+  profile_updates: number;
+  problems: string[];
+  revoked_checkouts: number;
+  killed_sessions: number;
+}
+
+export type DirectoryConfigInput = Omit<
+  DirectoryConfig,
+  'has_bind_password' | 'updated_at' | 'last_sync_at' | 'last_sync_status' | 'last_sync_summary'
+> & {
   bind_password?: string;
 };
 

@@ -12,7 +12,8 @@ from sqlalchemy import text
 
 from src.core.config import Settings
 from src.core.db import session_factory
-from src.services import access_service
+from src.errors.exceptions import ConflictError
+from src.services import access_service, directory_sync
 
 logger = structlog.get_logger(__name__)
 
@@ -39,6 +40,29 @@ async def expiry_sweep() -> None:
             logger.info("expiry_sweep", **result)
 
 
+async def directory_sync_tick() -> None:
+    """Every minute: run the directory sync if its interval has passed."""
+    async with session_factory()() as session:
+        try:
+            if not await directory_sync.sync_due(session):
+                return
+            result = await directory_sync.run_sync(session)
+        except ConflictError:
+            await session.rollback()  # another node is syncing, or it was just switched off
+            return
+        except Exception:
+            logger.exception("directory_sync_failed")
+            await session.rollback()
+            return
+        logger.info(
+            "directory_sync",
+            status=result.status,
+            checked=result.checked,
+            disabled=len(result.disabled),
+            role_changes=len(result.role_changes),
+        )
+
+
 def build_scheduler(settings: Settings) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(
@@ -46,6 +70,14 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
         "interval",
         seconds=settings.expiry_sweep_seconds,
         id="expiry_sweep",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        directory_sync_tick,
+        "interval",
+        seconds=60,
+        id="directory_sync",
         max_instances=1,
         coalesce=True,
     )

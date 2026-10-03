@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -35,6 +36,16 @@ class DirectoryConfigIn(BaseModel):
     role_mappings: list[RoleMapping] = Field(default_factory=list, max_length=100)
     default_role: Role | None = None
     timeout_seconds: int = Field(10, ge=1, le=60)
+    # 0 = no scheduled sync; otherwise every 5-1440 minutes.
+    sync_interval_minutes: int = Field(60, ge=0, le=1440)
+    sync_max_disable_percent: int = Field(20, ge=1, le=100)
+
+    @field_validator("sync_interval_minutes")
+    @classmethod
+    def _interval(cls, v: int) -> int:
+        if 0 < v < 5:
+            raise ValueError("use 0 (off) or at least 5 minutes")
+        return v
 
     @field_validator("user_filter")
     @classmethod
@@ -71,6 +82,11 @@ class DirectoryConfigOut(BaseModel):
     role_mappings: list[RoleMapping]
     default_role: Role | None
     timeout_seconds: int
+    sync_interval_minutes: int
+    sync_max_disable_percent: int
+    last_sync_at: datetime | None
+    last_sync_status: str | None
+    last_sync_summary: dict[str, Any] | None
     updated_at: datetime
 
 
@@ -85,3 +101,22 @@ class DirectoryTestResult(BaseModel):
     full_name: str | None
     groups: list[str]
     role: Role | None
+
+
+class SyncRequest(BaseModel):
+    dry_run: bool = False
+    # Apply even past the disable limit, after an admin has reviewed the preview.
+    force: bool = False
+
+
+class SyncResultOut(BaseModel):
+    status: str
+    dry_run: bool
+    checked: int
+    disabled: list[dict[str, str]]
+    enabled: list[str]
+    role_changes: list[dict[str, str]]
+    profile_updates: int
+    problems: list[str]
+    revoked_checkouts: int
+    killed_sessions: int

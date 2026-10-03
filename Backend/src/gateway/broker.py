@@ -397,6 +397,7 @@ class Broker:
                     select(
                         GatewaySession.id,
                         GatewaySession.terminate_requested_at,
+                        GatewaySession.close_reason,
                         Checkout.status,
                         Checkout.expires_at,
                     )
@@ -406,9 +407,12 @@ class Broker:
             ).all()
         now = utcnow()
         orders: dict[uuid.UUID, CloseOrder] = {}
-        for sid, kill_at, co_status, co_expires in rows:
+        for sid, kill_at, kill_reason, co_status, co_expires in rows:
             if kill_at is not None:
-                orders[sid] = CloseOrder("terminated", "Terminated by an administrator")
+                # A reason set with the kill request (e.g. by directory sync) is shown as is.
+                orders[sid] = CloseOrder(
+                    "terminated", kill_reason or "Terminated by an administrator"
+                )
             elif co_status is None or co_status != CheckoutStatus.ACTIVE:
                 orders[sid] = CloseOrder("terminated", "The check-out was closed")
             elif co_expires <= now:

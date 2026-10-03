@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Form, Input, Modal, Popconfirm, Select, Switch, Table, Tag, Typography } from 'antd';
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -138,7 +138,10 @@ export default function UsersPage() {
           {
             title: 'Active',
             render: (_, u) => (
-              <Switch size="small" checked={u.is_active} onChange={(is_active) => update.mutate({ id: u.id, body: { is_active } })} />
+              <Space size={4}>
+                <Switch size="small" checked={u.is_active} onChange={(is_active) => update.mutate({ id: u.id, body: { is_active } })} />
+                {u.disabled_reason === 'directory_sync' && <Tag color="orange">left directory</Tag>}
+              </Space>
             ),
           },
           {

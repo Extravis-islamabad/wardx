@@ -24,6 +24,13 @@ Same stack as MonetX so engineers move between them freely.
   removing someone from the group locks them out at their next sign-in. Users are created on first
   sign-in; local accounts always win a name clash. Lockout, MFA and audit apply; the service
   account's password is kept in the vault. Works for console and SSH gateway logins alike.
+- **Directory sync** (scheduled, default hourly; Preview and Run now in the console): leavers and
+  people removed from every mapped group are disabled at once — tokens revoked, check-outs revoked,
+  live gateway sessions killed with the reason shown in their terminal. Role changes apply without
+  a sign-in. Safety valve: a run that would disable more than N% (default 20) of directory users
+  stops unchanged for review (apply with force); an unreachable directory changes nothing; a name
+  matching several entries is reported, never disabled. Only sync-disabled users are re-enabled by
+  sync; an admin's disable always stands.
 - **Vault:** envelope encryption — AES-256-GCM per secret version with its own data key, wrapped by
   a key-encryption key (KEK). Owner + version bound as associated data, so a ciphertext moved to
   another account fails to open. KEK rotation via retired keys. HSM / KMS slot in behind `Keyring`.
@@ -88,6 +95,5 @@ cd Frontend && npm run build                  # tsc strict + vite build
 1. Telnet through the gateway; vendor-aware prompts for enable/privilege levels (Cisco, Huawei).
 2. Password rotation drivers (network devices via Netmiko, Linux, Windows/AD) with verify + rollback.
 3. Discovery (subnets, AD, MonetX device registry sync via `targets.external_ref`).
-4. WebAuthn / passkeys; SAML / OIDC single sign-on; scheduled directory sync (disable leavers
-   without waiting for their next sign-in).
+4. WebAuthn / passkeys; SAML / OIDC single sign-on.
 5. RDP gateway (guacd), break-glass, SIEM export.

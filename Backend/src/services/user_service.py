@@ -107,6 +107,8 @@ async def update_user(
 
     for field, value in changes.items():
         setattr(user, field, value.value if isinstance(value, Role) else value)
+    if "is_active" in changes:
+        user.disabled_reason = None if user.is_active else "admin"
     if "role" in changes or changes.get("is_active") is False:
         # Role or access changed: make existing tokens re-authenticate.
         user.token_version += 1

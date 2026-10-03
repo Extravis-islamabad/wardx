@@ -29,6 +29,14 @@ class DirectoryAuthFailed(Exception):
     """Unknown user, wrong password, ambiguous match, or no WardX role for the user."""
 
 
+class UserNotFound(DirectoryAuthFailed):
+    """No entry matches the login name: in a sync, the person has left."""
+
+
+class AmbiguousUser(DirectoryAuthFailed):
+    """Several entries match: a directory data problem, never a reason to disable."""
+
+
 @dataclass(frozen=True)
 class DirectorySettings:
     server_url: str
@@ -142,9 +150,11 @@ class DirectoryClient:
             )
         except LDAPException as exc:
             raise DirectoryError(f"User search failed: {exc}") from exc
-        if len(conn.entries) != 1:
-            # None: unknown user. Several: the filter is too loose; refuse rather than guess.
-            raise DirectoryAuthFailed("no unique directory entry for that login name")
+        if not conn.entries:
+            raise UserNotFound("no unique directory entry for that login name")
+        if len(conn.entries) > 1:
+            # The filter is too loose; refuse rather than guess which person this is.
+            raise AmbiguousUser("no unique directory entry for that login name")
         return conn.entries[0]
 
     def _groups(self, conn: ldap3.Connection, entry: ldap3.Entry) -> tuple[str, ...]:

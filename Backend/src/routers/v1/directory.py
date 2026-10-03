@@ -8,10 +8,13 @@ from src.contracts.schemas.directory import (
     DirectoryConfigOut,
     DirectoryTest,
     DirectoryTestResult,
+    SyncRequest,
+    SyncResultOut,
 )
 from src.dependencies.auth import AdminActor, SessionDep
 from src.models import DirectoryConfig
 from src.services import directory_service as svc
+from src.services import directory_sync
 
 router = APIRouter(prefix="/directory", tags=["directory"])
 
@@ -51,3 +54,11 @@ async def test_lookup(body: DirectoryTest, actor: AdminActor, session: SessionDe
             role=user.role,
         )
     )
+
+
+@router.post("/sync", response_model=APIResponse[SyncResultOut])
+async def sync_now(body: SyncRequest, actor: AdminActor, session: SessionDep):
+    result = await directory_sync.run_sync(
+        session, actor=actor, dry_run=body.dry_run, force=body.force
+    )
+    return ok(SyncResultOut(**result.summary()))

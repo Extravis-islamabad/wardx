@@ -53,6 +53,7 @@ class User(Base):
     auth_source: Mapped[str] = mapped_column(String(10), default="local")
     external_id: Mapped[str | None] = mapped_column(Text)
     directory_synced_at: Mapped[datetime | None] = mapped_column(TZ)
+    disabled_reason: Mapped[str | None] = mapped_column(String(30))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
 
@@ -79,6 +80,11 @@ class DirectoryConfig(Base):
     role_mappings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     default_role: Mapped[str | None] = mapped_column(String(20))
     timeout_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    sync_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    sync_max_disable_percent: Mapped[int] = mapped_column(Integer, default=20)
+    last_sync_at: Mapped[datetime | None] = mapped_column(TZ)
+    last_sync_status: Mapped[str | None] = mapped_column(String(20))
+    last_sync_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
 
