@@ -32,7 +32,7 @@ from src.models import (
     Target,
     utcnow,
 )
-from src.services import access_service, audit_service, auth_service, vault_service
+from src.services import access_service, audit_service, auth_service, mfa_service, vault_service
 from src.services.inventory_service import ACCOUNT_SECRET
 
 GATEWAY_REASON = "Interactive session via WardX gateway"
@@ -95,6 +95,25 @@ class Broker:
                 id=user.id, username=user.username, role=Role(user.role), source_ip=source_ip
             )
 
+    async def mfa_enabled(self, actor: Actor) -> bool:
+        async with session_factory()() as session:
+            return await mfa_service.is_enabled(session, actor.id)
+
+    async def verify_mfa(self, actor: Actor, code: str) -> bool:
+        async with session_factory()() as session:
+            try:
+                await mfa_service.verify_login_code(
+                    session,
+                    self.settings,
+                    user_id=actor.id,
+                    code=code,
+                    source_ip=actor.source_ip,
+                    channel="ssh_gateway",
+                )
+            except AppError:
+                return False
+            return True
+
     # ── Opening a session ──
 
     async def open(
@@ -107,6 +126,12 @@ class Broker:
         command: str | None,
     ) -> Grant:
         async with session_factory()() as session:
+            if mfa_service.is_required(
+                self.settings, actor.role
+            ) and not await mfa_service.is_enabled(session, actor.id):
+                raise GatewayDenied(
+                    "Your role requires MFA. Set it up in the WardX console, then reconnect."
+                )
             target = (
                 await session.execute(
                     select(Target).where(func.lower(Target.name) == target_name.lower())

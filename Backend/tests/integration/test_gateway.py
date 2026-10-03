@@ -9,74 +9,10 @@ import asyncssh
 import pytest
 from sqlalchemy import text
 
-from src.core.config import get_settings
 from src.core.db import session_factory
-from src.gateway.server import Gateway
-from tests.integration.fake_device import FakeDevice
+from tests.integration.conftest import DEVICE_PASSWORD, DEVICE_USER
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
-
-DEVICE_USER, DEVICE_PASSWORD = "netadmin", "Dev1ce-Secret-77"
-
-
-@pytest.fixture(scope="session")
-async def device():
-    dev = FakeDevice(DEVICE_USER, DEVICE_PASSWORD)
-    await dev.start()
-    yield dev
-    await dev.stop()
-
-
-@pytest.fixture(scope="session")
-async def gateway(app, tmp_path_factory):
-    base = tmp_path_factory.mktemp("gw")
-    settings = get_settings().model_copy(
-        update={
-            "gateway_listen_host": "127.0.0.1",
-            "gateway_port": 0,
-            "gateway_host_key_file": str(base / "host_key"),
-            "gateway_watch_seconds": 0.2,
-            "gateway_node": "test-gw",
-            "target_connect_timeout_seconds": 5,
-        }
-    )
-    gw = Gateway(settings)
-    await gw.start()
-    yield gw
-    await gw.stop()
-
-
-@pytest.fixture(scope="session")
-async def lab(client, admin, make_user, device):
-    """A target pointing at the fake device, its account, a deny rule, and a user."""
-    target = (
-        await client.post(
-            "/targets",
-            headers=admin,
-            json={
-                "name": "fake-rtr",
-                "address": "127.0.0.1",
-                "port": device.port,
-                "platform": "cisco_ios",
-                "protocol": "ssh",
-            },
-        )
-    ).json()["data"]
-    account = (
-        await client.post(
-            "/accounts",
-            headers=admin,
-            json={"target_id": target["id"], "username": DEVICE_USER, "secret": DEVICE_PASSWORD},
-        )
-    ).json()["data"]
-    rule = await client.post(
-        "/command-rules",
-        headers=admin,
-        json={"pattern": r"^(reload|write erase)\b", "description": "No reloads or wipes"},
-    )
-    assert rule.status_code == 201, rule.text
-    user = await make_user("netops1")
-    return {"target": target, "account": account, "user_headers": user}
 
 
 async def _connect(gateway, login: str, password: str) -> asyncssh.SSHClientConnection:

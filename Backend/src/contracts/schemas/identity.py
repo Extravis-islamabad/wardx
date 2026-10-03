@@ -44,6 +44,46 @@ class TokenPair(BaseModel):
     expires_in: int
 
 
+class LoginResult(BaseModel):
+    """Either tokens, or ``mfa_required`` with a short-lived ``mfa_token`` for /auth/mfa/verify."""
+
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int | None = None
+    mfa_required: bool = False
+    mfa_token: str | None = None
+    # Signed in, but the role requires MFA: only enrolment is allowed until it is on.
+    mfa_enrollment_required: bool = False
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_token: str
+    code: str = Field(min_length=6, max_length=20)
+
+
+class MfaCode(BaseModel):
+    code: str = Field(min_length=6, max_length=20)
+
+
+class MfaSetup(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class MfaRecoveryCodes(BaseModel):
+    recovery_codes: list[str]
+    # Fresh tokens: turning MFA on signs out sessions that never proved it.
+    tokens: TokenPair | None = None
+
+
+class MfaStatusOut(BaseModel):
+    enabled: bool
+    pending: bool
+    required: bool
+    recovery_codes_left: int
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(max_length=1024)
     new_password: str = Field(max_length=1024)

@@ -217,3 +217,20 @@ export interface GatewayInfo {
   port: number;
   login_format: string;
 }
+
+export interface LoginResult {
+  access_token: string | null;
+  refresh_token: string | null;
+  token_type: string;
+  expires_in: number | null;
+  mfa_required: boolean;
+  mfa_token: string | null;
+  mfa_enrollment_required: boolean;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  pending: boolean;
+  required: boolean;
+  recovery_codes_left: number;
+}

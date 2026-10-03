@@ -1,6 +1,6 @@
 import { Spin } from 'antd';
 import { lazy, Suspense, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Role } from '@/constants/enums';
 import { useAuth } from '@/context/AuthContext';
@@ -16,6 +16,7 @@ const AuditPage = lazy(() => import('@/pages/AuditPage'));
 const SessionsPage = lazy(() => import('@/pages/SessionsPage'));
 const CommandRulesPage = lazy(() => import('@/pages/CommandRulesPage'));
 const UsersPage = lazy(() => import('@/pages/UsersPage'));
+const SecurityPage = lazy(() => import('@/pages/SecurityPage'));
 
 const Loading = () => (
   <div className="flex min-h-[50vh] items-center justify-center">
@@ -24,9 +25,12 @@ const Loading = () => (
 );
 
 function RequireAuth({ roles, children }: { roles?: RoleT[]; children?: ReactNode }) {
-  const { user, loading, hasRole } = useAuth();
+  const { user, loading, hasRole, needsMfaEnrolment } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return <Loading />;
   if (!user) return <Navigate to="/login" replace />;
+  // A role that requires MFA can only reach the Security page until it is on.
+  if (needsMfaEnrolment && pathname !== '/security') return <Navigate to="/security" replace />;
   if (roles && !hasRole(...roles)) return <Navigate to="/" replace />;
   return <>{children ?? <Outlet />}</>;
 }
@@ -56,6 +60,7 @@ export const router = createBrowserRouter([
         path: '/audit',
         element: <RequireAuth roles={[Role.Admin, Role.Auditor]}>{page(<AuditPage />)}</RequireAuth>,
       },
+      { path: '/security', element: page(<SecurityPage />) },
       { path: '/users', element: <RequireAuth roles={[Role.Admin]}>{page(<UsersPage />)}</RequireAuth> },
     ],
   },

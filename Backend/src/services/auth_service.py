@@ -8,7 +8,7 @@ from datetime import timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.contracts.schemas.identity import TokenPair
+from src.contracts.schemas.identity import LoginResult, TokenPair
 from src.core.config import Settings, resolve_jwt_secret
 from src.core.context import Actor
 from src.core.enums import Role
@@ -22,7 +22,7 @@ from src.core.security import (
 )
 from src.errors.exceptions import AccountLockedError, UnauthorizedError
 from src.models import User, utcnow
-from src.services import audit_service
+from src.services import audit_service, mfa_service
 
 _BAD_LOGIN = "Invalid username or password"
 
@@ -133,11 +133,45 @@ async def login(
     username: str,
     password: str,
     source_ip: str | None,
-) -> TokenPair:
+) -> LoginResult:
     user = await authenticate(
         session, settings, username=username, password=password, source_ip=source_ip
     )
-    return issue_tokens(user, settings)
+    if await mfa_service.is_enabled(session, user.id):
+        token = create_token(
+            secret=resolve_jwt_secret(settings),
+            user_id=user.id,
+            token_version=user.token_version,
+            token_type="mfa",
+            ttl=timedelta(minutes=settings.mfa_token_minutes),
+        )
+        return LoginResult(mfa_required=True, mfa_token=token)
+    return LoginResult(
+        **issue_tokens(user, settings).model_dump(),
+        mfa_enrollment_required=mfa_service.is_required(settings, user.role),
+    )
+
+
+async def complete_mfa(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    mfa_token: str,
+    code: str,
+    source_ip: str | None,
+) -> LoginResult:
+    claims = decode_token(mfa_token, secret=resolve_jwt_secret(settings), expected_type="mfa")
+    try:
+        user_id = uuid.UUID(claims["sub"])
+    except ValueError as exc:
+        raise UnauthorizedError("Invalid token") from exc
+    current = await session.get(User, user_id)
+    if current is None or current.token_version != claims["tv"]:
+        raise UnauthorizedError("Sign in again")
+    user = await mfa_service.verify_login_code(
+        session, settings, user_id=user_id, code=code, source_ip=source_ip, channel="web"
+    )
+    return LoginResult(**issue_tokens(user, settings).model_dump())
 
 
 async def refresh(session: AsyncSession, settings: Settings, refresh_token: str) -> TokenPair:

@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Form, Input, Modal, Select, Switch, Table, Tag, Typography } from 'antd';
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Switch, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -88,6 +88,11 @@ export default function UsersPage() {
   const { page, page_size, setPage, pagination } = usePaging();
   const q = { page, page_size, search: search || undefined };
   const { data, isLoading } = useQuery({ queryKey: queryKeys.users.list(q), queryFn: () => usersApi.list(q) });
+  const resetMfa = useMutation({
+    mutationFn: (id: string) => usersApi.resetMfa(id),
+    onSuccess: () => message.success('MFA removed; they set it up again at next sign-in'),
+    onError: (e) => message.error(errorMessage(e)),
+  });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<User> }) => usersApi.update(id, body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.users.all }),
@@ -135,6 +140,19 @@ export default function UsersPage() {
               <>
                 {fmtTime(u.last_login_at)} {u.locked_until && new Date(u.locked_until) > new Date() && <Tag color="red">locked</Tag>}
               </>
+            ),
+          },
+          {
+            title: '',
+            width: 110,
+            render: (_, u) => (
+              <Popconfirm
+                title={`Reset MFA for ${u.username}?`}
+                description="For a lost phone. Their sessions end and they re-enrol at next sign-in."
+                onConfirm={() => resetMfa.mutate(u.id)}
+              >
+                <Button size="small">Reset MFA</Button>
+              </Popconfirm>
             ),
           },
         ]}

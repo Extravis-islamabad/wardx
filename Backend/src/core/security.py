@@ -14,7 +14,8 @@ from argon2.exceptions import InvalidHashError, VerificationError
 
 from src.errors.exceptions import UnauthorizedError
 
-TokenType = Literal["access", "refresh"]
+# "mfa": proves the password step only; exchanged for real tokens with a valid code.
+TokenType = Literal["access", "refresh", "mfa"]
 _ALGORITHM = "HS256"
 _ISSUER = "wardx"
 

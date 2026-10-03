@@ -14,8 +14,9 @@ from src.core.context import Actor
 from src.core.db import get_session
 from src.core.enums import Role
 from src.core.security import decode_token
-from src.errors.exceptions import ForbiddenError, UnauthorizedError
+from src.errors.exceptions import ForbiddenError, MfaEnrollmentRequired, UnauthorizedError
 from src.models import User
+from src.services import mfa_service
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
@@ -26,7 +27,12 @@ def client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+# What a user whose role requires MFA may still reach before enrolling.
+_MFA_ENROLMENT_PATHS = ("/api/v1/auth/me", "/api/v1/auth/mfa", "/api/v1/auth/logout")
+
+
 async def get_current_user(
+    request: Request,
     session: SessionDep,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> User:
@@ -42,6 +48,13 @@ async def get_current_user(
     user = await session.get(User, user_id)
     if user is None or not user.is_active or user.token_version != claims["tv"]:
         raise UnauthorizedError("Session is no longer valid")
+    settings = get_settings()
+    if (
+        mfa_service.is_required(settings, user.role)
+        and not request.url.path.startswith(_MFA_ENROLMENT_PATHS)
+        and not await mfa_service.is_enabled(session, user.id)
+    ):
+        raise MfaEnrollmentRequired("Your role requires MFA. Set it up to continue.")
     return user
 
 

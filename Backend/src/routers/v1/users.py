@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from src.contracts.schemas.common import APIResponse, PageParams, PaginatedAPIResponse, ok
 from src.contracts.schemas.identity import PasswordReset, UserCreate, UserOut, UserUpdate
 from src.dependencies.auth import AdminActor, SessionDep
-from src.services import user_service
+from src.services import mfa_service, user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -47,3 +47,9 @@ async def reset_password(
 ):
     await user_service.reset_password(session, actor, user_id, body.new_password)
     return ok(None, "Password reset; the user's sessions were signed out")
+
+
+@router.post("/{user_id}/mfa/reset", response_model=APIResponse[None])
+async def reset_mfa(user_id: uuid.UUID, actor: AdminActor, session: SessionDep):
+    await mfa_service.admin_reset(session, actor, user_id)
+    return ok(None, "MFA removed; the user sets it up again at next sign-in")

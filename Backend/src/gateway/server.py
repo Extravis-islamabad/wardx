@@ -21,6 +21,9 @@ from src.gateway.naming import GatewayLogin, parse_login
 
 logger = structlog.get_logger(__name__)
 
+# Failed authentication attempts per connection before it is dropped (sshd default is 6).
+MAX_AUTH_TRIES = 3
+
 
 def load_host_key(path: Path) -> asyncssh.SSHKey:
     if not path.exists():
@@ -39,6 +42,10 @@ class _Listener(asyncssh.SSHServer):
     def __init__(self, gateway: Gateway) -> None:
         self.gateway = gateway
         self.conn: asyncssh.SSHServerConnection | None = None
+        # Keyboard-interactive is two rounds when MFA is on: password, then code.
+        self._stage = "password"
+        self._pending: tuple[GatewayLogin, Actor] | None = None
+        self._failures = 0
 
     def connection_made(self, conn: asyncssh.SSHServerConnection) -> None:
         self.conn = conn
@@ -46,22 +53,78 @@ class _Listener(asyncssh.SSHServer):
     def begin_auth(self, username: str) -> bool:
         return True
 
+    def _source_ip(self) -> str | None:
+        peer = self.conn.get_extra_info("peername")
+        return peer[0] if peer else None
+
+    async def _check_password(
+        self, username: str, password: str
+    ) -> tuple[GatewayLogin, Actor] | None:
+        try:
+            login = parse_login(username)
+        except ValueError:
+            return None
+        try:
+            actor = await self.gateway.broker.authenticate(
+                login.wardx_user, password, self._source_ip()
+            )
+        except AppError:
+            return None
+        return login, actor
+
+    def _reject(self) -> bool:
+        """Count a failed attempt; drop the connection after MAX_AUTH_TRIES, like sshd."""
+        self._failures += 1
+        if self._failures >= MAX_AUTH_TRIES:
+            self.conn.disconnect(
+                asyncssh.DISC_NO_MORE_AUTH_METHODS_AVAILABLE, "Too many authentication failures"
+            )
+        return False
+
+    def _accept(self, login: GatewayLogin, actor: Actor) -> bool:
+        self.conn.set_extra_info(wardx_login=login, wardx_actor=actor)
+        return True
+
+    # ── Password: for users without MFA ──
+
     def password_auth_supported(self) -> bool:
         return True
 
     async def validate_password(self, username: str, password: str) -> bool:
-        try:
-            login = parse_login(username)
-        except ValueError:
+        checked = await self._check_password(username, password)
+        if checked is None:
+            return self._reject()
+        if await self.gateway.broker.mfa_enabled(checked[1]):
+            # Plain password auth cannot ask for the code; the client falls back
+            # to keyboard-interactive, which can.
             return False
-        peer = self.conn.get_extra_info("peername")
-        source_ip = peer[0] if peer else None
-        try:
-            actor = await self.gateway.broker.authenticate(login.wardx_user, password, source_ip)
-        except AppError:
-            return False
-        self.conn.set_extra_info(wardx_login=login, wardx_actor=actor)
+        return self._accept(*checked)
+
+    # ── Keyboard-interactive: password, then code when MFA is on ──
+
+    def kbdint_auth_supported(self) -> bool:
         return True
+
+    def get_kbdint_challenge(self, username: str, lang: str, submethods: str):
+        self._stage, self._pending = "password", None
+        return ("WardX sign-in", "", "", [("WardX password: ", False)])
+
+    async def validate_kbdint_response(self, username: str, responses: list[str]):
+        if len(responses) != 1:
+            return self._reject()
+        if self._stage == "password":
+            checked = await self._check_password(username, responses[0])
+            if checked is None:
+                return self._reject()
+            if not await self.gateway.broker.mfa_enabled(checked[1]):
+                return self._accept(*checked)
+            self._stage, self._pending = "code", checked
+            return ("WardX sign-in", "", "", [("Authenticator or recovery code: ", True)])
+        if self._stage == "code" and self._pending is not None:
+            login, actor = self._pending
+            if await self.gateway.broker.verify_mfa(actor, responses[0]):
+                return self._accept(login, actor)
+        return self._reject()
 
 
 class Gateway:

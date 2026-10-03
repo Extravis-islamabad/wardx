@@ -12,6 +12,11 @@ Same stack as MonetX so engineers move between them freely.
 
 - **Identity:** local users, argon2id passwords, JWT access + refresh, lockout after 5 failures,
   sign-out-everywhere (token version), roles `admin` / `approver` / `auditor` / `user`.
+- **MFA:** TOTP (RFC 6238, any authenticator app) for the console *and* the SSH gateway (second
+  keyboard-interactive prompt). Seed encrypted in the vault, each code accepted once, 10 single-use
+  recovery codes, wrong codes count towards lockout. `WARDX_MFA_REQUIRED_ROLES=["admin"]` forces
+  enrolment: those users can only reach the Security page until MFA is on. Admins can reset a
+  user's MFA (lost phone). The gateway drops a connection after 3 failed auth attempts.
 - **Vault:** envelope encryption — AES-256-GCM per secret version with its own data key, wrapped by
   a key-encryption key (KEK). Owner + version bound as associated data, so a ciphertext moved to
   another account fails to open. KEK rotation via retired keys. HSM / KMS slot in behind `Keyring`.
@@ -76,5 +81,5 @@ cd Frontend && npm run build                  # tsc strict + vite build
 1. Telnet through the gateway; vendor-aware prompts for enable/privilege levels (Cisco, Huawei).
 2. Password rotation drivers (network devices via Netmiko, Linux, Windows/AD) with verify + rollback.
 3. Discovery (subnets, AD, MonetX device registry sync via `targets.external_ref`).
-4. MFA (TOTP, WebAuthn), LDAP / SAML / OIDC sign-in.
+4. WebAuthn / passkeys; LDAP / SAML / OIDC sign-in.
 5. RDP gateway (guacd), break-glass, SIEM export.

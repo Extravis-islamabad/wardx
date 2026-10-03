@@ -2,6 +2,7 @@ import type { PageQuery } from '@/types/api';
 
 export const queryKeys = {
   me: ['auth', 'me'] as const,
+  mfa: ['auth', 'mfa'] as const,
   dashboard: ['dashboard'] as const,
   targets: { all: ['targets'] as const, list: (q: PageQuery) => ['targets', 'list', q] as const },
   accounts: { all: ['accounts'] as const, list: (q: PageQuery) => ['accounts', 'list', q] as const },

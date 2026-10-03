@@ -10,6 +10,8 @@ import type {
   DashboardSummary,
   GatewayInfo,
   GatewaySession,
+  LoginResult,
+  MfaStatus,
   PageQuery,
   Paginated,
   RevealedSecret,
@@ -27,7 +29,16 @@ const del = async <T>(url: string) => (await apiClient.delete<T>(url)).data;
 
 export const authApi = {
   login: (username: string, password: string) =>
-    post<ApiResponse<TokenPair>>('auth/login', { username, password }),
+    post<ApiResponse<LoginResult>>('auth/login', { username, password }),
+  mfaVerify: (mfa_token: string, code: string) =>
+    post<ApiResponse<LoginResult>>('auth/mfa/verify', { mfa_token, code }),
+  mfaStatus: () => get<ApiResponse<MfaStatus>>('auth/mfa'),
+  mfaSetup: () => post<ApiResponse<{ secret: string; otpauth_uri: string }>>('auth/mfa/setup'),
+  mfaEnable: (code: string) =>
+    post<ApiResponse<{ recovery_codes: string[]; tokens: TokenPair | null }>>('auth/mfa/enable', { code }),
+  mfaRecoveryCodes: (code: string) =>
+    post<ApiResponse<{ recovery_codes: string[] }>>('auth/mfa/recovery-codes', { code }),
+  mfaDisable: (code: string) => post<ApiResponse<null>>('auth/mfa/disable', { code }),
   me: () => get<ApiResponse<User>>('auth/me'),
   logout: () => post<ApiResponse<null>>('auth/logout'),
   changePassword: (current_password: string, new_password: string) =>
@@ -97,6 +108,7 @@ export const usersApi = {
     patch<ApiResponse<User>>(`users/${id}`, body),
   resetPassword: (id: string, new_password: string) =>
     post<ApiResponse<null>>(`users/${id}/reset-password`, { new_password }),
+  resetMfa: (id: string) => post<ApiResponse<null>>(`users/${id}/mfa/reset`),
 };
 
 export const sessionsApi = {

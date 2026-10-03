@@ -5,6 +5,7 @@ import {
   DesktopOutlined,
   DashboardOutlined,
   KeyOutlined,
+  LockOutlined,
   LogoutOutlined,
   MoonOutlined,
   SafetyCertificateOutlined,
@@ -74,8 +75,11 @@ export function AppLayout() {
           />
           <Dropdown
             menu={{
-              items: [{ key: 'logout', icon: <LogoutOutlined />, label: 'Sign out everywhere' }],
-              onClick: () => void logout(),
+              items: [
+                { key: 'security', icon: <LockOutlined />, label: 'Security (MFA)' },
+                { key: 'logout', icon: <LogoutOutlined />, label: 'Sign out everywhere' },
+              ],
+              onClick: ({ key }) => (key === 'logout' ? void logout() : navigate('/security')),
             }}
           >
             <span className="flex cursor-pointer items-center gap-2">

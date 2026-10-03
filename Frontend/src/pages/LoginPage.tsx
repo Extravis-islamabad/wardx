@@ -1,4 +1,4 @@
-import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
+import { KeyOutlined, LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Alert, Button, Card, Form, Input, Typography } from 'antd';
 import { useState } from 'react';
@@ -15,8 +15,57 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
+function CodeStep() {
+  const { verifyCode, cancelCode } = useAuth();
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await verifyCode(code);
+    } catch (e) {
+      setError(errorMessage(e));
+      setCode('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Typography.Paragraph type="secondary" className="text-center">
+        Enter the 6-digit code from your authenticator app, or a recovery code.
+      </Typography.Paragraph>
+      {error && <Alert className="!mb-4" type="error" showIcon title={error} />}
+      <Form layout="vertical" onFinish={() => void submit()}>
+        <Form.Item label="Authentication code" htmlFor="mfa-code">
+          <Input
+            id="mfa-code"
+            prefix={<KeyOutlined />}
+            autoFocus
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            maxLength={20}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </Form.Item>
+        <Button type="primary" htmlType="submit" block loading={busy} disabled={code.trim().length < 6}>
+          Verify
+        </Button>
+        <Button type="link" block className="!mt-2" onClick={cancelCode}>
+          Use a different account
+        </Button>
+      </Form>
+    </>
+  );
+}
+
 export default function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, awaitingCode } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const { control, handleSubmit, formState } = useForm<Values>({
     resolver: zodResolver(schema),
@@ -44,6 +93,10 @@ export default function LoginPage() {
           </Typography.Title>
           <Typography.Text type="secondary">Privileged access management</Typography.Text>
         </div>
+        {awaitingCode ? (
+          <CodeStep />
+        ) : (
+        <>
         {error && <Alert className="!mb-4" type="error" showIcon title={error} />}
         <Form layout="vertical" onSubmitCapture={onSubmit} requiredMark={false}>
           <FormField
@@ -79,6 +132,8 @@ export default function LoginPage() {
             Sign in
           </Button>
         </Form>
+        </>
+        )}
       </Card>
     </div>
   );

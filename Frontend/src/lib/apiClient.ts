@@ -1,13 +1,15 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import type { ApiErrorBody, ApiResponse, TokenPair } from '@/types/api';
 
+type Tokens = Pick<TokenPair, 'access_token' | 'refresh_token'>;
+
 const ACCESS_KEY = 'wardx.access';
 const REFRESH_KEY = 'wardx.refresh';
 
 export const tokens = {
   access: () => localStorage.getItem(ACCESS_KEY),
   refresh: () => localStorage.getItem(REFRESH_KEY),
-  set(pair: TokenPair) {
+  set(pair: Tokens) {
     localStorage.setItem(ACCESS_KEY, pair.access_token);
     localStorage.setItem(REFRESH_KEY, pair.refresh_token);
   },
@@ -48,7 +50,7 @@ apiClient.interceptors.response.use(
   (r) => r,
   async (error: AxiosError<ApiErrorBody>) => {
     const config = error.config as RetriableConfig | undefined;
-    const isAuthCall = config?.url?.startsWith('auth/login') || config?.url?.startsWith('auth/refresh');
+    const isAuthCall = ['auth/login', 'auth/refresh', 'auth/mfa/verify'].some((u) => config?.url?.startsWith(u));
     if (error.response?.status === 401 && config && !config._retried && !isAuthCall) {
       config._retried = true;
       refreshing ??= refreshAccess().finally(() => {
@@ -61,6 +63,9 @@ apiClient.interceptors.response.use(
       }
       tokens.clear();
       window.dispatchEvent(new Event('wardx:logout'));
+    }
+    if (error.response?.data?.error?.code === 'mfa_enrollment_required') {
+      window.dispatchEvent(new Event('wardx:mfa-enrol'));
     }
     return Promise.reject(error);
   },

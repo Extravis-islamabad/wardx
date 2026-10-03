@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Roles that must enrol in MFA before using anything else, e.g. ["admin","approver"].
+    mfa_required_roles: list[str] = []
+    mfa_token_minutes: int = 5
+
     login_max_failures: int = 5
     login_lockout_minutes: int = 15
     # How long a pending request waits for a decision, and how long an approval
