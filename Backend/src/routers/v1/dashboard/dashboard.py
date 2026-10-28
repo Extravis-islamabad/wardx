@@ -5,13 +5,14 @@ GET /dashboard/summary   — headline counts, and the signed-in user's own
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from src.contracts.schemas.responses.common import UNAUTHORIZED_RESPONSE, APIResponse, ok
 from src.contracts.schemas.responses.dashboard.dashboard_responses import (
     DashboardSummaryResponse,
 )
-from src.dependencies.auth import ActorDep
+from src.core.permissions import DASHBOARD_VIEW
+from src.dependencies.auth import ActorDep, require_permission
 from src.dependencies.dashboard import DashboardServiceDep
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get(
     "/summary",
     response_model=APIResponse[DashboardSummaryResponse],
+    dependencies=[Depends(require_permission(DASHBOARD_VIEW))],
     summary="Headline counts for the home page",
     responses={**UNAUTHORIZED_RESPONSE},
 )

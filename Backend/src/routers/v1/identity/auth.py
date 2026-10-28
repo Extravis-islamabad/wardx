@@ -9,7 +9,7 @@ POST /auth/change-password   — change your own (local) password
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from src.contracts.schemas.requests.identity.auth_requests import (
     ChangePasswordRequest,
@@ -28,7 +28,8 @@ from src.contracts.schemas.responses.identity.auth_responses import (
     TokenPairResponse,
 )
 from src.contracts.schemas.responses.identity.user_responses import UserResponse
-from src.dependencies.auth import ActorDep, CurrentUserDep, client_ip
+from src.core.permissions import PROFILE_SELF
+from src.dependencies.auth import ActorDep, CurrentUserDep, client_ip, require_permission
 from src.dependencies.identity import AuthServiceDep
 from src.routers.v1.identity.mappers import login_response, token_response, user_response
 
@@ -67,6 +68,7 @@ async def refresh(
 @router.post(
     "/logout",
     response_model=APIResponse[None],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Sign out of every session",
     responses={**UNAUTHORIZED_RESPONSE},
 )
@@ -78,6 +80,7 @@ async def logout(service: AuthServiceDep, actor: ActorDep) -> APIResponse[None]:
 @router.get(
     "/me",
     response_model=APIResponse[UserResponse],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="The signed-in user",
     responses={**UNAUTHORIZED_RESPONSE},
 )
@@ -88,6 +91,7 @@ async def me(user: CurrentUserDep) -> APIResponse[UserResponse]:
 @router.post(
     "/change-password",
     response_model=APIResponse[TokenPairResponse],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Change your own password",
     responses={**UNAUTHORIZED_RESPONSE, **CONFLICT_RESPONSE, **VALIDATION_ERROR_RESPONSE},
 )

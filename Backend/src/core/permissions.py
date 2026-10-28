@@ -23,8 +23,11 @@ POLICY_MANAGE = "policy.manage"
 AUDIT_VIEW = "audit.view"
 USERS_MANAGE = "users.manage"
 DIRECTORY_MANAGE = "directory.manage"
+DASHBOARD_VIEW = "dashboard.view"
+# Your own profile: who am I, sign out, change password, your own MFA.
+PROFILE_SELF = "profile.self"
 
-_EVERYONE = frozenset({INVENTORY_VIEW, ACCESS_USE, POLICY_VIEW})
+_EVERYONE = frozenset({INVENTORY_VIEW, ACCESS_USE, POLICY_VIEW, DASHBOARD_VIEW, PROFILE_SELF})
 
 ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
     Role.ADMIN: frozenset(
@@ -42,6 +45,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             AUDIT_VIEW,
             USERS_MANAGE,
             DIRECTORY_MANAGE,
+            DASHBOARD_VIEW,
+            PROFILE_SELF,
         }
     ),
     Role.APPROVER: _EVERYONE | {ACCESS_APPROVE},

@@ -67,4 +67,6 @@ def require_permission(*codenames: str):
             raise ForbiddenError(f"Missing required permission: {', '.join(codenames)}")
         return actor
 
+    # Read by the route-coverage security test: which codenames this gate enforces.
+    _check.permission_codenames = codenames  # type: ignore[attr-defined]
     return _check

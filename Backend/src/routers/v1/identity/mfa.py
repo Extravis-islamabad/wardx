@@ -10,7 +10,7 @@ POST /auth/mfa/disable          — turn MFA off (when your role allows)
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from src.contracts.schemas.requests.identity.auth_requests import MfaCode, MfaVerifyRequest
 from src.contracts.schemas.responses.common import (
@@ -26,7 +26,8 @@ from src.contracts.schemas.responses.identity.auth_responses import (
     MfaSetupResponse,
     MfaStatusResponse,
 )
-from src.dependencies.auth import ActorDep, CurrentUserDep, client_ip
+from src.core.permissions import PROFILE_SELF
+from src.dependencies.auth import ActorDep, CurrentUserDep, client_ip, require_permission
 from src.dependencies.identity import AuthServiceDep, MfaServiceDep
 from src.routers.v1.identity.mappers import login_response, token_response
 
@@ -51,6 +52,7 @@ async def mfa_verify(
 @router.get(
     "",
     response_model=APIResponse[MfaStatusResponse],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Your MFA status",
     responses={**UNAUTHORIZED_RESPONSE},
 )
@@ -71,6 +73,7 @@ async def mfa_status(
 @router.post(
     "/setup",
     response_model=APIResponse[MfaSetupResponse],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Start MFA enrolment",
     responses={**UNAUTHORIZED_RESPONSE, **CONFLICT_RESPONSE},
 )
@@ -84,6 +87,7 @@ async def mfa_setup(service: MfaServiceDep, actor: ActorDep) -> APIResponse[MfaS
 @router.post(
     "/enable",
     response_model=APIResponse[MfaRecoveryCodesResponse],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Confirm MFA enrolment",
     responses={**UNAUTHORIZED_RESPONSE, **CONFLICT_RESPONSE, **VALIDATION_ERROR_RESPONSE},
 )
@@ -101,6 +105,7 @@ async def mfa_enable(
 @router.post(
     "/recovery-codes",
     response_model=APIResponse[MfaRecoveryCodesResponse],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Replace your recovery codes",
     responses={**UNAUTHORIZED_RESPONSE, **VALIDATION_ERROR_RESPONSE},
 )
@@ -114,6 +119,7 @@ async def mfa_new_recovery_codes(
 @router.post(
     "/disable",
     response_model=APIResponse[None],
+    dependencies=[Depends(require_permission(PROFILE_SELF))],
     summary="Turn MFA off",
     responses={**UNAUTHORIZED_RESPONSE, **CONFLICT_RESPONSE, **VALIDATION_ERROR_RESPONSE},
 )

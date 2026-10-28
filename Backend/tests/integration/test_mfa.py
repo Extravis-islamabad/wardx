@@ -10,7 +10,7 @@ import pytest
 
 from src.core import totp
 from src.core.config import get_settings
-from tests.integration.conftest import DEVICE_USER, login
+from tests.conftest import DEVICE_USER, login
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

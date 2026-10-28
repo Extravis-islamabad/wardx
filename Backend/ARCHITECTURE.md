@@ -37,5 +37,9 @@ Reference module: **inventory** (targets, accounts). Copy it.
   `PaginatedAPIResponse[T]`. Errors: `{success, status_code, error: {code, message, details}}`.
 - **Permissions**: services decide row visibility (e.g. "see every check-out") with
   `actor.can(CODENAME)`, never with role names.
+- **Security tests** (`tests/security/`) gate every change: each route needs a codename or an
+  entry in `PUBLIC_ROUTES` (reviewed); crypto refuses wrong keys and any tampered byte; the audit
+  table is append-only and edits or deletions break the chain; cross-tenant tests switch on with
+  the tenancy step.
 - **Migrations**: raw SQL `migrations/NNN_name.sql`, applied in order, idempotent.
 - No file over 500 lines; split by sub-area like MonetX.

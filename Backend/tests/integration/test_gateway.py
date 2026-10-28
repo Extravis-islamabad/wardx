@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import text
 
 from src.core.db import session_factory
-from tests.integration.conftest import DEVICE_PASSWORD, DEVICE_USER
+from tests.conftest import DEVICE_PASSWORD, DEVICE_USER
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
