@@ -133,8 +133,10 @@ data: migrations only add, backfill and move.
     - directory: `directory.configure`, `directory.test`, `directory.sync`;
     - global settings: `command_rule.create`, `command_rule.update`, `command_rule.delete`,
       `alert.acknowledge`;
-    - targets: `target.create`, `target.update`, `target.delete`, `target.host_key_reset`
-      (a target can hold accounts from several safes). `target.host_key_learned` and
+    - targets: `target.create`, `target.update`, `target.host_key_reset`, and the
+      target-level `target.delete` (a target can hold accounts from several safes).
+      Deleting a target also writes one `target.delete` per affected safe, carrying that
+      safe and listing only the accounts removed from it (id and username). `target.host_key_learned` and
       `target.host_key_mismatch` get the session's safe;
     - `account.emergency_list`, a lookup across every safe.
 

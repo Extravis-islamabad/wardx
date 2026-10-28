@@ -48,3 +48,53 @@ async def test_events_stay_with_the_safe_they_happened_in(client, admin, make_us
     assert not before_move & in_b
     assert "secret.set" in in_b and "secret.set" not in in_a
     assert all(e["safe_id"] == safe_b for e in await _events(client, admin, safe_b) if e["safe_id"])
+
+
+async def test_target_delete_is_recorded_in_every_affected_safe(client, admin, make_user):
+    safe_a, safe_b = await new_safe(client, admin), await new_safe(client, admin)
+    keeper = await make_user(f"keeper{tag()}", role="admin")
+    keeper_id = (await me(client, keeper))["id"]
+    for sid in (safe_a, safe_b):
+        await grant(client, admin, sid, "user", keeper_id, ALL_PERMS)
+    target = (
+        await client.post(
+            "/targets",
+            headers=keeper,
+            json={
+                "name": f"t-{tag()}",
+                "address": "10.0.0.7",
+                "platform": "linux",
+                "protocol": "ssh",
+            },
+        )
+    ).json()["data"]
+    made = {}
+    for sid, username in ((safe_a, "alpha"), (safe_a, "beta"), (safe_b, "gamma")):
+        resp = await client.post(
+            "/accounts",
+            headers=keeper,
+            json={"target_id": target["id"], "safe_id": sid, "username": username},
+        )
+        made[username] = resp.json()["data"]["id"]
+    assert (await client.delete(f"/targets/{target['id']}", headers=keeper)).status_code == 200
+
+    def deletion(events):
+        return [e for e in events if e["action"] == "target.delete"]
+
+    in_a = deletion(await _events(client, admin, safe_a))
+    in_b = deletion(await _events(client, admin, safe_b))
+    assert len(in_a) == len(in_b) == 1
+    assert sorted(a["username"] for a in in_a[0]["details"]["accounts_removed"]) == [
+        "alpha",
+        "beta",
+    ]
+    assert in_b[0]["details"]["accounts_removed"] == [{"id": made["gamma"], "username": "gamma"}]
+    # The target-level event is kept, without a safe.
+    everything = (
+        await client.get(
+            "/audit/events",
+            headers=admin,
+            params={"action": "target.delete", "object_id": target["id"]},
+        )
+    ).json()["data"]
+    assert len(everything) == 3 and sum(e["safe_id"] is None for e in everything) == 1

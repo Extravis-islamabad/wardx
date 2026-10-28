@@ -93,6 +93,8 @@ class TargetService:
         await ensure_no_active_checkouts(self._accounts, account_ids)
         await self._vault.shred(ACCOUNT_SECRET, account_ids)
         await self._targets.delete(target_id)
+        # The target-level event (no safe), then one per affected safe listing only the
+        # accounts removed from that safe, so each safe's audit trail shows its loss.
         await self._audit.record(
             actor,
             "target.delete",
@@ -100,4 +102,19 @@ class TargetService:
             object_id=target_id,
             details={"name": target.name, "accounts_removed": len(account_ids)},
         )
+        for safe_id in sorted({a.safe_id for a in accounts}, key=str):
+            removed = [a for a in accounts if a.safe_id == safe_id]
+            await self._audit.record(
+                actor,
+                "target.delete",
+                object_type="target",
+                object_id=target_id,
+                safe_id=safe_id,
+                details={
+                    "name": target.name,
+                    "accounts_removed": [
+                        {"id": str(a.id), "username": a.username} for a in removed
+                    ],
+                },
+            )
         await self._targets.commit()
