@@ -115,8 +115,28 @@ data: migrations only add, backfill and move.
   - **No backfill:** `audit.events` is append-only, so existing rows are not rewritten.
     Events before migration 016 use the current mapping. Older events of moved or deleted
     accounts can't be attributed. The global audit trail still has them.
-  - Not attributed yet: gateway-session events, and check-outs revoked by directory sync.
-    Both fall back to the current mapping.
+  - Every event about an account, request, check-out or gateway session records its safe.
+    That includes system-actor events: expiry, directory-sync revokes and session
+    terminations, and gateway session start, end, injection and blocked commands.
+    - When the caller doesn't pass the safe, `AuditService` resolves it at write time from
+      the event's object, or from a `session_id`, `checkout_id`, `request_id` or
+      `account_id` in its details. That is how host-key events of a session get it.
+    - Callers pass the safe explicitly where a lookup would be wrong: a move, or a deleted
+      account.
+    - Guard test: `tests/security/test_audit_safe_coverage.py`.
+  - **Events with no safe by design** (not about an account object):
+    - sign-in and MFA: `auth.login`, `auth.logout`, `auth.password_change`, `auth.mfa`,
+      `mfa.enrol_start`, `mfa.enable`, `mfa.disable`, `mfa.recovery_regenerate`,
+      `mfa.reset`;
+    - user administration: `user.create`, `user.update`, `user.password_reset`,
+      `user.disable`, `user.enable`, `user.grant`, `user.revoke`, `user.bootstrap_admin`;
+    - directory: `directory.configure`, `directory.test`, `directory.sync`;
+    - global settings: `command_rule.create`, `command_rule.update`, `command_rule.delete`,
+      `alert.acknowledge`;
+    - targets: `target.create`, `target.update`, `target.delete`, `target.host_key_reset`
+      (a target can hold accounts from several safes). `target.host_key_learned` and
+      `target.host_key_mismatch` get the session's safe;
+    - `account.emergency_list`, a lookup across every safe.
 
 ### Directory outage, safe health and break-glass coverage
 

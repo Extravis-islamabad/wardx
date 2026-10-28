@@ -47,12 +47,14 @@ class AuditService:
         details: dict[str, Any] | None = None,
         safe_id: uuid.UUID | None = None,
     ) -> AuditEventDTO:
+        details = details or {}
+        if safe_id is None:
+            safe_id = await self._resolve_safe(object_type, object_id, details)
         key_version, key = await self._tenant_keys.active(KeyPurpose.AUDIT)
         await self._repo.lock_chain()
         prev = await self._repo.last_hash() or GENESIS_HASH
         event_id = uuid.uuid4()
         occurred_at = utcnow()
-        details = details or {}
         body = canonical(
             event_id=event_id,
             occurred_at=occurred_at,
@@ -85,6 +87,30 @@ class AuditService:
                 safe_id=safe_id,
             )
         )
+
+    async def _resolve_safe(
+        self, object_type: str | None, object_id: uuid.UUID | None, details: dict[str, Any]
+    ) -> uuid.UUID | None:
+        """The safe an event belongs to when the caller did not name one: the current safe
+        of its account, request, check-out or session, or of one referenced in the
+        details (e.g. a host-key event's session). Resolved at write time, so the event
+        keeps the safe it happened in. Callers pass ``safe_id`` explicitly where the
+        lookup would be wrong (an account move, a deleted account)."""
+        candidates: list[tuple[str, Any]] = []
+        if object_type and object_id:
+            candidates.append((object_type, object_id))
+        for kind in ("session", "checkout", "request", "account"):
+            if details.get(f"{kind}_id"):
+                candidates.append((kind, details[f"{kind}_id"]))
+        for kind, ref in candidates:
+            try:
+                ref_id = ref if isinstance(ref, uuid.UUID) else uuid.UUID(str(ref))
+            except ValueError:
+                continue
+            found = await self._repo.safe_of(kind, ref_id)
+            if found is not None:
+                return found
+        return None
 
     async def verify_chain(self) -> ChainCheck:
         """Walk the whole chain in batches of ``_VERIFY_BATCH`` events."""

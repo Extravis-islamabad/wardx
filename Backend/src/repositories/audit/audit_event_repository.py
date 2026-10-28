@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import Row, and_, func, literal, or_, select, text, union
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
-from src.models import AccessRequest, Account, AuditEvent, Checkout
+from src.models import AccessRequest, Account, AuditEvent, Checkout, GatewaySession
 from src.repositories.base import BaseRepository
 
 _AUDIT_LOCK_KEY = 0x5741_5244_00A1
@@ -31,6 +32,9 @@ def _to_dto(row: AuditEvent) -> AuditEventDTO:
         key_version=row.key_version,
         safe_id=row.safe_id,
     )
+
+
+_VIA_ACCOUNT = {"request": AccessRequest, "checkout": Checkout, "session": GatewaySession}
 
 
 def _safe_objects(safe_id):
@@ -64,6 +68,22 @@ class AuditEventRepository(BaseRepository):
         return await self._session.scalar(
             select(AuditEvent.hash).order_by(AuditEvent.seq.desc()).limit(1)
         )
+
+    async def safe_of(self, kind: str, object_id: uuid.UUID) -> uuid.UUID | None:
+        """The current safe of an account, or of the account behind a request, check-out
+        or gateway session (None when it no longer exists)."""
+        if kind == "account":
+            account_id = object_id
+        elif kind in _VIA_ACCOUNT:
+            model = _VIA_ACCOUNT[kind]
+            account_id = await self._session.scalar(
+                select(model.account_id).where(model.id == object_id)
+            )
+            if account_id is None:
+                return None
+        else:
+            return None
+        return await self._session.scalar(select(Account.safe_id).where(Account.id == account_id))
 
     async def add(self, event: AuditEvent) -> AuditEventDTO:
         self._session.add(event)
