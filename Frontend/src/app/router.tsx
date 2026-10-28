@@ -1,70 +1,73 @@
-import { Spin } from 'antd';
-import { lazy, Suspense, type ReactNode } from 'react';
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { AppLayout } from '@/components/AppLayout';
-import { Role } from '@/constants/enums';
-import { useAuth } from '@/context/AuthContext';
-import type { Role as RoleT } from '@/types/api';
+import { lazy, type ReactElement } from 'react';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { ROUTES } from '@/constants/enums/routes';
+import { routeAccessOf } from '@/constants/routeAccess';
+import { BaseLayout } from '@/components/layout/BaseLayout';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import SuspenseBoundary from '@/components/SuspenseBoundary';
 
-const LoginPage = lazy(() => import('@/pages/LoginPage'));
-const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
-const AccountsPage = lazy(() => import('@/pages/AccountsPage'));
-const CheckoutsPage = lazy(() => import('@/pages/CheckoutsPage'));
-const RequestsPage = lazy(() => import('@/pages/RequestsPage'));
-const TargetsPage = lazy(() => import('@/pages/TargetsPage'));
-const AuditPage = lazy(() => import('@/pages/AuditPage'));
-const SessionsPage = lazy(() => import('@/pages/SessionsPage'));
-const CommandRulesPage = lazy(() => import('@/pages/CommandRulesPage'));
-const UsersPage = lazy(() => import('@/pages/UsersPage'));
-const SecurityPage = lazy(() => import('@/pages/SecurityPage'));
-const DirectoryPage = lazy(() => import('@/pages/DirectoryPage'));
+// Login sits outside the layout's Suspense, so it carries its own boundary.
+const Login = lazy(() => import('@/pages/Login'));
 
-const Loading = () => (
-  <div className="flex min-h-[50vh] items-center justify-center">
-    <Spin size="large" />
-  </div>
-);
+const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'));
 
-function RequireAuth({ roles, children }: { roles?: RoleT[]; children?: ReactNode }) {
-  const { user, loading, hasRole, needsMfaEnrolment } = useAuth();
-  const { pathname } = useLocation();
-  if (loading) return <Loading />;
-  if (!user) return <Navigate to="/login" replace />;
-  // A role that requires MFA can only reach the Security page until it is on.
-  if (needsMfaEnrolment && pathname !== '/security') return <Navigate to="/security" replace />;
-  if (roles && !hasRole(...roles)) return <Navigate to="/" replace />;
-  return <>{children ?? <Outlet />}</>;
+// Inventory
+const Targets = lazy(() => import('@/pages/inventory/Targets'));
+const Accounts = lazy(() => import('@/pages/inventory/Accounts'));
+
+// Access
+const Requests = lazy(() => import('@/pages/access/Requests'));
+const Checkouts = lazy(() => import('@/pages/access/Checkouts'));
+
+// Sessions
+const Sessions = lazy(() => import('@/pages/sessions/Sessions'));
+const CommandPolicy = lazy(() => import('@/pages/sessions/CommandPolicy'));
+
+// Audit
+const AuditTrail = lazy(() => import('@/pages/audit/AuditTrail'));
+
+// Identity
+const Users = lazy(() => import('@/pages/identity/Users'));
+const Directory = lazy(() => import('@/pages/identity/Directory'));
+
+// Own account
+const Security = lazy(() => import('@/pages/auth/Security'));
+
+/** Gates a page on its route's entry in ROUTE_ACCESS — the same gate the nav reads. */
+function guard(path: ROUTES, element: ReactElement) {
+  return <ProtectedRoute {...routeAccessOf(path)}>{element}</ProtectedRoute>;
 }
 
-const page = (el: ReactNode) => <Suspense fallback={<Loading />}>{el}</Suspense>;
-
-export const router = createBrowserRouter([
-  { path: '/login', element: page(<LoginPage />) },
+const routes = createBrowserRouter([
+  {
+    path: ROUTES.LOGIN,
+    element: (
+      <SuspenseBoundary>
+        <Login />
+      </SuspenseBoundary>
+    ),
+  },
   {
     element: (
-      <RequireAuth>
-        <AppLayout />
-      </RequireAuth>
+      <ProtectedRoute>
+        <BaseLayout />
+      </ProtectedRoute>
     ),
     children: [
-      { path: '/', element: page(<DashboardPage />) },
-      { path: '/accounts', element: page(<AccountsPage />) },
-      { path: '/checkouts', element: page(<CheckoutsPage />) },
-      { path: '/requests', element: page(<RequestsPage />) },
-      { path: '/targets', element: page(<TargetsPage />) },
-      { path: '/sessions', element: page(<SessionsPage />) },
-      {
-        path: '/policy',
-        element: <RequireAuth roles={[Role.Admin, Role.Auditor]}>{page(<CommandRulesPage />)}</RequireAuth>,
-      },
-      {
-        path: '/audit',
-        element: <RequireAuth roles={[Role.Admin, Role.Auditor]}>{page(<AuditPage />)}</RequireAuth>,
-      },
-      { path: '/security', element: page(<SecurityPage />) },
-      { path: '/users', element: <RequireAuth roles={[Role.Admin]}>{page(<UsersPage />)}</RequireAuth> },
-      { path: '/directory', element: <RequireAuth roles={[Role.Admin]}>{page(<DirectoryPage />)}</RequireAuth> },
+      { path: ROUTES.HOME, element: guard(ROUTES.HOME, <Dashboard />) },
+      { path: ROUTES.ACCOUNTS, element: guard(ROUTES.ACCOUNTS, <Accounts />) },
+      { path: ROUTES.CHECKOUTS, element: guard(ROUTES.CHECKOUTS, <Checkouts />) },
+      { path: ROUTES.REQUESTS, element: guard(ROUTES.REQUESTS, <Requests />) },
+      { path: ROUTES.TARGETS, element: guard(ROUTES.TARGETS, <Targets />) },
+      { path: ROUTES.SESSIONS, element: guard(ROUTES.SESSIONS, <Sessions />) },
+      { path: ROUTES.COMMAND_POLICY, element: guard(ROUTES.COMMAND_POLICY, <CommandPolicy />) },
+      { path: ROUTES.AUDIT, element: guard(ROUTES.AUDIT, <AuditTrail />) },
+      { path: ROUTES.SECURITY, element: guard(ROUTES.SECURITY, <Security />) },
+      { path: ROUTES.USERS, element: guard(ROUTES.USERS, <Users />) },
+      { path: ROUTES.DIRECTORY, element: guard(ROUTES.DIRECTORY, <Directory />) },
     ],
   },
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '*', element: <Navigate to={ROUTES.HOME} replace /> },
 ]);
+
+export default routes;

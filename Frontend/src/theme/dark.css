@@ -1,0 +1,26 @@
+/* WardX dark theme tokens (the default). */
+html[data-theme='dark'] {
+  --background: #141414;
+  --foreground: #e6e8ee;
+  --card: #1f1f1f;
+  --muted: #262626;
+  --muted-foreground: #8c8f99;
+  --border: #303030;
+  --primary: #5b6cff;
+  --primary-hover: #6d7cff;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --success: #3f9f47;
+  --error: #ef4444;
+  --warning: #faad14;
+  --info: #22a5f1;
+  --status-info: #1677ff;
+  --status-primary: #7c3aed;
+  --status-neutral: #3a3a3a;
+  --status-on-solid: #ffffff;
+  --status-on-neutral: #c7cad3;
+  --code-surface: rgba(0, 0, 0, 0.2);
+  --qr-background: #ffffff;
+  --qr-foreground: #000000;
+  --nav-foreground: #ffffff;
+}

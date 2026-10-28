@@ -1,17 +1,18 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { tokens } from '@/lib/apiClient';
-import { queryKeys } from '@/lib/queryKeys';
-import { authApi } from '@/services/api';
-import type { LoginResult, Role, User } from '@/types/api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { tokens } from '@/lib/authStorage';
+import { authKeys } from '@/features/auth/hooks/authKeys';
+import { useMe, useSessionMfaStatus } from '@/features/auth/hooks/useAuthSession';
+import { authService, type LoginResult, type User } from '@/services/auth-services';
+import { AuthEvent, type Role } from '@/constants/enums/auth';
+import { ROLE_PERMISSIONS } from '@/constants/enums/permissions';
+
+export type AccessCheck = {
+  /** Module code(s). Accepted for the registry's shape; the backend does not license modules yet. */
+  module?: string | string[];
+  /** Permission codename(s) — any one of them passes. */
+  permission?: string | string[];
+};
 
 interface AuthState {
   user: User | null;
@@ -26,29 +27,21 @@ interface AuthState {
   adoptTokens: (access: string, refresh: string) => void;
   logout: () => Promise<void>;
   hasRole: (...roles: Role[]) => boolean;
+  /** The one gate routes, nav and in-page actions read (see `constants/routeAccess.ts`). */
+  canAccess: (check: AccessCheck) => boolean;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
+
+const asList = (v: string | string[] | undefined): string[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [signedIn, setSignedIn] = useState(() => !!tokens.access());
   const [mfaToken, setMfaToken] = useState<string | null>(null);
 
-  const me = useQuery({
-    queryKey: queryKeys.me,
-    queryFn: async () => (await authApi.me()).data,
-    enabled: signedIn,
-    retry: false,
-    staleTime: 60_000,
-  });
-  const mfa = useQuery({
-    queryKey: queryKeys.mfa,
-    queryFn: async () => (await authApi.mfaStatus()).data,
-    enabled: signedIn,
-    retry: false,
-    staleTime: 60_000,
-  });
+  const me = useMe(signedIn);
+  const mfa = useSessionMfaStatus(signedIn);
 
   const clearSession = useCallback(() => {
     tokens.clear();
@@ -59,12 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onLogout = () => clearSession();
-    const onEnrol = () => void queryClient.invalidateQueries({ queryKey: queryKeys.mfa });
-    window.addEventListener('wardx:logout', onLogout);
-    window.addEventListener('wardx:mfa-enrol', onEnrol);
+    const onEnrol = () => void queryClient.invalidateQueries({ queryKey: authKeys.mfa() });
+    window.addEventListener(AuthEvent.LOGOUT, onLogout);
+    window.addEventListener(AuthEvent.MFA_ENROL, onEnrol);
     return () => {
-      window.removeEventListener('wardx:logout', onLogout);
-      window.removeEventListener('wardx:mfa-enrol', onEnrol);
+      window.removeEventListener(AuthEvent.LOGOUT, onLogout);
+      window.removeEventListener(AuthEvent.MFA_ENROL, onEnrol);
     };
   }, [clearSession, queryClient]);
 
@@ -78,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (username: string, password: string) => {
-      const { data } = await authApi.login(username, password);
+      const { data } = await authService.login(username, password);
       if (data.mfa_required && data.mfa_token) {
         setMfaToken(data.mfa_token);
         return;
@@ -91,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyCode = useCallback(
     async (code: string) => {
       if (!mfaToken) throw new Error('Sign in again');
-      finish((await authApi.mfaVerify(mfaToken, code)).data);
+      finish((await authService.mfaVerify(mfaToken, code)).data);
     },
     [mfaToken, finish],
   );
@@ -106,13 +99,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await authApi.logout();
+      await authService.logout();
     } finally {
       clearSession();
     }
   }, [clearSession]);
 
   const user = signedIn ? (me.data ?? null) : null;
+
+  const canAccess = useCallback(
+    ({ permission }: AccessCheck) => {
+      if (!user) return false;
+      const required = asList(permission);
+      if (!required.length) return true;
+      const held: string[] = ROLE_PERMISSIONS[user.role] ?? [];
+      return required.some((p) => held.includes(p));
+    },
+    [user],
+  );
+
   const value = useMemo<AuthState>(
     () => ({
       user,
@@ -125,8 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       adoptTokens,
       logout,
       hasRole: (...roles) => !!user && roles.includes(user.role),
+      canAccess,
     }),
-    [user, signedIn, me.isLoading, mfa.isLoading, mfa.data, mfaToken, login, verifyCode, adoptTokens, logout],
+    [user, signedIn, me.isLoading, mfa.isLoading, mfa.data, mfaToken, login, verifyCode, adoptTokens, logout, canAccess],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,18 +1,24 @@
-import type { PageQuery } from '@/types/api';
+import { authKeys } from '@/features/auth/hooks/authKeys';
+import { dashboardKeys } from '@/features/dashboard/hooks/dashboardKeys';
+import { inventoryKeys } from '@/features/inventory/hooks/inventoryKeys';
+import { accessKeys } from '@/features/access/hooks/accessKeys';
+import { sessionsKeys } from '@/features/sessions/hooks/sessionsKeys';
+import { auditKeys } from '@/features/audit/hooks/auditKeys';
+import { identityKeys } from '@/features/identity/hooks/identityKeys';
 
+export { authKeys, dashboardKeys, inventoryKeys, accessKeys, sessionsKeys, auditKeys, identityKeys };
+
+/**
+ * Namespaced facade for ergonomic call sites:
+ *   queryKeys.inventory.targets(params)
+ *   queryKeys.auth.mfa()
+ */
 export const queryKeys = {
-  me: ['auth', 'me'] as const,
-  mfa: ['auth', 'mfa'] as const,
-  dashboard: ['dashboard'] as const,
-  targets: { all: ['targets'] as const, list: (q: PageQuery) => ['targets', 'list', q] as const },
-  accounts: { all: ['accounts'] as const, list: (q: PageQuery) => ['accounts', 'list', q] as const },
-  requests: { all: ['requests'] as const, list: (q: PageQuery) => ['requests', 'list', q] as const },
-  checkouts: { all: ['checkouts'] as const, list: (q: PageQuery) => ['checkouts', 'list', q] as const },
-  audit: { all: ['audit'] as const, list: (q: PageQuery) => ['audit', 'list', q] as const },
-  sessions: { all: ['sessions'] as const, list: (q: PageQuery) => ['sessions', 'list', q] as const },
-  sessionCommands: (id: string) => ['sessions', id, 'commands'] as const,
-  rules: ['command-rules'] as const,
-  gateway: ['gateway-info'] as const,
-  directory: ['directory'] as const,
-  users: { all: ['users'] as const, list: (q: PageQuery) => ['users', 'list', q] as const },
+  auth: authKeys,
+  dashboard: dashboardKeys,
+  inventory: inventoryKeys,
+  access: accessKeys,
+  sessions: sessionsKeys,
+  audit: auditKeys,
+  identity: identityKeys,
 };

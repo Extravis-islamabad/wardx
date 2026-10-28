@@ -1,25 +1,24 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import type { ApiErrorBody, ApiResponse, TokenPair } from '@/types/api';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import type { ApiErrorBody } from '@/types/api';
+import { ApiErrorCode, AuthEvent, HttpStatus } from '@/constants/enums/auth';
+import { notifyApiError } from '@/utils/notifyApiError';
+import { tokens } from './authStorage';
+import { API_BASE_URL, clearAuthAndSignOut, refreshAccessToken } from './tokenRefresh';
 
-type Tokens = Pick<TokenPair, 'access_token' | 'refresh_token'>;
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /** The caller renders this failure itself, in words — skip the global toast. */
+    skipErrorNotify?: boolean;
+  }
+}
 
-const ACCESS_KEY = 'wardx.access';
-const REFRESH_KEY = 'wardx.refresh';
+// Per-request flags we tack onto the axios config.
+type RetryableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
-export const tokens = {
-  access: () => localStorage.getItem(ACCESS_KEY),
-  refresh: () => localStorage.getItem(REFRESH_KEY),
-  set(pair: Tokens) {
-    localStorage.setItem(ACCESS_KEY, pair.access_token);
-    localStorage.setItem(REFRESH_KEY, pair.refresh_token);
-  },
-  clear() {
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-  },
-};
+// Auth calls answer 401 for bad credentials; refreshing on them would loop.
+const AUTH_CALLS = ['auth/login', 'auth/refresh', 'auth/mfa/verify'];
 
-export const apiClient = axios.create({ baseURL: '/api/v1/' });
+export const apiClient = axios.create({ baseURL: API_BASE_URL });
 
 apiClient.interceptors.request.use((config) => {
   const access = tokens.access();
@@ -27,61 +26,39 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// One refresh at a time: concurrent 401s wait on the same promise.
-let refreshing: Promise<string | null> | null = null;
-
-async function refreshAccess(): Promise<string | null> {
-  const refresh = tokens.refresh();
-  if (!refresh) return null;
-  try {
-    const { data } = await axios.post<ApiResponse<TokenPair>>('/api/v1/auth/refresh', {
-      refresh_token: refresh,
-    });
-    tokens.set(data.data);
-    return data.data.access_token;
-  } catch {
-    return null;
-  }
-}
-
-type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
-
 apiClient.interceptors.response.use(
-  (r) => r,
+  (response) => response,
   async (error: AxiosError<ApiErrorBody>) => {
-    const config = error.config as RetriableConfig | undefined;
-    const isAuthCall = ['auth/login', 'auth/refresh', 'auth/mfa/verify'].some((u) => config?.url?.startsWith(u));
-    if (error.response?.status === 401 && config && !config._retried && !isAuthCall) {
-      config._retried = true;
-      refreshing ??= refreshAccess().finally(() => {
-        refreshing = null;
-      });
-      const access = await refreshing;
+    const originalRequest = error.config as RetryableConfig | undefined;
+    const status = error.response?.status;
+    const isAuthCall = AUTH_CALLS.some((u) => originalRequest?.url?.startsWith(u));
+
+    if (status === HttpStatus.UNAUTHORIZED && originalRequest && !originalRequest._retry && !isAuthCall) {
+      originalRequest._retry = true;
+      const access = await refreshAccessToken();
       if (access) {
-        config.headers.Authorization = `Bearer ${access}`;
-        return apiClient(config);
+        originalRequest.headers.Authorization = `Bearer ${access}`;
+        return apiClient(originalRequest);
       }
-      tokens.clear();
-      window.dispatchEvent(new Event('wardx:logout'));
+      clearAuthAndSignOut();
+      return Promise.reject(error);
     }
-    if (error.response?.data?.error?.code === 'mfa_enrollment_required') {
-      window.dispatchEvent(new Event('wardx:mfa-enrol'));
+
+    // The Security page explains enrolment; a toast per refused call would bury it.
+    if (error.response?.data?.error?.code === ApiErrorCode.MFA_ENROLLMENT_REQUIRED) {
+      window.dispatchEvent(new Event(AuthEvent.MFA_ENROL));
+      return Promise.reject(error);
+    }
+
+    if (status !== HttpStatus.UNAUTHORIZED && !originalRequest?.skipErrorNotify) {
+      try {
+        notifyApiError(error);
+      } catch {
+        // ignore notification errors
+      }
     }
     return Promise.reject(error);
   },
 );
 
-export function errorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const body = error.response?.data as ApiErrorBody | undefined;
-    if (body?.error) {
-      const errors = body.error.details?.errors as { loc: string[]; msg: string }[] | undefined;
-      if (errors?.length) {
-        return errors.map((e) => `${e.loc.slice(1).join('.')}: ${e.msg}`).join('; ');
-      }
-      return body.error.message;
-    }
-    return error.message;
-  }
-  return error instanceof Error ? error.message : 'Something went wrong';
-}
+export default apiClient;
