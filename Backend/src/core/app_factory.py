@@ -13,7 +13,8 @@ from src.core.config import Settings, get_settings, resolve_jwt_secret, resolve_
 from src.core.db import dispose_engine, init_engine, session_factory
 from src.core.migration_runner import run_migrations
 from src.errors.handlers import register_exception_handlers
-from src.routers.v1 import access, auth, dashboard, directory, health, sessions, users
+from src.routers.v1 import auth, dashboard, directory, health, sessions, users
+from src.routers.v1.access import checkouts, requests
 from src.routers.v1.audit import audit_events
 from src.routers.v1.inventory import accounts, targets
 from src.scheduler.jobs import build_scheduler
@@ -91,7 +92,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         users,
         targets,
         accounts,
-        access,
+        requests,
+        checkouts,
         audit_events,
         dashboard,
         sessions,

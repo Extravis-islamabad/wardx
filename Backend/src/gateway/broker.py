@@ -15,11 +15,11 @@ from datetime import datetime
 
 from sqlalchemy import func, or_, select, update
 
-from src.contracts.schemas.access import CheckoutCreate
 from src.core.config import Settings
 from src.core.context import SYSTEM_ACTOR, Actor
 from src.core.db import session_factory
 from src.core.enums import CheckoutStatus, Protocol, RequestStatus, Role
+from src.dependencies.access import build_checkout_service
 from src.errors.exceptions import AppError
 from src.gateway.policy import CommandPolicy
 from src.models import (
@@ -32,8 +32,8 @@ from src.models import (
     Target,
     utcnow,
 )
-from src.services import access_service, audit_service, auth_service, mfa_service, vault_service
-from src.services.inventory_service import ACCOUNT_SECRET
+from src.services import audit_service, auth_service, mfa_service, vault_service
+from src.services.inventory.account_service import ACCOUNT_SECRET
 
 GATEWAY_REASON = "Interactive session via WardX gateway"
 SUPPORTED_PROTOCOLS = {Protocol.SSH}
@@ -271,7 +271,7 @@ class Broker:
         if held is not None:
             return held, False
 
-        body = CheckoutCreate(account_id=account.id, reason=GATEWAY_REASON)
+        body: dict = {"account_id": account.id, "reason": GATEWAY_REASON}
         if account.requires_approval:
             request = (
                 (
@@ -295,9 +295,9 @@ class Broker:
                     f"{account.username} needs an approved request. Request access in the "
                     "WardX console, then reconnect once it is approved."
                 )
-            body = CheckoutCreate(account_id=account.id, request_id=request.id)
+            body = {"account_id": account.id, "request_id": request.id}
         try:
-            out = await access_service.checkout(session, actor, body)
+            out = await build_checkout_service(session).checkout(actor, **body)
         except AppError as exc:
             held_by = exc.details.get("held_by")
             suffix = f" (held by {held_by} until {exc.details.get('until')})" if held_by else ""
@@ -469,7 +469,7 @@ class Broker:
     async def _close_checkout(self, checkout_id: uuid.UUID, actor: Actor) -> None:
         async with session_factory()() as session:
             try:
-                await access_service.checkin(session, actor, checkout_id)
+                await build_checkout_service(session).checkin(actor, checkout_id)
             except AppError:
                 # Already expired, revoked or returned: nothing to close.
                 await session.rollback()

@@ -12,8 +12,9 @@ from sqlalchemy import text
 
 from src.core.config import Settings
 from src.core.db import session_factory
+from src.dependencies.access import build_checkout_service
 from src.errors.exceptions import ConflictError
-from src.services import access_service, directory_sync
+from src.services import directory_sync
 
 logger = structlog.get_logger(__name__)
 
@@ -31,7 +32,7 @@ async def expiry_sweep() -> None:
             await session.rollback()
             return
         try:
-            result = await access_service.expire_overdue(session)
+            result = await build_checkout_service(session).expire_overdue()
         except Exception:
             logger.exception("expiry_sweep_failed")
             await session.rollback()

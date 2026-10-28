@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import text
 
 from src.core.db import session_factory
-from src.services import access_service
+from src.dependencies.access import build_checkout_service
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -180,7 +180,7 @@ async def test_expiry_sweep_closes_overdue_checkouts(client, admin, make_user):
             {"id": uuid.UUID(co["id"])},
         )
         await session.commit()
-        result = await access_service.expire_overdue(session)
+        result = await build_checkout_service(session).expire_overdue()
     assert result["checkouts"] >= 1
     resp = await client.get("/checkouts", headers=erin, params={"mine": True})
     assert next(c for c in resp.json()["data"] if c["id"] == co["id"])["status"] == "expired"
