@@ -460,11 +460,41 @@ Where the spec left a question open, the more restrictive choice was taken:
    Tests: `tests/integration/rotation/test_concurrency.py` (mutation-checked: with the lock
    disabled, the two overlap tests fail).
 2. **Scheduler.** Scheduled rotation and scheduled verify are also tested through the real
-   background scheduler (see the test notes below when added).
+   background scheduler: APScheduler as built by `src/scheduler/jobs.py`, ticking on its
+   own (`tests/integration/rotation/test_scheduler.py`). The test found that
+   `build_scheduler` didn't pass its settings to `rotation_tick`, so each tick read
+   `get_settings()` instead; it now gets the scheduler's settings.
 3. **One after-use setting.** Migration `018_rotation_fixes.sql` merges
    `rotate_after_checkin` into `rotate_after_use` (TRUE in either stays TRUE), then drops
    `rotate_after_checkin`. No code, schema, API or UI reads the old column.
-4. **Learn host key** (see the host-key notes below when added).
+4. **Host keys: probe, compare, accept.**
+   - `POST /targets/{id}/host-key/probe` reads the key the device presents without
+     authenticating (no credential is sent) and returns its `SHA256:` fingerprint, key type,
+     the pinned fingerprint and any recorded mismatch. It pins nothing.
+   - `POST /targets/{id}/host-key/accept {fingerprint}` re-reads the key and pins it only if
+     the device still presents exactly the fingerprint the administrator compared; a key
+     swapped in between is refused (409) and audited as a failed accept. Accept also
+     re-pins after a legitimate change and clears a recorded mismatch. The old one-step
+     `learn` endpoint is gone.
+   - Probe, accept and reset need `inventory.manage` plus `manage_accounts` on **every** safe
+     holding an account on the target (a target with no accounts: `inventory.manage` alone).
+   - Learning (`target.host_key_learned`), changing (`target.host_key_changed`, with the old
+     and new fingerprints), resetting and mismatches are audited once at target level and
+     once per affected safe.
+   - A device presenting another key, seen by the gateway, a rotation or a verify, records
+     the presented fingerprint on the target (`host_key_mismatch_at`,
+     `host_key_mismatch_fingerprint`, migration `019`) and raises one high alert
+     (`target.host_key_changed`) per new presented key. Every later rotation and verify of
+     that target is refused before connecting. Nothing is ever accepted automatically:
+     **reset** clears the pin but not the mismatch, so only an explicit **accept** unblocks
+     rotation.
+   - The gateway still pins a target's **first-seen** key on its first session (trust on
+     first use, existing behaviour); a different key after that is always a mismatch.
+     Question open for the product owner: should first use also require an explicit accept?
+   - Console: a Host key dialog on each SSH target shows the presented and pinned
+     fingerprints and accepts only after the administrator ticks that they compared it on
+     the device; the targets list tags a changed key in red.
+   Tests: `tests/integration/rotation/test_host_keys.py`, plus the gateway mismatch test.
 5. **Break-glass while a rotation needs attention or is untrustworthy.** Normal check-outs
    and sessions are blocked; break-glass is never blocked by rotation. It always reveals the
    account's **current** version (`accounts.secret_version`, the vault's source of truth),
