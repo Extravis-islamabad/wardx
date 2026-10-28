@@ -7,6 +7,7 @@ from src.models.audit.audit_event import AuditEvent
 from src.models.base import TZ, Base, utcnow
 from src.models.identity.directory_config import DirectoryConfig
 from src.models.identity.user import User
+from src.models.identity.user_group_cache import UserGroupCache
 from src.models.identity.user_mfa import MfaRecoveryCode, UserMfa
 from src.models.inventory.account import Account
 from src.models.inventory.target import Target
@@ -37,6 +38,7 @@ __all__ = [
     "Target",
     "TenantKey",
     "User",
+    "UserGroupCache",
     "UserMfa",
     "utcnow",
 ]

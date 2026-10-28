@@ -28,12 +28,16 @@ class DirectoryConfigResponse(BaseModel):
     group_filter: str | None
     role_mappings: list[RoleMapping]
     default_role: Role | None
+    nested_groups: bool
     timeout_seconds: int
     sync_interval_minutes: int
     sync_max_disable_percent: int
     last_sync_at: datetime | None
     last_sync_status: str | None
     last_sync_summary: dict[str, Any] | None
+    reachable: bool | None = None
+    reachability_checked_at: datetime | None = None
+    reachability_error: str | None = None
     updated_at: datetime
 
 

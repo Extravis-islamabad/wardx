@@ -25,6 +25,10 @@ CONFIG = {
     "bind_dn": SVC_DN,
     "bind_password": SVC_PW,
     "user_base_dn": f"ou=people,{BASE}",
+    # ldap3's mock cannot evaluate the AD in-chain matching rule (it rejects the
+    # extensible-match filter), so nested groups stay off against the mock;
+    # tests/unit/test_ldap_client.py checks the filter WardX sends.
+    "nested_groups": False,
     "role_mappings": [
         {"group_dn": ADMINS, "role": "admin"},
         {"group_dn": OPERATORS, "role": "user"},

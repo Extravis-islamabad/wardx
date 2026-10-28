@@ -32,6 +32,10 @@ class DirectoryConfigIn(BaseModel):
     group_filter: str | None = Field(None, max_length=1000)
     role_mappings: list[RoleMapping] = Field(default_factory=list, max_length=100)
     default_role: Role | None = None
+    # Resolve nested Active Directory groups (LDAP_MATCHING_RULE_IN_CHAIN). Omitted: on for
+    # Active Directory (attr_username sAMAccountName), off otherwise. Turn it off for very
+    # large directories where the in-chain query is slow.
+    nested_groups: bool | None = None
     timeout_seconds: int = Field(10, ge=1, le=60)
     # 0 = no scheduled sync; otherwise every 5-1440 minutes.
     sync_interval_minutes: int = Field(60, ge=0, le=1440)

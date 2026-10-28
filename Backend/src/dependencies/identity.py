@@ -16,6 +16,7 @@ from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
 from src.dependencies.directory import build_directory_service
 from src.dependencies.vault import build_vault_service
+from src.repositories.identity.group_cache_repository import GroupCacheRepository
 from src.repositories.identity.mfa_repository import MfaRepository
 from src.repositories.identity.user_repository import UserRepository
 from src.services.identity.auth_service import AuthService
@@ -44,6 +45,7 @@ def build_auth_service(session: AsyncSession) -> AuthService:
         build_directory_service(session),
         build_audit_service(session),
         get_settings(),
+        GroupCacheRepository(session),
     )
 
 

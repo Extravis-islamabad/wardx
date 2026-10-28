@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+
+from sqlalchemy import update
 
 from src.contracts.dto.directory.directory_config_dto import DirectoryConfigDTO
 from src.models import DirectoryConfig
@@ -28,6 +31,7 @@ def _to_dto(row: DirectoryConfig) -> DirectoryConfigDTO:
         group_base_dn=row.group_base_dn,
         group_filter=row.group_filter,
         role_mappings=list(row.role_mappings or []),
+        nested_groups=row.nested_groups,
         default_role=row.default_role,
         timeout_seconds=row.timeout_seconds,
         sync_interval_minutes=row.sync_interval_minutes,
@@ -37,6 +41,9 @@ def _to_dto(row: DirectoryConfig) -> DirectoryConfigDTO:
         last_sync_summary=row.last_sync_summary,
         updated_by=row.updated_by,
         updated_at=row.updated_at,
+        reachable=row.reachable,
+        reachability_checked_at=row.reachability_checked_at,
+        reachability_error=row.reachability_error,
     )
 
 
@@ -56,3 +63,15 @@ class DirectoryConfigRepository(BaseRepository):
                 setattr(row, key, value)
         await self._session.flush()
         return _to_dto(row)
+
+    async def record_reachability(self, ok: bool, error: str | None, at: datetime) -> None:
+        """The outcome of the latest directory contact (a no-op without a config row)."""
+        await self._session.execute(
+            update(DirectoryConfig)
+            .where(DirectoryConfig.id == _ID)
+            .values(
+                reachable=ok,
+                reachability_checked_at=at,
+                reachability_error=(error or "")[:500] or None,
+            )
+        )

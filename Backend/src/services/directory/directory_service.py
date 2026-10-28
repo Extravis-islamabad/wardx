@@ -5,14 +5,22 @@ every sign-in its name, e-mail and role are refreshed from the directory, so
 removing someone from the mapped group takes effect at their next sign-in.
 A local account with the same username always wins: the directory never takes
 over an existing local user.
+
+Every directory contact (sign-in, lookup, test) records whether the directory was
+reachable. That record is written on its own short session so it survives the
+caller's transaction rolling back (the dashboard warns while it is unreachable).
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
+import structlog
 from anyio import to_thread
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.contracts.dto.directory.directory_config_dto import DirectoryConfigDTO
 from src.contracts.dto.identity.user_dto import UserDTO
@@ -34,6 +42,10 @@ from src.services.audit.audit_service import AuditService
 from src.services.vault.vault_service import VaultService
 
 __all__ = ["DirectoryService", "default_connection", "set_connection_factory"]
+
+logger = structlog.get_logger(__name__)
+
+SideSessions = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 
 BIND_SECRET = "directory_bind"
 # Never verifies: argon2 rejects it as a malformed hash.
@@ -60,11 +72,13 @@ class DirectoryService:
         users: UserRepository,
         vault: VaultService,
         audit: AuditService,
+        side_sessions: SideSessions | None = None,
     ) -> None:
         self._config = config
         self._users = users
         self._vault = vault
         self._audit = audit
+        self._side_sessions = side_sessions
 
     async def get_config(self) -> DirectoryConfigDTO | None:
         return await self._config.get()
@@ -91,6 +105,9 @@ class DirectoryService:
             changes["bind_secret_version"] = bind_version
         if changes["enabled"] and bind_version is None:
             raise ConflictError("Set the service-account password before enabling the directory")
+        if changes.get("nested_groups") is None:
+            # On by default for Active Directory; OpenLDAP has no in-chain matching rule.
+            changes["nested_groups"] = changes.get("attr_username", "").lower() == "samaccountname"
         changes["updated_by"] = actor.id
         cfg = await self._config.save(changes)
         await self._audit.record(
@@ -104,6 +121,7 @@ class DirectoryService:
                 "bind_password_changed": bool(bind_password),
                 "role_mappings": cfg.role_mappings,
                 "default_role": cfg.default_role,
+                "nested_groups": cfg.nested_groups,
             },
         )
         await self._config.commit()
@@ -120,9 +138,7 @@ class DirectoryService:
         """Service-account lookup of one user, without their password: shows DN, groups, role."""
         client = await self.client()
         try:
-            user = await to_thread.run_sync(client.lookup, username)
-        except DirectoryError as exc:
-            raise DirectoryUnavailable(str(exc)) from exc
+            user = await self._contact(client.lookup, username)
         except DirectoryAuthFailed as exc:
             raise NotFoundError(f"Lookup failed: {exc}") from exc
         finally:
@@ -138,10 +154,42 @@ class DirectoryService:
     async def authenticate(self, username: str, password: str) -> DirectoryUser:
         """Raises DirectoryAuthFailed (bad credentials / no role) or DirectoryUnavailable."""
         client = await self.client()
+        return await self._contact(client.authenticate, username, password)
+
+    async def lookup(self, username: str) -> DirectoryUser:
+        """Service-account lookup (groups refresh). DirectoryAuthFailed: no such user."""
+        client = await self.client()
+        return await self._contact(client.lookup, username)
+
+    async def _contact(self, call: Callable[..., DirectoryUser], *args: str) -> DirectoryUser:
+        """Run a directory call in a thread and record whether the directory answered."""
         try:
-            return await to_thread.run_sync(client.authenticate, username, password)
+            result = await to_thread.run_sync(call, *args)
         except DirectoryError as exc:
+            await self.record_reachability(False, str(exc))
             raise DirectoryUnavailable(str(exc)) from exc
+        except DirectoryAuthFailed:
+            await self.record_reachability(True)
+            raise
+        await self.record_reachability(True)
+        return result
+
+    async def record_reachability(self, ok: bool, error: str | None = None) -> None:
+        if not ok:
+            logger.warning("directory_unreachable", error=error)
+        if self._side_sessions is None:
+            return
+        async with self._side_sessions() as session:
+            repo = DirectoryConfigRepository(session)
+            await repo.record_reachability(ok, error, utcnow())
+            await repo.commit()
+
+    async def recently_unreachable(self, retry_seconds: int) -> bool:
+        """The last contact failed less than ``retry_seconds`` ago: don't try again yet."""
+        cfg = await self.get_config()
+        if cfg is None or cfg.reachable is not False or cfg.reachability_checked_at is None:
+            return False
+        return (utcnow() - cfg.reachability_checked_at).total_seconds() < retry_seconds
 
     async def upsert_user(self, existing: UserDTO | None, found: DirectoryUser) -> UserDTO:
         """Create or refresh the local row for a directory user (caller commits)."""
@@ -194,4 +242,5 @@ class DirectoryService:
             role_mappings=tuple((m["group_dn"], m["role"]) for m in cfg.role_mappings),
             default_role=cfg.default_role,
             timeout_seconds=cfg.timeout_seconds,
+            nested_groups=cfg.nested_groups,
         )

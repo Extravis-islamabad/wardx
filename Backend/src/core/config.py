@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # How long a pending request waits for a decision, and how long an approval
     # stays usable before the check-out must start.
     request_window_minutes: int = 240
+    # Directory groups older than this are re-read before safe permissions use them.
+    group_cache_minutes: int = 15
+    # After a failed directory contact, groups fail closed without retrying for this long
+    # (so an outage does not add a connect timeout to every request).
+    directory_retry_seconds: int = 60
     expiry_sweep_seconds: int = 30
 
     # ── Session gateway (APP_ROLE=gateway) ──

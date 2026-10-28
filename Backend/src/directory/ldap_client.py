@@ -19,6 +19,8 @@ from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars
 
 ROLE_RANK = {"admin": 4, "approver": 3, "auditor": 2, "user": 1}
+# Active Directory's LDAP_MATCHING_RULE_IN_CHAIN: transitive (nested) group membership.
+IN_CHAIN_RULE = "1.2.840.113556.1.4.1941"
 
 
 class DirectoryError(Exception):
@@ -55,6 +57,8 @@ class DirectorySettings:
     role_mappings: tuple[tuple[str, str], ...] = ()
     default_role: str | None = None
     timeout_seconds: int = 10
+    # Active Directory only: also resolve nested groups with LDAP_MATCHING_RULE_IN_CHAIN.
+    nested_groups: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,17 @@ def default_connection(settings: DirectorySettings, user: str, password: str) ->
 def normalise_dn(dn: str) -> str:
     """Compare DNs case-insensitively and ignoring spaces around separators."""
     return ",".join(part.strip().lower() for part in dn.split(","))
+
+
+def in_chain_filter(user_dn: str) -> str:
+    """Groups the user belongs to directly or through nesting (Active Directory only)."""
+    return f"(&(objectClass=group)(member:{IN_CHAIN_RULE}:={escape_filter_chars(user_dn)}))"
+
+
+def domain_root(dn: str) -> str:
+    """The dc=... suffix of a DN (the domain's naming context), or the DN itself."""
+    dcs = [p.strip() for p in dn.split(",") if p.strip().lower().startswith("dc=")]
+    return ",".join(dcs) or dn
 
 
 def resolve_role(
@@ -166,9 +181,16 @@ class DirectoryClient:
             except LDAPException as exc:
                 raise DirectoryError(f"Group search failed: {exc}") from exc
             return tuple(e.entry_dn for e in conn.entries)
-        if "memberOf" in entry:
-            return tuple(str(v) for v in entry["memberOf"].values)
-        return ()
+        direct = tuple(str(v) for v in entry["memberOf"].values) if "memberOf" in entry else ()
+        if not s.nested_groups:
+            return direct
+        base = s.group_base_dn or domain_root(s.user_base_dn)
+        try:
+            conn.search(base, in_chain_filter(entry.entry_dn), ldap3.SUBTREE, attributes=[])
+        except LDAPException as exc:
+            raise DirectoryError(f"Nested group search failed: {exc}") from exc
+        nested = tuple(e.entry_dn for e in conn.entries)
+        return tuple(dict.fromkeys(direct + nested))
 
     def _to_user(self, conn: ldap3.Connection, entry: ldap3.Entry, login: str) -> DirectoryUser:
         s = self.settings

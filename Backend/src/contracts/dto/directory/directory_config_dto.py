@@ -25,6 +25,7 @@ class DirectoryConfigDTO:
     group_base_dn: str | None
     group_filter: str | None
     role_mappings: list[dict[str, Any]]
+    nested_groups: bool
     default_role: str | None
     timeout_seconds: int
     sync_interval_minutes: int
@@ -34,6 +35,9 @@ class DirectoryConfigDTO:
     last_sync_summary: dict[str, Any] | None
     updated_by: uuid.UUID | None
     updated_at: datetime
+    reachable: bool | None = None
+    reachability_checked_at: datetime | None = None
+    reachability_error: str | None = None
 
     @property
     def has_bind_password(self) -> bool:

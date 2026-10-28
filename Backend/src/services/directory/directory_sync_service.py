@@ -13,6 +13,10 @@ Guard rails:
   search base must not lock everybody out. An admin can re-run with force.
 - Only accounts the sync disabled itself are re-enabled; an administrator's
   decision to disable someone is never overridden.
+
+Every applied run also refreshes the group cache (safe memberships by directory
+group) of each user it found, and removes it for users it disables. The run's
+outcome is recorded as the directory's reachability.
 """
 
 from __future__ import annotations
@@ -31,11 +35,13 @@ from src.directory.ldap_client import (
     DirectoryError,
     DirectoryUser,
     UserNotFound,
+    normalise_dn,
 )
 from src.errors.exceptions import ConflictError, DirectoryUnavailable
 from src.models import utcnow
 from src.repositories.access.checkout_repository import CheckoutRepository
 from src.repositories.directory.directory_config_repository import DirectoryConfigRepository
+from src.repositories.identity.group_cache_repository import GroupCacheRepository
 from src.repositories.identity.user_repository import UserRepository
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.audit.audit_service import AuditService
@@ -49,6 +55,8 @@ class _Plan:
     disable: list[tuple[UserDTO, str]] = field(default_factory=list)
     enable: list[tuple[UserDTO, DirectoryUser]] = field(default_factory=list)
     refresh: list[tuple[UserDTO, DirectoryUser]] = field(default_factory=list)
+    # Every active or re-enabled user found in the directory, for the group cache.
+    found: list[tuple[UserDTO, DirectoryUser]] = field(default_factory=list)
 
 
 def _changed(user: UserDTO, found: DirectoryUser) -> bool:
@@ -80,7 +88,9 @@ async def _plan(client: DirectoryClient, users: list[UserDTO], result: SyncResul
         if not user.is_active:
             if user.disabled_reason == SYNC_DISABLED:
                 plan.enable.append((user, found))
+                plan.found.append((user, found))
             continue
+        plan.found.append((user, found))
         if _changed(user, found):
             plan.refresh.append((user, found))
     return plan
@@ -95,6 +105,7 @@ class DirectorySyncService:
         checkouts: CheckoutRepository,
         sessions: GatewaySessionRepository,
         audit: AuditService,
+        group_cache: GroupCacheRepository,
     ) -> None:
         self._directory = directory
         self._config = config
@@ -102,6 +113,7 @@ class DirectorySyncService:
         self._checkouts = checkouts
         self._sessions = sessions
         self._audit = audit
+        self._group_cache = group_cache
 
     async def sync_due(self) -> bool:
         cfg = await self._config.get()
@@ -130,6 +142,9 @@ class DirectorySyncService:
             result.status = "failed"
             result.problems.append(f"Directory unavailable; nothing changed: {exc}")
             plan = _Plan()
+            unreachable: str | None = str(exc)
+        else:
+            unreachable = None
 
         active = sum(1 for u in users if u.is_active)
         share = (len(plan.disable) * 100 / active) if active else 0
@@ -157,14 +172,23 @@ class DirectorySyncService:
         if result.status == "ok" and not dry_run:
             await self._apply(plan, actor, result)
 
+        now = utcnow()
+        reachability = {
+            "reachable": unreachable is None,
+            "reachability_checked_at": now,
+            "reachability_error": unreachable[:500] if unreachable else None,
+        }
         if not dry_run:
             await self._config.save(
                 {
-                    "last_sync_at": utcnow(),
+                    "last_sync_at": now,
                     "last_sync_status": result.status,
                     "last_sync_summary": result.summary(),
+                    **reachability,
                 }
             )
+        else:
+            await self._config.save(reachability)
         await self._audit.record(
             actor,
             "directory.sync",
@@ -194,6 +218,7 @@ class DirectorySyncService:
                 },
             )
             await self._cut_off(user, actor, result)
+            await self._group_cache.clear(user.id)
             await self._audit.record(
                 actor,
                 "user.disable",
@@ -203,6 +228,9 @@ class DirectorySyncService:
             )
         for user, found in [*plan.enable, *plan.refresh]:
             await self._directory.upsert_user(user, found)
+        now = utcnow()
+        for user, found in plan.found:
+            await self._group_cache.store(user.id, (normalise_dn(g) for g in found.groups), now)
         for user, _ in plan.enable:
             await self._audit.record(
                 actor,

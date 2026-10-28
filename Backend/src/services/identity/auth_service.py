@@ -27,7 +27,7 @@ from src.core.security import (
     needs_rehash,
     verify_password,
 )
-from src.directory.ldap_client import DirectoryAuthFailed
+from src.directory.ldap_client import DirectoryAuthFailed, normalise_dn
 from src.errors.exceptions import (
     AccountLockedError,
     ConflictError,
@@ -35,6 +35,7 @@ from src.errors.exceptions import (
     UnauthorizedError,
 )
 from src.models import utcnow
+from src.repositories.identity.group_cache_repository import GroupCacheRepository
 from src.repositories.identity.user_repository import UserRepository
 from src.services.audit.audit_service import AuditService
 from src.services.directory.directory_service import DirectoryService
@@ -51,12 +52,14 @@ class AuthService:
         directory: DirectoryService,
         audit: AuditService,
         settings: Settings,
+        group_cache: GroupCacheRepository,
     ) -> None:
         self._users = users
         self._mfa = mfa
         self._directory = directory
         self._audit = audit
         self._settings = settings
+        self._group_cache = group_cache
 
     def issue_tokens(self, user: UserDTO) -> TokenPairDTO:
         secret = resolve_jwt_secret(self._settings)
@@ -146,6 +149,8 @@ class AuthService:
                         await _fail("directory_name_taken_by_local_user")
                         raise UnauthorizedError(_BAD_LOGIN)
                 user = await self._directory.upsert_user(user, found)
+                # Safe memberships by directory group read this cache.
+                await self._group_cache.store(user.id, (normalise_dn(g) for g in found.groups), now)
                 actor = Actor(
                     id=user.id, username=user.username, role=Role(user.role), source_ip=source_ip
                 )

@@ -56,12 +56,16 @@ def _to_response(dto: DirectoryConfigDTO) -> DirectoryConfigResponse:
         group_filter=dto.group_filter,
         role_mappings=[RoleMapping.model_validate(m) for m in dto.role_mappings],
         default_role=dto.default_role,
+        nested_groups=dto.nested_groups,
         timeout_seconds=dto.timeout_seconds,
         sync_interval_minutes=dto.sync_interval_minutes,
         sync_max_disable_percent=dto.sync_max_disable_percent,
         last_sync_at=dto.last_sync_at,
         last_sync_status=dto.last_sync_status,
         last_sync_summary=dto.last_sync_summary,
+        reachable=dto.reachable,
+        reachability_checked_at=dto.reachability_checked_at,
+        reachability_error=dto.reachability_error,
         updated_at=dto.updated_at,
     )
 

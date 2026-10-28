@@ -68,8 +68,25 @@ data: migrations only add, backfill and move.
 - Directory sync also refreshes the cache, and clears it for users it disables.
 - **Nested groups:**
   - Active Directory: resolved with the `LDAP_MATCHING_RULE_IN_CHAIN` filter
-    (`1.2.840.113556.1.4.1941`) when the directory config's `nested_groups` is on.
+    (`1.2.840.113556.1.4.1941`), **on by default for AD**. The directory config's
+    `nested_groups` flag is an off-switch for very large directories where the in-chain
+    query is slow. Defaults: on for the AD preset (`attr_username` `sAMAccountName`), off
+    for OpenLDAP. Migration 013 turns it on for an existing AD config.
+  - WardX searches `(&(objectClass=group)(member:1.2.840.113556.1.4.1941:=<user DN>))` under
+    the group base DN, or the domain root (the user base DN's `dc=` suffix), and adds the
+    results to the user's direct `memberOf` groups.
   - Other directories: direct groups only, a documented limitation.
+  - **Test limitation:** ldap3's mock (`MOCK_SYNC`) rejects extensible-match filters, so the
+    in-chain query can't run against it. Unit tests check the filter and base WardX sends,
+    and that its results are added to `memberOf`. Integration tests run with
+    `nested_groups` off. Verify against a real AD before release.
+- **Implementation:**
+  - Cache refreshes are written on their own short session, so a read-only or failing
+    request still keeps them.
+  - After a failed contact, WardX doesn't retry the directory for
+    `WARDX_DIRECTORY_RETRY_SECONDS` (default 60). During that time, groups fail closed at
+    once, without a connect timeout on every request. Any successful contact ends the wait:
+    a sign-in, a sync, or the admin's test lookup.
 
 ### Break-glass (`access.emergency`)
 
