@@ -12,6 +12,7 @@ dependencies/<module>.py              build_x_service(session) + get_x_service +
 contracts/schemas/requests/<module>/<x>_requests.py    pydantic request bodies
 contracts/schemas/responses/<module>/<x>_responses.py  pydantic response bodies
 routers/v1/<module>/<x>.py            thin handlers: Dep in, _to_response(dto) out
+routers/v1/__init__.py                api_router: every module router, mounted at /api/v1
 ```
 
 Reference module: **inventory** (targets, accounts). Copy it.
@@ -27,11 +28,14 @@ Reference module: **inventory** (targets, accounts). Copy it.
 - **Audit**: every state change calls `AuditService.record(actor, action, ...)` in
   the same transaction.
 - **DI**: `build_x_service(session)` is the single wiring. Request handlers use
-  `XServiceDep`; the gateway and scheduler call `build_x_service(session)`.
+  `XServiceDep`; the gateway and scheduler open a session from `session_factory()`
+  and call `build_x_service(session)`. SQL lives only in repositories.
 - **Routers** gate with `dependencies=[Depends(require_permission(CODENAME))]`
   (codenames in `src/core/permissions.py`), take `ActorDep` when they need the actor,
   map DTOs with a local `_to_response`, and declare
   `responses={**UNAUTHORIZED_RESPONSE, ...}`. Envelopes: `APIResponse[T]`,
   `PaginatedAPIResponse[T]`. Errors: `{success, status_code, error: {code, message, details}}`.
+- **Permissions**: services decide row visibility (e.g. "see every check-out") with
+  `actor.can(CODENAME)`, never with role names.
 - **Migrations**: raw SQL `migrations/NNN_name.sql`, applied in order, idempotent.
 - No file over 500 lines; split by sub-area like MonetX.

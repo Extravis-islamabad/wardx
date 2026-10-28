@@ -15,13 +15,6 @@ class Actor:
     role: Role
     source_ip: str | None = None
 
-    @property
-    def is_admin(self) -> bool:
-        return self.role == Role.ADMIN
-
-    def has_role(self, *roles: Role) -> bool:
-        return self.role in roles
-
     def can(self, codename: str) -> bool:
         """Whether the actor holds a permission codename (see src/core/permissions.py)."""
         from src.core.permissions import role_has

@@ -10,12 +10,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.contracts.dto.identity.user_dto import UserDTO
 from src.core.context import Actor
 from src.core.enums import Role
-from src.dependencies.database import SQLSessionDep
 from src.dependencies.identity import AuthServiceDep, MfaServiceDep
 from src.errors.exceptions import ForbiddenError, MfaEnrollmentRequired, UnauthorizedError
-
-# Transitional alias; new code uses SQLSessionDep.
-SessionDep = SQLSessionDep
 
 _bearer = HTTPBearer(auto_error=False)
 
