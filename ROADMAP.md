@@ -58,6 +58,9 @@ frontend build passing at every commit. Effort is engineer-days.
 
 Review points: after (a) and (b).
 
+Note for (c): when an emergency check-out overlaps a normal one, rotate-after-use must wait until
+every holder (normal and emergency) has released the account.
+
 - **Safes:** containers of accounts with per-safe members and permissions (list, use, retrieve,
   manage, approve).
 - **Approvals:** dual control and multi-level approval chains, plus a ticket number checked
