@@ -118,6 +118,9 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
         rotation_tick,
         "interval",
         seconds=settings.rotation_tick_seconds,
+        # The settings this scheduler was built with, not whatever get_settings() returns
+        # at tick time: switches, jitter and worker limits must match the scheduler.
+        kwargs={"settings": settings},
         id="rotation",
         max_instances=1,
         coalesce=True,
