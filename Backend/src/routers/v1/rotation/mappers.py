@@ -54,6 +54,7 @@ def job_response(dto: RotationJobDTO) -> RotationJobResponse:
                 transcript=s.transcript,
                 started_at=s.started_at,
                 finished_at=s.finished_at,
+                channel=s.channel,
             )
             for s in dto.steps
         ],

@@ -77,6 +77,7 @@ class RotationStepDTO:
     transcript: str | None
     started_at: datetime
     finished_at: datetime
+    channel: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,6 +162,12 @@ class RotationTargetDTO:
     policy_overrides: dict[str, Any]
     ssh_host_key: str | None
     host_key_mismatch_at: datetime | None = None
+    # MikroTik API-SSL (ROTATION.md §15): port, TLS or cleartext, the pinned certificate.
+    api_port: int | None = None
+    api_tls: bool = True
+    tls_cert_pem: str | None = None
+    tls_cert_fingerprint: str | None = None
+    tls_cert_mismatch_at: datetime | None = None
 
 
 @dataclass(frozen=True)

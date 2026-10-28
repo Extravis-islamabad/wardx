@@ -54,11 +54,17 @@ def target_response(dto: TargetDTO) -> TargetResponse:
         ssh_host_key_learned_at=dto.ssh_host_key_learned_at,
         host_key_mismatch_at=dto.host_key_mismatch_at,
         host_key_mismatch_fingerprint=dto.host_key_mismatch_fingerprint,
+        api_port=dto.api_port,
+        api_tls=dto.api_tls,
+        tls_cert_fingerprint=dto.tls_cert_fingerprint,
+        tls_cert_learned_at=dto.tls_cert_learned_at,
+        tls_cert_mismatch_at=dto.tls_cert_mismatch_at,
+        tls_cert_mismatch_fingerprint=dto.tls_cert_mismatch_fingerprint,
         created_at=dto.created_at,
         updated_at=dto.updated_at,
         rotation_allowed=dto.rotation_allowed,
         policy_overrides=dto.policy_overrides or {},
-        non_rotatable_reason=non_rotatable_reason(dto.protocol, dto.platform),
+        non_rotatable_reason=non_rotatable_reason(dto.protocol, dto.platform, api_tls=dto.api_tls),
     )
 
 

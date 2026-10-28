@@ -36,12 +36,15 @@ from src.models import utcnow
 from src.repositories.rotation.rotation_account_repository import RotationAccountRepository
 from src.repositories.rotation.rotation_job_repository import RotationJobRepository
 from src.rotation import policy as policies
-from src.rotation.drivers.registry import default_registry
+from src.rotation.drivers.base import Identity
+from src.rotation.drivers.registry import default_registry, identities_of
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import AccountService
+from src.services.rotation.rotation_engine import identity_refusal
 
 OPERATIONS = {"rotate": MANUAL, "verify": VERIFY, "reconcile": RECONCILE}
 TELNET = "non-rotatable (Telnet)"
+CLEARTEXT_API = "non-rotatable (cleartext API)"
 
 
 class RotationRefused(AppError):
@@ -49,7 +52,7 @@ class RotationRefused(AppError):
     code = "rotation_refused"
 
 
-def non_rotatable_reason(protocol: str, platform: str) -> str | None:
+def non_rotatable_reason(protocol: str, platform: str, *, api_tls: bool = True) -> str | None:
     """Why a target can never be rotated, whatever its switches (shown in the UI)."""
     if protocol == Protocol.TELNET:
         return TELNET
@@ -58,6 +61,8 @@ def non_rotatable_reason(protocol: str, platform: str) -> str | None:
         return f"no rotation driver for {platform} yet"
     if protocol not in getattr(driver, "protocols", {Protocol.SSH}):
         return f"the {platform} driver does not rotate over {protocol}"
+    if not api_tls and Identity.TLS in identities_of(driver):
+        return CLEARTEXT_API
     return None
 
 
@@ -72,6 +77,8 @@ class AccountRotationView:
     effective_rotate_after_use: bool
     non_rotatable_reason: str | None
     open_job: RotationJobDTO | None
+    # Why the target's pinned identities block rotation now (missing pin, mismatch).
+    identity_blocker: str | None
     jobs: list[RotationJobDTO]
 
 
@@ -138,7 +145,7 @@ class RotationService:
     def _refusal(
         self, account: RotationAccountDTO, target: RotationTargetDTO, reason: str
     ) -> str | None:
-        fixed = non_rotatable_reason(target.protocol, target.platform)
+        fixed = non_rotatable_reason(target.protocol, target.platform, api_tls=target.api_tls)
         if fixed:
             return f"{target.name} is {fixed}"
         if not self._settings.rotation_enabled:
@@ -147,6 +154,9 @@ class RotationService:
             return f"Rotation is not allowed on target {target.name} (rotation_allowed is off)"
         if not target.is_active:
             return f"Target {target.name} is inactive"
+        why = identity_refusal(target, default_registry().get(target.platform), mismatches=False)
+        if why:
+            return why
         if target.protocol == Protocol.SSH and not target.ssh_host_key:
             return f"{target.name} has no pinned SSH host key; learn or pin it first"
         if account.secret_type != "password":
@@ -186,9 +196,12 @@ class RotationService:
             policy_error=error,
             effective_interval_days=min(intervals) if intervals else None,
             effective_rotate_after_use=account.rotate_after_use or safe_policy.rotate_after_use,
-            non_rotatable_reason=non_rotatable_reason(target.protocol, target.platform),
+            non_rotatable_reason=non_rotatable_reason(
+                target.protocol, target.platform, api_tls=target.api_tls
+            ),
             open_job=await self._jobs.open_for_account(account.id),
             jobs=jobs,
+            identity_blocker=identity_refusal(target, default_registry().get(target.platform)),
         )
 
     async def list_jobs(

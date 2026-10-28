@@ -82,6 +82,7 @@ async def account_rotation(
             rotation_enabled=get_settings().rotation_enabled,
             host_key_pinned=bool(t.ssh_host_key),
             non_rotatable_reason=v.non_rotatable_reason,
+            identity_blocker=v.identity_blocker,
             effective_policy=v.effective_policy,
             policy_error=v.policy_error,
             effective_interval_days=v.effective_interval_days,

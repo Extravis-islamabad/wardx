@@ -24,6 +24,14 @@ class TargetResponse(BaseModel):
     ssh_host_key_learned_at: datetime | None = None
     host_key_mismatch_at: datetime | None = None
     host_key_mismatch_fingerprint: str | None = None
+    # MikroTik API-SSL: port (None = 8729), TLS or cleartext-only, and the pinned
+    # certificate's SHA-256 fingerprint (ROTATION.md §15).
+    api_port: int | None = None
+    api_tls: bool = True
+    tls_cert_fingerprint: str | None = None
+    tls_cert_learned_at: datetime | None = None
+    tls_cert_mismatch_at: datetime | None = None
+    tls_cert_mismatch_fingerprint: str | None = None
     created_at: datetime
     updated_at: datetime
     rotation_allowed: bool = False

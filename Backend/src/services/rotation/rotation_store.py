@@ -32,12 +32,13 @@ from src.core.context import SYSTEM_ACTOR
 from src.models import utcnow
 from src.repositories.rotation.rotation_account_repository import RotationAccountRepository
 from src.repositories.rotation.rotation_job_repository import RotationJobRepository
-from src.rotation.drivers.base import StepResult
+from src.rotation.drivers.base import Identity, StepResult
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET
 from src.services.rotation.rotation_outcomes import _CLEAR_RISK, RotationOutcomesMixin, next_sync
 from src.services.security.alert_service import AlertService
 from src.services.sessions.host_key_service import HostKeyService
+from src.services.sessions.tls_cert_service import TlsCertService
 from src.services.vault.vault_service import VaultService
 
 SYNC_FOR = {VERIFIED: IN_SYNC, UNTRUSTWORTHY: VERIFY_UNTRUSTWORTHY, INCONCLUSIVE: UNVERIFIED}
@@ -45,11 +46,22 @@ SYNC_FOR = {VERIFIED: IN_SYNC, UNTRUSTWORTHY: VERIFY_UNTRUSTWORTHY, INCONCLUSIVE
 
 class RotationStore(RotationOutcomesMixin):
     async def record_host_key_mismatch(
-        self, ctx: RotationContextDTO, presented: str | None, *, source: str
+        self,
+        ctx: RotationContextDTO,
+        presented: str | None,
+        *,
+        source: str,
+        identity: Identity = Identity.SSH,
     ) -> None:
-        """The target presented another host key: record it on the target, which blocks
-        every later rotation and verify there until an administrator accepts a key."""
-        if self._host_keys is not None:
+        """The target presented another host key (or API-SSL certificate): record it on
+        the target, which blocks every later rotation and verify there until an
+        administrator accepts one."""
+        if identity == Identity.TLS:
+            if self._tls_certs is not None:
+                await self._tls_certs.record_mismatch(
+                    SYSTEM_ACTOR, ctx.target.id, presented=presented, source=source
+                )
+        elif self._host_keys is not None:
             await self._host_keys.record_mismatch(
                 SYSTEM_ACTOR, ctx.target.id, presented=presented, source=source
             )
@@ -63,9 +75,11 @@ class RotationStore(RotationOutcomesMixin):
         alerts: AlertService,
         *,
         host_keys: HostKeyService | None = None,
+        tls_certs: TlsCertService | None = None,
         lease_seconds: int = 600,
     ) -> None:
         self._host_keys = host_keys
+        self._tls_certs = tls_certs
         self._jobs = jobs
         self._accounts = accounts
         self._vault = vault
@@ -153,6 +167,7 @@ class RotationStore(RotationOutcomesMixin):
                 "secret_version": version,
                 "detail": result.detail[:2000] if result.detail else None,
                 "transcript": result.transcript or None,
+                "channel": result.channel,
             }
         )
 

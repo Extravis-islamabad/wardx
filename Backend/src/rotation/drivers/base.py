@@ -24,6 +24,16 @@ class Capability(StrEnum):
     VERIFY = "verify"
     PERSIST = "persist"
     SSH_KEY = "ssh_key"
+    # The driver can tell, without side effects, whether the account's device password
+    # is empty (MikroTik: an empty-password login over the API).
+    EMPTY_PROBE = "empty_probe"
+
+
+class Identity(StrEnum):
+    """A device identity WardX pins: the SSH host key, or a TLS certificate."""
+
+    SSH = "ssh"
+    TLS = "tls"
 
 
 class Outcome(StrEnum):
@@ -35,6 +45,11 @@ class Outcome(StrEnum):
     # The command was sent, but the connection dropped before a definite answer.
     AMBIGUOUS = "ambiguous"
     BLOCKED_BY_DEPENDENTS = "blocked_by_dependents"
+    # The secure channel the driver must use is not offered (MikroTik: API-SSL off).
+    # Nothing was sent; an administrator must enable it (needs attention).
+    CHANNEL_UNAVAILABLE = "channel_unavailable"
+    # WardX refused before sending anything (e.g. an identity is not pinned).
+    REFUSED = "refused"
 
 
 @dataclass(frozen=True)
@@ -45,6 +60,10 @@ class StepResult:
     # HOST_KEY_MISMATCH only: the fingerprint the device presented instead of the pin
     # (SHA256:...), when it could be read. Recorded on the target; never trusted.
     presented_fingerprint: str | None = None
+    # HOST_KEY_MISMATCH only: which pinned identity did not match.
+    identity: Identity = Identity.SSH
+    # The device channel used (api-ssl, ssh), recorded on the job step.
+    channel: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -69,6 +88,13 @@ class TargetRef:
     protocol: str
     # Pinned SSH host public key (OpenSSH format); None = not pinned (rotation refuses).
     pinned_host_key: str | None
+    # Drivers that change over a TLS API (MikroTik API-SSL): the pinned certificate (PEM)
+    # and its SHA-256 fingerprint, the API port (None = the driver's default) and
+    # whether the device's API is TLS at all (False = cleartext only, never used).
+    pinned_tls_pem: str | None = field(default=None, repr=False)
+    pinned_tls_fingerprint: str | None = None
+    api_port: int | None = None
+    api_tls: bool = True
 
 
 @dataclass(frozen=True)

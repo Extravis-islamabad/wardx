@@ -45,17 +45,20 @@ from src.rotation.drivers.base import (
     Capability,
     Credential,
     DriverContext,
+    Identity,
     PlatformDriver,
     TargetRef,
     Transcript,
 )
-from src.rotation.drivers.registry import DriverRegistry
+from src.rotation.drivers.registry import DriverRegistry, identities_of
 from src.services.rotation.rotation_run import JobRun
 from src.services.rotation.rotation_store import RotationStore
 
 logger = structlog.get_logger(__name__)
 
 TELNET_REFUSAL = "non-rotatable (Telnet)"
+CLEARTEXT_API_REFUSAL = "non-rotatable (cleartext API)"
+LEARN_IDENTITY = "learn the device identity first"
 
 
 class SimulatedCrash(BaseException):  # noqa: N818 - tests only: a process dying mid-job
@@ -66,6 +69,44 @@ Checkpoint = Callable[[str], Awaitable[None]]
 
 
 async def _no_checkpoint(_: str) -> None:
+    return None
+
+
+def identity_refusal(
+    target, driver: PlatformDriver | None, *, mismatches: bool = True
+) -> str | None:
+    """Why the target's pinned identities forbid any connection. Drivers that change
+    over a TLS API need both pins. ``mismatches``: also refuse on a recorded mismatch
+    (the engine does; a request is queued and then refused by the engine, as before)."""
+    if mismatches and target.host_key_mismatch_at is not None:
+        return (
+            f"{target.name} presented a host key other than the pinned one. Rotation and "
+            "verify are blocked until an administrator compares fingerprints and accepts a "
+            "key (Targets → Host key). Nothing was sent."
+        )
+    if mismatches and target.tls_cert_mismatch_at is not None:
+        return (
+            f"{target.name} presented an API-SSL certificate other than the pinned one. "
+            "Rotation and verify are blocked until an administrator compares fingerprints "
+            "and accepts a certificate (Targets → Host key). Nothing was sent."
+        )
+    if Identity.TLS not in identities_of(driver):
+        return None
+    if not target.api_tls:
+        return f"{target.name} is {CLEARTEXT_API_REFUSAL}"
+    missing = [
+        name
+        for name, value in (
+            ("SSH host key", target.ssh_host_key),
+            ("API-SSL certificate", target.tls_cert_fingerprint),
+        )
+        if not value
+    ]
+    if missing:
+        return (
+            f"{target.name}: {LEARN_IDENTITY} (pin the {' and the '.join(missing)} in "
+            "Targets → Host key). Nothing was sent."
+        )
     return None
 
 
@@ -86,12 +127,9 @@ def refusal(ctx: RotationContextDTO, driver: PlatformDriver | None, *, enabled: 
         return f"The {target.platform} driver does not rotate over {target.protocol}"
     if account.secret_type != "password":
         return "Only passwords are rotated (SSH keys come later)"
-    if target.host_key_mismatch_at is not None:
-        return (
-            f"{target.name} presented a host key other than the pinned one. Rotation and "
-            "verify are blocked until an administrator compares fingerprints and accepts a "
-            "key (Targets → Host key). Nothing was sent."
-        )
+    why = identity_refusal(target, driver)
+    if why is not None:
+        return why
     if target.protocol == Protocol.SSH and not target.ssh_host_key:
         return (
             f"{target.name} has no pinned SSH host key; pin it (Targets → Learn host key) "
@@ -206,7 +244,19 @@ class RotationEngine:
     @staticmethod
     def target_ref(ctx: RotationContextDTO) -> TargetRef:
         t = ctx.target
-        return TargetRef(t.id, t.name, t.address, t.port, t.platform, t.protocol, t.ssh_host_key)
+        return TargetRef(
+            t.id,
+            t.name,
+            t.address,
+            t.port,
+            t.platform,
+            t.protocol,
+            t.ssh_host_key,
+            pinned_tls_pem=t.tls_cert_pem,
+            pinned_tls_fingerprint=t.tls_cert_fingerprint,
+            api_port=t.api_port,
+            api_tls=t.api_tls,
+        )
 
     @staticmethod
     def account_ref(ctx: RotationContextDTO) -> AccountRef:

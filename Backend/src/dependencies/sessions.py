@@ -23,6 +23,7 @@ from src.services.sessions.command_rule_service import CommandRuleService
 from src.services.sessions.gateway_session_service import GatewaySessionService
 from src.services.sessions.host_key_service import HostKeyService
 from src.services.sessions.session_service import SessionService
+from src.services.sessions.tls_cert_service import TlsCertService
 
 
 def build_session_service(session: AsyncSession) -> SessionService:
@@ -59,6 +60,19 @@ def build_host_key_service(session: AsyncSession) -> HostKeyService:
     )
 
 
+def build_tls_cert_service(session: AsyncSession) -> TlsCertService:
+    from src.dependencies.identity import build_alert_service
+    from src.dependencies.safes import build_safe_access_service
+
+    return TlsCertService(
+        TargetRepository(session),
+        AccountRepository(session),
+        build_safe_access_service(session),
+        build_alert_service(session),
+        build_audit_service(session),
+    )
+
+
 async def get_session_service(session: SQLSessionDep) -> SessionService:
     return build_session_service(session)
 
@@ -71,6 +85,11 @@ async def get_host_key_service(session: SQLSessionDep) -> HostKeyService:
     return build_host_key_service(session)
 
 
+async def get_tls_cert_service(session: SQLSessionDep) -> TlsCertService:
+    return build_tls_cert_service(session)
+
+
 SessionServiceDep = Annotated[SessionService, Depends(get_session_service)]
 CommandRuleServiceDep = Annotated[CommandRuleService, Depends(get_command_rule_service)]
 HostKeyServiceDep = Annotated[HostKeyService, Depends(get_host_key_service)]
+TlsCertServiceDep = Annotated[TlsCertService, Depends(get_tls_cert_service)]

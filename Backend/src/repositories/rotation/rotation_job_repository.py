@@ -41,6 +41,7 @@ def _step_dto(row: RotationJobStep) -> RotationStepDTO:
         transcript=row.transcript,
         started_at=row.started_at,
         finished_at=row.finished_at,
+        channel=row.channel,
     )
 
 

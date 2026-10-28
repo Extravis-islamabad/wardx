@@ -14,7 +14,7 @@ from src.routers.v1.rotation import account_rotation, jobs, safe_policy
 from src.routers.v1.safes import audit as safe_audit
 from src.routers.v1.safes import members, policy, safes
 from src.routers.v1.security import alerts
-from src.routers.v1.sessions import command_rules, gateway, sessions
+from src.routers.v1.sessions import command_rules, gateway, sessions, tls_cert
 
 api_router = APIRouter()
 
@@ -40,6 +40,7 @@ for _module in (
     audit_events,
     dashboard,
     gateway,
+    tls_cert,
     sessions,
     command_rules,
     directory,

@@ -32,6 +32,13 @@ def _to_dto(row: Target) -> TargetDTO:
         ssh_host_key_learned_at=row.ssh_host_key_learned_at,
         host_key_mismatch_at=row.host_key_mismatch_at,
         host_key_mismatch_fingerprint=row.host_key_mismatch_fingerprint,
+        api_port=row.api_port,
+        api_tls=row.api_tls,
+        tls_cert_pem=row.tls_cert_pem,
+        tls_cert_fingerprint=row.tls_cert_fingerprint,
+        tls_cert_learned_at=row.tls_cert_learned_at,
+        tls_cert_mismatch_at=row.tls_cert_mismatch_at,
+        tls_cert_mismatch_fingerprint=row.tls_cert_mismatch_fingerprint,
         created_at=row.created_at,
         updated_at=row.updated_at,
         rotation_allowed=row.rotation_allowed,
@@ -120,6 +127,38 @@ class TargetRepository(BaseRepository):
         if new:
             row.host_key_mismatch_at = seen_at
             row.host_key_mismatch_fingerprint = presented
+            await self._session.flush()
+        return new
+
+    async def accept_tls_cert(
+        self, target_id: uuid.UUID, *, pem: str, fingerprint: str, learned_at: datetime
+    ) -> None:
+        """Pin (or re-pin) the API-SSL certificate an administrator accepted, and clear
+        any recorded certificate mismatch."""
+        await self._session.execute(
+            update(Target)
+            .where(Target.id == target_id)
+            .values(
+                tls_cert_pem=pem,
+                tls_cert_fingerprint=fingerprint,
+                tls_cert_learned_at=learned_at,
+                tls_cert_mismatch_at=None,
+                tls_cert_mismatch_fingerprint=None,
+            )
+        )
+
+    async def record_tls_cert_mismatch(
+        self, target_id: uuid.UUID, *, presented: str | None, seen_at: datetime
+    ) -> bool:
+        """Mark the target as presenting an unpinned certificate. True when this is a new
+        mismatch (none recorded yet, or another presented fingerprint)."""
+        row = await self._session.get(Target, target_id, with_for_update=True)
+        if row is None:
+            return False
+        new = row.tls_cert_mismatch_at is None or row.tls_cert_mismatch_fingerprint != presented
+        if new:
+            row.tls_cert_mismatch_at = seen_at
+            row.tls_cert_mismatch_fingerprint = presented
             await self._session.flush()
         return new
 

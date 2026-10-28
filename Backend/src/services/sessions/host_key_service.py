@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any
 
 import asyncssh
 
@@ -30,88 +29,15 @@ from src.contracts.dto.inventory.target_dto import TargetDTO
 from src.contracts.dto.sessions.host_key_dto import HostKeyProbeDTO
 from src.core.config import get_settings
 from src.core.context import Actor
-from src.core.enums import SafePermission
-from src.errors.exceptions import ConflictError, ForbiddenError, NotFoundError
+from src.errors.exceptions import ConflictError
 from src.models import utcnow
-from src.repositories.inventory.account_repository import AccountRepository
-from src.repositories.inventory.target_repository import TargetRepository
-from src.services.audit.audit_service import AuditService
-from src.services.safes.safe_access_service import SafeAccessService
-from src.services.security.alert_service import AlertService
+from src.services.sessions.target_identity import TargetIdentityService
 from src.transport.ssh import openssh_public
 
 MISMATCH_ALERT = "target.host_key_changed"
 
 
-class HostKeyService:
-    def __init__(
-        self,
-        targets: TargetRepository,
-        accounts: AccountRepository,
-        access: SafeAccessService,
-        alerts: AlertService,
-        audit: AuditService,
-    ) -> None:
-        self._targets = targets
-        self._accounts = accounts
-        self._access = access
-        self._alerts = alerts
-        self._audit = audit
-
-    # ── helpers ──
-
-    async def _target(self, target_id: uuid.UUID) -> TargetDTO:
-        target = await self._targets.get(target_id)
-        if target is None:
-            raise NotFoundError("Target not found")
-        return target
-
-    async def _safe_ids(self, target_id: uuid.UUID) -> list[uuid.UUID]:
-        accounts = await self._accounts.list_for_target(target_id)
-        return sorted({a.safe_id for a in accounts}, key=str)
-
-    async def _require_manage(self, actor: Actor, target_id: uuid.UUID) -> list[uuid.UUID]:
-        """manage_accounts on every safe holding an account on the target (the route
-        already requires inventory.manage). A target with no accounts needs nothing more."""
-        safe_ids = await self._safe_ids(target_id)
-        for safe_id in safe_ids:
-            perms = await self._access.permissions(actor, safe_id)
-            if SafePermission.MANAGE_ACCOUNTS not in perms:
-                raise ForbiddenError(
-                    "Host keys of this target can only be changed with manage_accounts on "
-                    "every safe that holds one of its accounts"
-                )
-        return safe_ids
-
-    async def _audit_per_safe(
-        self,
-        actor: Actor,
-        action: str,
-        target_id: uuid.UUID,
-        safe_ids: list[uuid.UUID],
-        details: dict[str, Any],
-        outcome: str = "success",
-    ) -> None:
-        """One target-level event, then one per affected safe."""
-        await self._audit.record(
-            actor,
-            action,
-            object_type="target",
-            object_id=target_id,
-            outcome=outcome,
-            details=details,
-        )
-        for safe_id in safe_ids:
-            await self._audit.record(
-                actor,
-                action,
-                object_type="target",
-                object_id=target_id,
-                safe_id=safe_id,
-                outcome=outcome,
-                details=details,
-            )
-
+class HostKeyService(TargetIdentityService):
     @staticmethod
     async def _read_key(target: TargetDTO) -> asyncssh.SSHKey:
         if target.protocol != "ssh":

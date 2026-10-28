@@ -18,7 +18,7 @@ from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
 from src.dependencies.identity import build_alert_service
 from src.dependencies.inventory import build_account_service
-from src.dependencies.sessions import build_host_key_service
+from src.dependencies.sessions import build_host_key_service, build_tls_cert_service
 from src.dependencies.vault import build_vault_service
 from src.repositories.rotation.rotation_account_repository import RotationAccountRepository
 from src.repositories.rotation.rotation_job_repository import RotationJobRepository
@@ -50,6 +50,7 @@ def build_rotation_store(session: AsyncSession) -> RotationStore:
         build_audit_service(session),
         build_alert_service(session),
         host_keys=build_host_key_service(session),
+        tls_certs=build_tls_cert_service(session),
         lease_seconds=get_settings().rotation_lease_seconds,
     )
 

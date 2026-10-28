@@ -110,16 +110,28 @@ class RotationOutcomesMixin:
                 details={"job_id": str(ctx.job.id), "reason": "clean verify"},
             )
 
-    async def flag_empty_password(self, ctx: RotationContextDTO) -> None:
-        """The vaulted password is empty: flag the account high risk and stop."""
+    async def flag_empty_password(
+        self,
+        ctx: RotationContextDTO,
+        *,
+        on_device: bool = False,
+        steps: list[tuple[str, StepResult, int | None]] = (),
+        candidate: int | None = None,
+    ) -> None:
+        """The vaulted password (or, ``on_device``, the device's password) is empty: flag
+        the account high risk and stop. A stored candidate is kept, labelled abandoned."""
+        for s in steps:
+            await self._step(ctx.job.id, *s)
         if HIGH_RISK_EMPTY_PASSWORD not in ctx.account.risk_flags:
             await self._accounts.update(
                 ctx.account.id,
                 {"risk_flags": [*ctx.account.risk_flags, HIGH_RISK_EMPTY_PASSWORD]},
             )
+        where = "device accepted an empty password" if on_device else "vaulted password is empty"
         await self.fail(
             ctx,
-            "The vaulted password is empty (high_risk_empty_password)",
+            f"The {where} (high_risk_empty_password)",
+            candidate=candidate,
             alert=(
                 "account.high_risk_empty_password",
                 f"{ctx.account.username}@{ctx.target.name} has an empty password (high risk)",

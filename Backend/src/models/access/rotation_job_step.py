@@ -25,5 +25,7 @@ class RotationJobStep(Base):
     secret_version: Mapped[int | None] = mapped_column(Integer)
     detail: Mapped[str | None] = mapped_column(Text)
     transcript: Mapped[str | None] = mapped_column(Text)
+    # The device channel the step used (api-ssl, ssh), when it used one.
+    channel: Mapped[str | None] = mapped_column(String(16))
     started_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     finished_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)

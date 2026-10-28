@@ -18,6 +18,8 @@ class RotationStepResponse(BaseModel):
     transcript: str | None
     started_at: datetime
     finished_at: datetime
+    # The device channel the step used (api-ssl, ssh), when it used one.
+    channel: str | None = None
 
 
 class RotationJobResponse(BaseModel):
@@ -83,6 +85,9 @@ class AccountRotationResponse(BaseModel):
     rotation_enabled: bool
     host_key_pinned: bool
     non_rotatable_reason: str | None
+    # Why the target's pinned identities block rotation now (a missing pin or a recorded
+    # host-key or certificate mismatch), e.g. "learn the device identity first".
+    identity_blocker: str | None = None
     effective_policy: dict[str, Any] | None
     policy_error: str | None
     effective_interval_days: int | None

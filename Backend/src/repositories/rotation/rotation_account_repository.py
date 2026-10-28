@@ -73,6 +73,11 @@ def target_dto(row: Target) -> RotationTargetDTO:
         policy_overrides=dict(row.policy_overrides or {}),
         ssh_host_key=row.ssh_host_key,
         host_key_mismatch_at=row.host_key_mismatch_at,
+        api_port=row.api_port,
+        api_tls=row.api_tls,
+        tls_cert_pem=row.tls_cert_pem,
+        tls_cert_fingerprint=row.tls_cert_fingerprint,
+        tls_cert_mismatch_at=row.tls_cert_mismatch_at,
     )
 
 

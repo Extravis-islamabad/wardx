@@ -31,6 +31,14 @@ class TargetDTO:
     # administrator accepts a key again (ROTATION.md §14, fix 4).
     host_key_mismatch_at: datetime | None = None
     host_key_mismatch_fingerprint: str | None = None
+    # Management API (MikroTik API-SSL) and its pinned TLS certificate (ROTATION.md §15).
+    api_port: int | None = None
+    api_tls: bool = True
+    tls_cert_pem: str | None = None
+    tls_cert_fingerprint: str | None = None
+    tls_cert_learned_at: datetime | None = None
+    tls_cert_mismatch_at: datetime | None = None
+    tls_cert_mismatch_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)

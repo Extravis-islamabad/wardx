@@ -37,5 +37,16 @@ class Target(Base):
     # until an administrator re-learns the key.
     host_key_mismatch_at: Mapped[datetime | None] = mapped_column(TZ)
     host_key_mismatch_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    # Management API (MikroTik API-SSL): port (None = platform default) and whether it is
+    # TLS; a cleartext-only API is never used for rotation.
+    api_port: Mapped[int | None] = mapped_column(Integer)
+    api_tls: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The pinned API-SSL certificate and its SHA-256 (DER) fingerprint, and a recorded
+    # mismatch, which blocks rotation and verify until a certificate is accepted again.
+    tls_cert_pem: Mapped[str | None] = mapped_column(Text)
+    tls_cert_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    tls_cert_learned_at: Mapped[datetime | None] = mapped_column(TZ)
+    tls_cert_mismatch_at: Mapped[datetime | None] = mapped_column(TZ)
+    tls_cert_mismatch_fingerprint: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)

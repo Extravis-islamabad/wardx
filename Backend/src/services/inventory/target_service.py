@@ -80,6 +80,8 @@ class TargetService:
         return target
 
     async def update(self, actor: Actor, target_id: uuid.UUID, changes: dict) -> TargetDTO:
+        if "api_tls" in changes and changes["api_tls"] is None:
+            changes.pop("api_tls")  # NOT NULL: an explicit null means "unchanged"
         if "protocol" in changes and "port" not in changes:
             changes["port"] = DEFAULT_PORTS[Protocol(changes["protocol"])]
         if "policy_overrides" in changes or "platform" in changes:

@@ -35,6 +35,10 @@ class TargetCreate(BaseModel):
     # Rotation: the per-target safety switch (off by default) and device policy caps.
     rotation_allowed: bool = False
     policy_overrides: PolicyOverrides | None = None
+    # Management API (MikroTik): API-SSL port (None = 8729). api_tls false = the device
+    # offers only the cleartext API, which is never used for rotation.
+    api_port: int | None = Field(None, ge=1, le=65535)
+    api_tls: bool = True
 
 
 class TargetUpdate(BaseModel):
@@ -49,3 +53,5 @@ class TargetUpdate(BaseModel):
     is_active: bool | None = None
     rotation_allowed: bool | None = None
     policy_overrides: PolicyOverrides | None = None
+    api_port: int | None = Field(None, ge=1, le=65535)
+    api_tls: bool | None = None

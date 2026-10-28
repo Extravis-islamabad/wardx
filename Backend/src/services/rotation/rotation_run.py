@@ -9,18 +9,14 @@ import structlog
 from src.contracts.dto.rotation.rotation_dto import (
     CANDIDATE_STORED,
     DEVICE_CHANGED,
-    IN_SYNC,
     INCONCLUSIVE,
     OUT_OF_SYNC,
     PERSISTED,
     RECONCILE,
     RUNNING,
-    UNREACHABLE,
     UNTRUSTWORTHY,
-    UNVERIFIED,
     VERIFIED,
     VERIFY,
-    VERIFY_UNTRUSTWORTHY,
     RotationContextDTO,
 )
 from src.rotation import policy as policies
@@ -33,6 +29,7 @@ from src.rotation.drivers.base import (
     StepResult,
 )
 from src.rotation.passwords import generate, wrong_password
+from src.services.rotation.rotation_verify import VerifyMixin
 
 if TYPE_CHECKING:
     from src.services.rotation.rotation_engine import RotationEngine
@@ -46,7 +43,7 @@ MAX_ATTEMPTS = 3
 Step = tuple[str, StepResult, int | None]
 
 
-class JobRun:
+class JobRun(VerifyMixin):
     def __init__(self, engine: RotationEngine, ctx: RotationContextDTO, driver: PlatformDriver):
         self.e = engine
         self.ctx = ctx
@@ -126,7 +123,18 @@ class JobRun:
         """A positive login with one version (or a given secret)."""
         value = secret if secret is not None else await self.secret(version)
         dctx = self.e.driver_context([value, *self._secrets.values()])
-        return await self.driver.verify(self.target, self.account, value, dctx)
+        result = await self.driver.verify(self.target, self.account, value, dctx)
+        if result.outcome == Outcome.HOST_KEY_MISMATCH:
+            await self.record_mismatch(result, "verify")
+        return result
+
+    async def record_mismatch(self, result: StepResult, source: str) -> None:
+        """Another host key or certificate: recorded on the target, which blocks every
+        later rotation and verify there until an administrator accepts one."""
+        async with self.e.store() as st:
+            await st.record_host_key_mismatch(
+                self.ctx, result.presented_fingerprint, source=source, identity=result.identity
+            )
 
     async def negative_check(self, known: list[str]) -> StepResult:
         """Exactly one login with a fresh wrong password; it must be refused. Never retried."""
@@ -200,17 +208,22 @@ class JobRun:
         step = (step_name, result, self.n)
         who = f"{self.ctx.account.username}@{self.ctx.target.name}"
         if result.outcome == Outcome.HOST_KEY_MISMATCH:
-            async with self.e.store() as st:
-                await st.record_host_key_mismatch(
-                    self.ctx, result.presented_fingerprint, source="rotation"
-                )
+            await self.record_mismatch(result, "rotation")
             await self.fail(
                 result.detail,
                 step,
                 candidate=self.c,
                 alert=("rotation.host_key_mismatch", f"Rotation of {who}: {result.detail}"),
             )
+        elif result.outcome == Outcome.CHANNEL_UNAVAILABLE:
+            # The device offers no secure change channel: an administrator must enable it.
+            # Nothing was sent, and there is no fallback to a weaker channel.
+            await self.attention(result.detail, step)
+        elif result.outcome == Outcome.REFUSED:
+            await self.fail_abandon(result.detail, step)
         elif result.outcome == Outcome.AUTH_FAILED and not self.via_reconcile:
+            if await self.empty_on_device([step], candidate=self.c):
+                return
             await self.fail(
                 f"{who} rejected its current vaulted password (N)",
                 step,
@@ -372,7 +385,7 @@ class JobRun:
             known = [await self.secret(self.c)] + ([await self.secret(self.n)] if self.n else [])
             neg = await self.negative_check(known)
             verdict = self.negative_verdict(neg)
-            n_step = ("verify_negative", StepResult(neg.outcome, f"wrong password {verdict}"), None)
+            n_step = ("verify_negative", self.negative_step(neg, verdict), None)
             async with self.e.store() as st:
                 await st.promote(self.ctx, self.c, verdict, steps=[c_step, n_step])
             return
@@ -395,54 +408,3 @@ class JobRun:
             await self.attention("Neither the new nor the current password works", n_step)
         else:
             await self.retry(PERSISTED, n_res.detail, n_step, on_exhausted=self.attention)
-
-    async def verify_only(self) -> None:
-        """A verify job (or a dry run): the current version, then the negative check."""
-        version = self.ctx.account.secret_version
-        current = await self.secret(version)
-        if current == "":
-            async with self.e.store() as st:
-                await st.flag_empty_password(self.ctx)
-            return
-        steps: list[Step] = []
-        if self.job.reason != VERIFY:  # a dry run: also connect the way a change would
-            login = await self.login(after_change=False)
-            dctx = self.dctx()
-            try:
-                session = await self.driver.connect(self.target, login, dctx)
-                await session.close()
-                steps.append(("dry_run_connect", StepResult(Outcome.OK, "connected"), None))
-            except DriverError as exc:
-                steps.append(("dry_run_connect", exc.result, None))
-        pos = await self.verify(version)
-        steps.append(("verify", pos, version))
-        verdict = None
-        if pos.ok:
-            neg = await self.negative_check([current])
-            verdict = self.negative_verdict(neg)
-            steps.append(
-                ("verify_negative", StepResult(neg.outcome, f"wrong password {verdict}"), None)
-            )
-            sync = {VERIFIED: IN_SYNC, UNTRUSTWORTHY: VERIFY_UNTRUSTWORTHY}.get(verdict, UNVERIFIED)
-        elif pos.outcome == Outcome.AUTH_FAILED:
-            sync = OUT_OF_SYNC
-        elif pos.outcome == Outcome.HOST_KEY_MISMATCH:
-            who = f"{self.ctx.account.username}@{self.ctx.target.name}"
-            async with self.e.store() as st:
-                await st.record_host_key_mismatch(
-                    self.ctx, pos.presented_fingerprint, source="verify"
-                )
-            await self.fail(
-                pos.detail,
-                steps[-1],
-                alert=("rotation.host_key_mismatch", f"Verify of {who}: {pos.detail}"),
-            )
-            return
-        else:
-            sync = UNREACHABLE
-        dry = self.job.dry_run or self.job.reason != VERIFY
-        detail = "dry run: nothing changed" if dry else None
-        async with self.e.store() as st:
-            await st.verify_finished(self.ctx, sync, verdict, steps=steps, detail=detail)
-            if sync == OUT_OF_SYNC:
-                await st.enqueue_auto_reconcile(self.ctx)

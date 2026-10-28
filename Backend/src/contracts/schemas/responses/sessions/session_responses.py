@@ -58,3 +58,16 @@ class HostKeyProbeResponse(BaseModel):
     matches_pin: bool
     mismatch_at: datetime | None
     mismatch_fingerprint: str | None
+
+
+class TlsCertProbeResponse(BaseModel):
+    """The API-SSL certificate a target presents now (SHA-256 over DER), next to the pin."""
+
+    target_id: uuid.UUID
+    presented_fingerprint: str
+    subject: str
+    not_after: datetime | None
+    pinned_fingerprint: str | None
+    matches_pin: bool
+    mismatch_at: datetime | None
+    mismatch_fingerprint: str | None
