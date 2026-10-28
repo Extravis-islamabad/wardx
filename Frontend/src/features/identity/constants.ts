@@ -27,6 +27,8 @@ export const DIRECTORY_PRESETS: Record<
     attr_full_name: string;
     group_base_dn: string;
     group_filter: string;
+    /** Resolve nested groups (LDAP_MATCHING_RULE_IN_CHAIN): AD only. */
+    nested_groups: boolean;
   }
 > = {
   [DirectoryPreset.AD]: {
@@ -37,6 +39,7 @@ export const DIRECTORY_PRESETS: Record<
     attr_full_name: 'displayName',
     group_base_dn: '',
     group_filter: '',
+    nested_groups: true,
   },
   [DirectoryPreset.OPENLDAP]: {
     label: 'OpenLDAP',
@@ -46,6 +49,7 @@ export const DIRECTORY_PRESETS: Record<
     attr_full_name: 'cn',
     group_base_dn: '',
     group_filter: '(&(objectClass=groupOfNames)(member={user_dn}))',
+    nested_groups: false,
   },
 };
 

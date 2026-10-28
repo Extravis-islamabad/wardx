@@ -18,7 +18,15 @@ import {
 import type { DirectoryConfig } from '@/services/identity-services';
 import { notify } from '@/utils/notify';
 
-const PRESET_FIELDS = ['user_filter', 'attr_username', 'attr_email', 'attr_full_name', 'group_base_dn', 'group_filter'] as const;
+const PRESET_FIELDS = [
+  'user_filter',
+  'attr_username',
+  'attr_email',
+  'attr_full_name',
+  'group_base_dn',
+  'group_filter',
+  'nested_groups',
+] as const;
 
 type TextFieldName = Extract<
   FieldPath<DirectoryFormValues>,
@@ -236,6 +244,17 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
           </FormField>
           <FormField label="Group filter (optional)" htmlFor="group_filter">
             <DnInput control={control} name="group_filter" placeholder="(&(objectClass=groupOfNames)(member={user_dn}))" />
+          </FormField>
+          <FormField
+            label="Nested groups (Active Directory)"
+            htmlFor="nested_groups"
+            hint="Resolves group-in-group membership with the in-chain rule. Turn off only for very large directories where it is slow; OpenLDAP does not support it."
+          >
+            <Controller
+              control={control}
+              name="nested_groups"
+              render={({ field }) => <Switch id="nested_groups" checked={field.value} onChange={field.onChange} />}
+            />
           </FormField>
         </div>
       </Card>

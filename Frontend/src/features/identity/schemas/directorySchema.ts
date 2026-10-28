@@ -20,6 +20,7 @@ export const directoryFormSchema = z.object({
   group_filter: z.string().optional(),
   role_mappings: z.array(z.object({ group_dn: z.string().min(3, 'Group DN'), role: z.enum(Role) })),
   default_role: z.enum(Role).nullable(),
+  nested_groups: z.boolean(),
   timeout_seconds: z.number().int().min(1).max(60),
   sync_interval_minutes: z
     .number()
@@ -51,6 +52,8 @@ export const directoryFormValuesFrom = (c: DirectoryConfig | null): DirectoryFor
   group_filter: c?.group_filter ?? '',
   role_mappings: c?.role_mappings ?? [],
   default_role: c?.default_role ?? null,
+  // On by default for Active Directory (the in-chain rule is AD-only).
+  nested_groups: c?.nested_groups ?? AD.nested_groups,
   timeout_seconds: c?.timeout_seconds ?? 10,
   sync_interval_minutes: c?.sync_interval_minutes ?? 60,
   sync_max_disable_percent: c?.sync_max_disable_percent ?? 20,

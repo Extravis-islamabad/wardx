@@ -22,6 +22,12 @@ export interface User {
   auth_source: AuthSource;
   disabled_reason: string | null;
   created_at: string;
+  /** Direct per-user grants (break-glass); filled in on /auth/me and the users list. */
+  direct_permissions?: string[];
+  /** MFA state, on the users list. */
+  mfa_enabled?: boolean | null;
+  /** Effective permission codenames, on /auth/me only. */
+  permissions?: string[];
 }
 
 export interface LoginResult {

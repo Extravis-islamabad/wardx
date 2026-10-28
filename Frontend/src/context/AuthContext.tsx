@@ -5,7 +5,6 @@ import { authKeys } from '@/features/auth/hooks/authKeys';
 import { useMe, useSessionMfaStatus } from '@/features/auth/hooks/useAuthSession';
 import { authService, type LoginResult, type User } from '@/services/auth-services';
 import { AuthEvent, type Role } from '@/constants/enums/auth';
-import { ROLE_PERMISSIONS } from '@/constants/enums/permissions';
 
 export type AccessCheck = {
   /** Module code(s). Accepted for the registry's shape; the backend does not license modules yet. */
@@ -112,7 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return false;
       const required = asList(permission);
       if (!required.length) return true;
-      const held: string[] = ROLE_PERMISSIONS[user.role] ?? [];
+      // Server-issued: the role's bundle plus direct grants (GET /auth/me).
+      const held = user.permissions ?? [];
       return required.some((p) => held.includes(p));
     },
     [user],

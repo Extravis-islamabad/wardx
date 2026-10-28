@@ -1,30 +1,24 @@
-import { Role } from './auth';
-
-/** Permission codenames the console gates on. Today they resolve from the user's role via ROLE_PERMISSIONS. */
+/**
+ * Permission codenames the console gates on. They are the backend's codenames
+ * (Backend/src/core/permissions.py): `/auth/me` returns the signed-in user's effective
+ * list (role bundle plus direct grants such as break-glass), and `canAccess` checks it.
+ */
 export enum PERMISSIONS {
-  TARGETS_MANAGE = 'inventory.targets.manage',
-  ACCOUNTS_MANAGE = 'inventory.accounts.manage',
-  REQUESTS_DECIDE = 'access.requests.decide',
-  CHECKOUTS_VIEW_ALL = 'access.checkouts.view_all',
-  CHECKOUTS_REVOKE = 'access.checkouts.revoke',
+  INVENTORY_VIEW = 'inventory.view',
+  TARGETS_MANAGE = 'inventory.manage',
+  ACCOUNTS_MANAGE = 'inventory.manage',
+  SAFES_MANAGE = 'safes.manage',
+  REQUESTS_DECIDE = 'access.approve',
+  CHECKOUTS_VIEW_ALL = 'access.view_all',
+  CHECKOUTS_REVOKE = 'access.revoke',
+  /** Break-glass: a direct per-user grant only; no role holds it. */
+  ACCESS_EMERGENCY = 'access.emergency',
   SESSIONS_VIEW_ALL = 'sessions.view_all',
   SESSIONS_TERMINATE = 'sessions.terminate',
-  COMMAND_POLICY_VIEW = 'sessions.command_policy.view',
-  COMMAND_POLICY_MANAGE = 'sessions.command_policy.manage',
+  COMMAND_POLICY_VIEW = 'policy.view',
+  COMMAND_POLICY_MANAGE = 'policy.manage',
   AUDIT_VIEW = 'audit.view',
-  USERS_MANAGE = 'identity.users.manage',
-  DIRECTORY_MANAGE = 'identity.directory.manage',
+  ALERTS_ACKNOWLEDGE = 'alerts.acknowledge',
+  USERS_MANAGE = 'users.manage',
+  DIRECTORY_MANAGE = 'directory.manage',
 }
-
-// Swap for a server-issued permission list once the backend sends one; call sites keep using codenames.
-export const ROLE_PERMISSIONS: Record<Role, PERMISSIONS[]> = {
-  [Role.ADMIN]: Object.values(PERMISSIONS),
-  [Role.APPROVER]: [PERMISSIONS.REQUESTS_DECIDE],
-  [Role.AUDITOR]: [
-    PERMISSIONS.CHECKOUTS_VIEW_ALL,
-    PERMISSIONS.SESSIONS_VIEW_ALL,
-    PERMISSIONS.COMMAND_POLICY_VIEW,
-    PERMISSIONS.AUDIT_VIEW,
-  ],
-  [Role.USER]: [],
-};

@@ -39,18 +39,31 @@ export interface DirectoryConfig {
   group_filter: string | null;
   role_mappings: RoleMapping[];
   default_role: Role | null;
+  /** Active Directory nested groups (in-chain rule); an off-switch for very large directories. */
+  nested_groups: boolean;
   timeout_seconds: number;
   sync_interval_minutes: number;
   sync_max_disable_percent: number;
   last_sync_at: string | null;
   last_sync_status: SyncStatus | null;
   last_sync_summary: SyncResult | null;
+  /** Outcome of the most recent directory contact (null until WardX has tried). */
+  reachable: boolean | null;
+  reachability_checked_at: string | null;
+  reachability_error: string | null;
   updated_at: string;
 }
 
 export type DirectoryConfigInput = Omit<
   DirectoryConfig,
-  'has_bind_password' | 'updated_at' | 'last_sync_at' | 'last_sync_status' | 'last_sync_summary'
+  | 'has_bind_password'
+  | 'updated_at'
+  | 'last_sync_at'
+  | 'last_sync_status'
+  | 'last_sync_summary'
+  | 'reachable'
+  | 'reachability_checked_at'
+  | 'reachability_error'
 > & {
   bind_password?: string;
 };
