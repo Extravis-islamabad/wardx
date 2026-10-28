@@ -1,12 +1,14 @@
 # Tenancy key management (design, for review)
 
-Status: **draft for review, revision 2. Nothing here is implemented yet.**
+Status: **revision 3: §10 decisions answered (2026-10-28). Nothing here is implemented yet.**
 Revision 2 adds:
 - audit integrity against a DB superuser (keyed HMAC chain, signed checkpoints, real-time
   forwarding), §8.1;
 - a key-compromise procedure separate from rotation, §6.1;
 - explicit MK-wrapping of backup key bundles and fail-safe restore, §7;
 - master key loss and HSM failure, §8.2.
+
+Revision 3 records the review decisions in §10 and aligns the sections they touch.
 Scope: how WardX encrypts tenant data once it is multi-tenant (MonetX style: a parent control-plane
 database plus one database per tenant), how keys rotate without manual re-encryption, and how
 backups are encrypted and restored one tenant at a time.
@@ -15,7 +17,7 @@ backups are encrypted and restored one tenant at a time.
 
 | # | Threat | Requirement |
 |---|---|---|
-| T1 | Parent DB dump stolen | No tenant secret, and no usable tenant key, can be recovered from it. |
+| T1 | Parent DB dump stolen. **Highest-value target:** it holds every user, role grant, per-tenant directory config, wrapped tenant keys and identity secrets | No tenant secret, MFA seed, bind password or usable tenant key can be recovered from it without the MK. Hardened as in T11. |
 | T2 | One tenant DB dump stolen | No secret recoverable without the master key; nothing about other tenants in it. |
 | T3 | Tenant A's admin or key compromised | Tenant B unaffected: different key, different DB, AAD binds every blob to its tenant. |
 | T4 | Backup media stolen | Encrypted end to end; useless without the master key. |
@@ -25,6 +27,7 @@ backups are encrypted and restored one tenant at a time.
 | T8 | Tenant offboarded | Crypto-shred: destroying its keys makes its data, including backups, unrecoverable. |
 | T9 | DB superuser drops triggers and rewrites or truncates the audit chain | Detected: keyed chain, signed checkpoints and an external copy (§8.1). |
 | T10 | Master key lost, or HSM fails | No silent loss: HSM cluster and backup, M-of-N escrow, enforced checks (§8.2). |
+| T11 | Parent DB host or admin compromised (it serves every tenant) | Minimum blast radius. The parent holds no vault ciphertext. Identity secrets are sealed per tenant (§8). The MK provider only accepts unwrap calls from the WardX service identity, so a parent DB admin can't unwrap keys. Separate DB host with no tenant workloads, app role not a superuser, DB activity forwarded to the external sink (§8.1), encrypted backups, and admin access brokered through WardX itself. |
 
 Non-goals: protecting secrets from a fully compromised running WardX process (it holds unwrapped
 keys in memory by design), and side channels on the host.
@@ -37,7 +40,8 @@ Master key (MK)          in an HSM / KMS / TPM; never leaves it (file only in de
        ├─ vault   → wraps a data key (DEK) per secret version → AES-256-GCM secret
        ├─ backup  → wraps a DEK per backup archive            → AES-256-GCM stream
        ├─ files   → wraps a DEK per session recording          → AES-256-GCM stream
-       └─ audit   → HMAC key for the tenant's audit chain (§8.1); never in the tenant DB
+       ├─ audit   → HMAC key for the tenant's audit chain (§8.1); never in the tenant DB
+       └─ identity→ wraps DEKs for the tenant's MFA seeds and directory/SSO secrets (stored in the parent)
   └─ wraps → Platform KEK (PKEK): control-plane secrets (parent-DB MFA seeds, LDAP bind
              passwords held in the parent, signing-key private halves)
 ```
@@ -81,7 +85,7 @@ anything needs both, plus the MK provider.
 CREATE TABLE platform.tenant_keys (
     id           UUID PRIMARY KEY,
     tenant_id    UUID        NOT NULL REFERENCES platform.tenants (id),
-    purpose      VARCHAR(16) NOT NULL CHECK (purpose IN ('vault','backup','files','audit')),
+    purpose      VARCHAR(16) NOT NULL CHECK (purpose IN ('vault','backup','files','audit','identity')),
     version      INTEGER     NOT NULL,
     state        VARCHAR(12) NOT NULL
                  CHECK (state IN ('active','retired','compromised','destroyed')),
@@ -115,9 +119,9 @@ class KeyProvider(Protocol):
 
 | Provider | Use | Notes |
 |---|---|---|
-| `pkcs11` | on-prem / air-gapped (banks, telco, government) | Thales Luna, Utimaco, Entrust nShield, YubiHSM 2; SoftHSM2 in CI. AES key-wrap (KWP) or AES-GCM in the HSM. |
+| `pkcs11` | on-prem / air-gapped (banks, telco, government) | **Vendor-neutral** PKCS#11 (decision 4), tested on SoftHSM2 in CI. No vendor committed yet; Thales Luna is a candidate, pending what pipeline customers run. AES key-wrap (KWP) or AES-GCM inside the HSM. |
 | `aws-kms`, `azure-kv`, `gcp-kms` | SaaS and cloud installs | Envelope via `GenerateDataKey`/`Encrypt`. Encryption context = AAD. Multi-region keys for DR. |
-| `tpm2` | single-appliance on-prem without an HSM | MK sealed to the TPM (optionally to PCRs). Bound to one machine, so it **must** be paired with an escrowed copy (Shamir M-of-N shares held by named officers) for DR and hardware replacement. |
+| `tpm2` | single-appliance on-prem without an HSM | Allowed **only with mandatory escrow** (decision 2). Ceremony order: generate the MK in the ceremony → split it into M-of-N shares → seal it into the TPM (optionally to PCRs). The working copy is then bound to one machine; the shares are the only DR and hardware-replacement path. WardX refuses a `tpm2` MK without verified escrow. |
 | `file` | development and tests only | Today's `.wardx/kek.key` behaviour. Startup refuses it in production. |
 
 **Failure behaviour.**
@@ -296,7 +300,7 @@ MK-wrapped TKEKs, so on their own they reveal nothing.
 |---|---|---|
 | JWT signing | one HS256 secret | Asymmetric (Ed25519 / ES256) with `kid`. Tokens carry `tenant_id`; the private key is under the PKEK; rotation publishes the next key before switching. |
 | Session recordings | plaintext asciicast files | Encrypted with the tenant's **files** TKEK (streaming GCM, as backups). The SHA-256 integrity hash stays in the audit chain. |
-| MFA seeds, LDAP bind password | in the vault (single KEK) | Tenant users: tenant vault. Platform operators: PKEK. |
+| MFA seeds, directory bind secrets | in the vault (single KEK) | Users and per-tenant directory config live in the **parent** (decision 1). Tenant users' MFA seeds and each tenant's LDAP/AD bind secret (later SSO client secrets) are sealed under that tenant's `identity` key, so one tenant key unlocks only that tenant's identity secrets. Platform operators' seeds are under the PKEK. |
 | Gateway SSH host key | file | Per gateway node, under the PKEK. |
 | Audit chain key and checkpoint key (new) | none | See §8.1. |
 
@@ -330,10 +334,12 @@ Three layers close this. Each one alone is not enough.
 3. **Real-time forwarding to an external sink.**
    - Every audit event is also written to a **transactional outbox**, in the same transaction as
      the action it records, so no committed event can be skipped.
-   - A forwarder delivers each one at least once to the configured sinks:
-     - syslog (RFC 5424 over TLS, CEF or LEEF);
-     - Splunk HEC, Microsoft Sentinel, QRadar or Cortex XSIAM;
-     - optionally S3-compatible object storage with object lock (WORM).
+   - A forwarder delivers each one at least once. **MVP sink: syslog over TLS (RFC 5424, CEF)**
+     (decision 8). Later plugins on the same outbox: Splunk HEC, Microsoft Sentinel, QRadar,
+     Cortex XSIAM, and S3-compatible object storage with object lock (WORM).
+   - An outbox event is marked delivered **only after a successful TLS write** to the sink. A
+     failed or timed-out write leaves it pending, to be retried with backoff. The sink may see
+     duplicates, never gaps, and `seq` lets it de-duplicate.
    - Each forwarded record carries `seq`, `hash` and `prev_hash`, so the external copy can be
      verified on its own and compared against the DB.
    - The sink is administered by someone other than the WardX DB admin. That separation of duties
@@ -341,7 +347,8 @@ Three layers close this. Each one alone is not enough.
    - Forwarding lag and failures are monitored. An outbox older than a threshold raises an alert
      and shows on the platform dashboard.
    - `wardx audit reconcile --tenant X` compares the DB chain with the sink's copy and reports the
-     first difference.
+     first difference. It also **runs on a schedule** (default hourly per tenant). A mismatch or
+     missing range raises an alert and is recorded in the platform audit.
 
 **Supporting controls.**
 - The WardX application role is not a superuser and doesn't own the audit tables or triggers.
@@ -378,9 +385,13 @@ something that can happen silently.
   - a scripted procedure;
   - a signed ceremony log.
 - At generation, an export-wrapped copy of the MK (or the vendor backup blob) is split with
-  Shamir secret sharing into **N shares, any M of which rebuild it** (default 3-of-5). Each share
-  goes to a separate named custodian, on a smart card or in tamper-evident sealed storage in a
-  separate safe.
+  Shamir secret sharing into **N shares, any M of which rebuild it**. The quorum is a parameter
+  with a **minimum of 2-of-3** and a **recommended 3-of-5** (decision 3). Each share goes to a
+  separate named custodian, on a smart card or in tamper-evident sealed storage in a separate safe.
+- Custodians (decision 3):
+  - **On-prem:** customer-side roles only (for example CISO, IT head, compliance or audit).
+    Extravis holds no share.
+  - **SaaS:** Extravis roles (for example security lead, CTO) with an independent witness.
 - No single custodian, including the platform owner, can rebuild the MK alone.
 - Custodian changes re-split the shares in a new ceremony. Old shares are destroyed under
   witness.
@@ -436,23 +447,40 @@ layers above are mandatory. The documented fallback is operational:
 - Backup bundle holds no plaintext key; restore with the MK provider unavailable is refused
   before any database is created.
 - MK recovery: rebuild from 3-of-5 test shares into SoftHSM2, unwrap the canary, unseal.
+- Per-tenant directory: tenant A's LDAP can't authenticate a tenant B user (same username in
+  both); a JIT-created user lands only in the tenant whose directory authenticated them.
+- Audit sink: a failed or timed-out TLS write leaves the event pending, and it is redelivered
+  after the sink returns; scheduled reconcile alerts on a deleted sink record.
 
-## 10. Decisions needed in review
+## 10. Decisions (answered in review, 2026-10-28)
 
-1. **Where users live.**
-   - Option (a), parent DB like MonetX: platform operators and cross-tenant MSP staff are natural,
-     and their MFA seeds go under the PKEK.
-   - Option (b), each tenant DB: stronger isolation, and a tenant's people go with its backup.
-   - Recommendation: **(a)**, to match MonetX, with tenant-scoped role grants.
-2. **First HSM target** for on-prem: Thales Luna, Utimaco, or YubiHSM 2. SoftHSM2 will be used in
-   CI regardless.
-3. **TPM appliance mode:** acceptable only with Shamir escrow? Recommendation: yes, 3-of-5.
-4. **Default backup retention** (it decides how long retired TKEKs live): 35 days, or set per tenant?
-5. **Recordings encryption** in the tenancy step, or in Phase 2 with the new session protocols?
-   Recommendation: tenancy step, since recordings already contain sensitive output today.
-6. **Key generation:** in-HSM `GenerateDataKey` where available (recommended), or always
-   in-process?
-7. **Escrow quorum and custodians:** is 3-of-5 right, and who are the custodians (roles, not
-   names)?
-8. **External audit sink for the MVP:** syslog over TLS only, or a SIEM connector too (and
-   which)?
+1. **Where users live: parent DB.**
+   - Users and role grants live in the parent DB with tenant-scoped grants, and
+     `tenant_id` = MonetX `company_id`, 1:1.
+   - **Directory config is per tenant:** LDAP/AD now, SSO (SAML/OIDC) later, so each customer
+     uses its own directory. It lives in the parent with `tenant_id`; bind and client secrets are
+     sealed under the tenant's `identity` key.
+   - Sign-in resolves the tenant before the directory is consulted (tenant chosen at login or
+     from the username's domain), so one tenant's directory never authenticates another's users.
+   - The parent DB is treated as the **highest-value target** (T1, T11).
+2. **TPM appliance mode: allowed only with mandatory escrow.** The ceremony order is fixed:
+   generate in ceremony → split into shares → seal into TPM (§4, §8.2).
+3. **Escrow: on-prem customer-only custodians; SaaS Extravis custodians with a witness.**
+   - The quorum is a parameter: minimum 2-of-3, recommended 3-of-5.
+   - **Pending compliance/legal review:**
+     - the claim that regulators (for example SBP) expect the vendor to hold no path to on-prem
+       keys;
+     - the contract clause that Extravis can never recover an on-prem customer's master key.
+4. **HSM: vendor-neutral PKCS#11 provider, tested on SoftHSM2 in CI, plus cloud KMS for SaaS.**
+   No HSM vendor is committed yet; the owner will confirm what pipeline customers run. Thales Luna
+   is recorded as a **candidate** only.
+5. **Recordings: encrypted in the tenancy step,** with the tenant's `files` key (§8).
+6. **Key generation: in the HSM or KMS (`GenerateDataKey`) where supported,** in-process for the
+   TPM and file providers. The origin is recorded per key version.
+7. **Backup retention: 35 days by default, overridable per tenant** (`backup_retention_days`).
+   Retired keys are destroyed only after the last backup that references them expires (§6, §7);
+   the compromise procedure (§6.1) overrides this.
+8. **Audit sink for the MVP: syslog over TLS with CEF.**
+   - An outbox event is marked delivered only after a successful TLS write.
+   - Reconcile runs on a schedule and alerts on any mismatch (§8.1).
+   - Native SIEM connectors come later, as plugins on the same outbox.
