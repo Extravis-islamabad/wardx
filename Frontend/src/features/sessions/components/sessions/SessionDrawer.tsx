@@ -36,7 +36,9 @@ export function SessionDrawer({ session, onClose }: { session: GatewaySession | 
         <>
           <Descriptions size="small" column={2} className="!mb-4">
             <Descriptions.Item label="Status">
-              <StatusTag label={session.status} /> {session.close_reason}
+              <StatusTag label={session.status} />
+              {/* The item content is a flex row, which drops a plain space between children. */}
+              {session.close_reason && <span className="ml-2">{session.close_reason}</span>}
             </Descriptions.Item>
             <Descriptions.Item label="Mode">
               {session.mode}
