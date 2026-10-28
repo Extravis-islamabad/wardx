@@ -54,6 +54,9 @@ class SecretType(StrEnum):
     SSH_KEY = "ssh_key"
     ENABLE_SECRET = "enable_secret"
     API_KEY = "api_key"
+    # Structured SNMP credentials, sealed as one JSON document (CREDENTIAL_PROVIDER.md §4).
+    SNMP_V2C = "snmp_v2c"
+    SNMP_V3 = "snmp_v3"
 
 
 class RequestStatus(StrEnum):
@@ -92,6 +95,9 @@ class SafePermission(StrEnum):
     MANAGE_MEMBERS = "manage_members"
     VIEW_AUDIT = "view_audit"
     APPROVE = "approve"
+    # Application identities only, and the only permission an app can hold
+    # (docs/phase1/CREDENTIAL_PROVIDER.md §3).
+    FETCH = "fetch"
 
 
 class PrincipalType(StrEnum):
@@ -99,6 +105,8 @@ class PrincipalType(StrEnum):
     GROUP = "group"
     # Migration only: keeps the Default safe's pre-safes access. The UI offers users and groups.
     ROLE = "role"
+    # An application identity (iam.apps); holds only 'fetch'.
+    APP = "app"
 
 
 # The safe every pre-safes account was moved into (migrations/012_safes.sql).

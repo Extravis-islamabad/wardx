@@ -34,6 +34,9 @@ class Safe(Base):
     auto_reconcile: Mapped[bool] = mapped_column(Boolean, default=False)
     maintenance_window: Mapped[dict | None] = mapped_column(JSONB)
     max_release_wait_minutes: Mapped[int] = mapped_column(Integer, default=240)
+    # Credential provider (docs/phase1/CREDENTIAL_PROVIDER.md §3, §4).
+    allow_app_fetch: Mapped[bool] = mapped_column(Boolean, default=False)
+    app_cache_seconds: Mapped[int] = mapped_column(Integer, default=300)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)

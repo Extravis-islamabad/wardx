@@ -16,6 +16,9 @@ from src.models.inventory.account import Account
 from src.models.inventory.target import Target
 from src.models.keys.tenant_key import TenantKey
 from src.models.notify.notification import Notification
+from src.models.provider.app import App
+from src.models.provider.app_secret import AppSecret
+from src.models.provider.rate_counter import RateCounter
 from src.models.safes.safe import Safe
 from src.models.safes.safe_approval_level import SafeApprovalLevel
 from src.models.safes.safe_member import SafeMember
@@ -29,6 +32,8 @@ __all__ = [
     "AccessRequest",
     "Alert",
     "Account",
+    "App",
+    "AppSecret",
     "AuditEvent",
     "Base",
     "Checkout",
@@ -37,6 +42,7 @@ __all__ = [
     "GatewaySession",
     "MfaRecoveryCode",
     "Notification",
+    "RateCounter",
     "RequestDecision",
     "RotationJob",
     "RotationJobStep",
