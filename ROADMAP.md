@@ -52,7 +52,8 @@ frontend build passing at every commit. Effort is engineer-days.
 | 0 | Tenancy seams | Key-provider interface (file provider), keyed HMAC audit chain, default-tenant context | 2–3 |
 | a | Safes | Safes, members, per-safe permissions on top of the codenames; accounts move into safes; existing accounts kept in a default safe | 5–7 |
 | b | Approval workflow | Approval policies per safe: dual control, multi-level approver chains, ticket number field (validated against SupportX later) | 5–7 |
-| c | Rotation engine and platforms | Scheduled, after check-in and on-demand rotation; verify and reconcile; Linux/Unix over SSH, then Windows, then Cisco, Huawei and MikroTik | 12–15 |
+| c | Rotation engine and platforms | Spec `Backend/docs/phase1/ROTATION.md`. Core and recovery first, then Linux, MikroTik, Windows, Cisco, Huawei (Cisco and Huawei lab-unverified until a lab device is confirmed); verify and reconcile; Telnet-only devices non-rotatable; Windows refuses accounts with dependent services, tasks or app pools | 17–20 |
+| c+ | Active Directory platform | Domain accounts over LDAPS: domain password policy, replication delay, verify; immediately after (c) | tbd |
 | d | MonetX credential provider API | App identities and authentication, credential fetch at poll time, full audit trail, API document for the MonetX team | 5–7 |
 | e | HA/DR | Active/passive API and gateway, DB replication guidance, vault behaviour on failover, DR runbook | 5–8 |
 

@@ -1,6 +1,8 @@
 # Phase 1 (c) Rotation engine and platforms: spec (draft for review)
 
-Status: **draft for review. No rotation code is written until it is approved.**
+Status: **approved 2026-10-28** with the decisions in §11. Build order: plugin interface and the
+failure-handling core (tests for every recovery path) → Linux → MikroTik → Windows → Cisco →
+Huawei. **Review stop:** after the core and the Linux driver work end to end in a lab container.
 Builds on the groundwork already in the repo: migration `007_rotation.sql` (job queue, per-account
 rotation fields), `src/rotation/passwords.py` (generator) and `src/transport/ssh.py` (expect-style
 CLI with redacted transcripts). Layering follows `Backend/ARCHITECTURE.md`. Encryption goes only
@@ -22,7 +24,10 @@ through the vault service (key provider).
      avoids it (see §3).
 5. **Pinned identity only.** SSH host keys must match the pin from the gateway's
    trust-on-first-use (TOFU) store, and WinRM certificates must validate. A mismatch refuses
-   the rotation, and the credential is never sent. Telnet is refused for rotation.
+   the rotation, and the credential is never sent.
+   - **Telnet-only devices are never rotated.** They can still be vaulted, and are flagged
+     `non-rotatable (Telnet)` in the API and UI; a rotate request on them is refused with that
+     reason.
 6. **Testing only on lab devices and containers** set up for WardX. Never rotate an existing
    account on any real or shared device. Destructive tests create dedicated accounts first
    (`wardx_rot_<random>`), and clean-up removes only accounts the test itself created. The
@@ -59,7 +64,8 @@ class PlatformDriver(Protocol):
   - `rejected_by_device` (for example a complexity or history rule);
   - `unreachable`;
   - `host_key_mismatch`;
-  - `ambiguous` (the command was sent, but the connection dropped before a definite answer).
+  - `ambiguous` (the command was sent, but the connection dropped before a definite answer);
+  - `blocked_by_dependents` (Windows: the account runs services, tasks or app pools).
 - `DriverContext` carries timeouts, the transcript recorder (with redaction list) and the
   pinned host key or certificate.
 - Drivers are pure async and unit-testable against simulated CLIs (`tests/integration/fake_device.py`
@@ -82,6 +88,16 @@ Device notes the drivers must handle:
   `rejected_by_device` result maps to a clear message.
 - **MikroTik:** commands typed over SSH can land in `/system history`. The API avoids that,
   which is why it is preferred (question Q7).
+  - **RouterOS accepts any SSH password while an account's password is empty** (found while
+    setting up the lab). So the MikroTik `verify` never treats a successful login alone as
+    proof: it also logs in once with a deliberately wrong password and requires that to be
+    refused, and refuses to promote if it isn't.
+- **Windows: dependent usages block rotation (Q15).** Before any change, the driver checks
+  whether the account runs a **service** (`Win32_Service.StartName`), a **scheduled task**
+  (`Get-ScheduledTask` principal) or an **IIS application pool** (`processModel.userName`, when
+  the WebAdministration module is present). If any match, the rotation is refused before the
+  device is touched, with outcome `blocked_by_dependents` and a reason naming each dependent.
+  Rotating them along with the password comes later (§11, Q15).
 
 ## 3. Password policy per platform
 
@@ -269,11 +285,14 @@ waits for release, no holder is ever left with a stale password mid-session.
 - **Linux:** the existing OpenSSH container pattern, building a throwaway container per test
   run with dedicated `wardx_rot_*` users. Covers self change, sudo reconcile, verify, and the
   "device changed, then WardX crashed" recovery.
-- **Cisco, Huawei, MikroTik:** simulated CLIs (fake-device dialects reproducing prompts,
-  confirmations, rejections and save behaviour), plus MikroTik CHR in a container if available
-  (question Q14).
-- **Windows:** WinRM against a mocked endpoint in CI, and a real Windows lab VM only if one is
-  provided (question Q14).
+- **MikroTik:** the CHR 7.25 lab container (`lab/`), plus a simulated dialect for edge cases.
+- **Cisco, Huawei:** simulated CLIs (prompts, confirmations, rejections, save behaviour), marked
+  **lab-unverified** until an office lab device is confirmed. Never a production or customer
+  device.
+- **Windows:** WinRM against a mocked endpoint in CI, including the dependent-usage refusal
+  (service, scheduled task, app pool each block rotation, with the reason). A real Windows
+  Server lab is still open (see `lab/README.md`): this host is Apple Silicon and there is no
+  ARM64 Windows Server evaluation build.
 - **The safety switches themselves:** with the global switch or the target flag off, nothing
   connects. The dev-DB accounts are never touched.
 
@@ -295,45 +314,32 @@ an emergency holder, then rotation and verify, against the Linux lab container.
 That's above the plan's 12–15 days, mostly because of the recovery cases and the three
 network dialects.
 
-## 11. Design questions (with recommendations)
+## 11. Decisions (answered in review, 2026-10-28)
 
 1. **Q1. Policy levels:** platform default → target override → safe default interval → account
-   override. Account overrides can only make a policy *stricter* (longer, more frequent).
-   *Recommend: yes.*
-2. **Q2. Two switches** (global plus per-target `rotation_allowed`, both off by default).
-   *Recommend: yes, plus a "dry run" mode (connect and verify only) for onboarding a new device.*
-3. **Q3. New check-outs while a rotation waits for release:** block new normal check-outs and
-   sessions; allow emergency ones (they extend the wait); alert after `max_release_wait` (4 h),
-   never force. *Recommend: yes.*
-4. **Q4. Scheduled rotation while the account is held:** same waiting mechanism. Never rotate
-   under a holder. *Recommend: yes.*
+   override; account overrides can only make a policy stricter.
+2. **Q2. Two switches** (global plus per-target `rotation_allowed`, both off by default), plus a
+   dry-run mode (connect and verify only).
+3. **Q3. New check-outs while a rotation waits for release:** normal ones blocked; emergency
+   ones allowed and extend the wait; alert after `max_release_wait` (4 h); never forced.
+4. **Q4. Scheduled rotation while held:** the same waiting mechanism; never under a holder.
 5. **Q5. Auto-reconcile on out-of-sync:** off by default per safe; always alert.
-   *Recommend: yes.*
-6. **Q6. Windows verify for accounts without WinRM rights:** fall back to SMB/NTLM
-   authentication. Domain accounts and Kerberos come with a later AD platform.
-   *Recommend: WinRM first; add SMB if a lab shows it is needed.*
-7. **Q7. MikroTik transport:** API-SSL (8729) first, SSH CLI fallback, since the API keeps
-   the password out of `/system history`. *Recommend: yes.*
-8. **Q8. Telnet-only devices:** refuse rotation (cleartext). *Recommend: refuse in (c).
-   Revisit only with a customer requirement.*
-9. **Q9. SSH key rotation:** after password rotation, as (c2). *Recommend: later.*
-10. **Q10. Version retention:** keep current and previous, the last 5, and any version an open
-    check-out references; never delete during rotation. *Recommend: yes. Older versions
-    destroyed only by a separate, audited retention job.*
-11. **Q11. Active Directory domain accounts:** a separate AD platform (LDAPS) after the first
-    five, because domain password policy and replication delay need their own handling.
-    *Recommend: next, not in (c).*
-12. **Q12. Maintenance windows per safe** for scheduled rotation (network teams often require
-    them). On-demand and after-use ignore the window. *Recommend: optional, default any time.*
-13. **Q13. Failed save on a network device:** retry once, then roll back to N and verify; if
-    that fails, `needs_attention`. *Recommend: yes.*
-14. **Q14. Lab availability:** I can build Linux containers and simulated CLIs myself.
-    - Is there a **MikroTik CHR** image we may run?
-    - Is there a **Cisco CML/IOSv** or **Huawei eNSP/NE40E** lab?
-    - Is there a **Windows Server VM** with WinRM?
-
-    Without them, those drivers ship tested against simulators only, marked "lab-unverified"
-    until a real lab run.
-15. **Q15. Dependent usages** (Windows services, scheduled tasks, IIS app pools, config files
-    using the account): out of (c), next item after (c), since it needs discovery first.
-    *Recommend: yes.*
+6. **Q6. Windows verify:** WinRM first; SMB/NTLM fallback only if the lab shows it's needed.
+7. **Q7. MikroTik:** API-SSL first, SSH CLI fallback.
+8. **Q8. Telnet-only devices:** never rotated; vaulted and flagged `non-rotatable (Telnet)`.
+9. **Q9. SSH key rotation:** later, as (c2).
+10. **Q10. Version retention:** current and previous, the last 5, and any version an open
+    check-out references; never deleted during rotation; older ones only by a separate,
+    audited retention job.
+11. **Q11. Active Directory domain accounts:** a separate AD platform, scheduled **immediately
+    after (c)** in the roadmap.
+12. **Q12. Maintenance windows:** optional per safe, default any time; on-demand and after-use
+    ignore them.
+13. **Q13. Failed save on a network device:** retry once, roll back to N and verify, else
+    `needs_attention`.
+14. **Q14. Labs:** Linux containers and MikroTik CHR set up (`lab/`). Windows Server: pending
+    (Apple Silicon host). Cisco and Huawei: simulators, **lab-unverified**, until the owner
+    confirms an office lab device. **Never** a production or customer device.
+15. **Q15. Dependent usages:** rotating them is out of (c). The Windows driver must detect
+    services, scheduled tasks and IIS app pools running as the account and refuse rotation
+    with a clear reason (§2), with a test.
