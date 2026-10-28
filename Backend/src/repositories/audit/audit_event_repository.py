@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from sqlalchemy import Row, and_, func, literal, or_, select, text, union
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
-from src.models import AccessRequest, Account, AuditEvent, Checkout, GatewaySession
+from src.models import AccessRequest, Account, AuditEvent, Checkout, GatewaySession, RotationJob
 from src.repositories.base import BaseRepository
 
 _AUDIT_LOCK_KEY = 0x5741_5244_00A1
@@ -34,7 +34,12 @@ def _to_dto(row: AuditEvent) -> AuditEventDTO:
     )
 
 
-_VIA_ACCOUNT = {"request": AccessRequest, "checkout": Checkout, "session": GatewaySession}
+_VIA_ACCOUNT = {
+    "request": AccessRequest,
+    "checkout": Checkout,
+    "session": GatewaySession,
+    "rotation_job": RotationJob,
+}
 
 
 def _safe_objects(safe_id):

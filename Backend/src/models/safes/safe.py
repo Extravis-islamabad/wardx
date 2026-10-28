@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import TZ, Base, utcnow
@@ -27,6 +27,13 @@ class Safe(Base):
     approval_window_minutes: Mapped[int] = mapped_column(Integer, default=120)
     approval_multi_use: Mapped[bool] = mapped_column(Boolean, default=False)
     level_timeout_hours: Mapped[int] = mapped_column(Integer, default=24)
+    # Rotation policy (docs/phase1/ROTATION.md section 7).
+    rotate_after_use: Mapped[bool] = mapped_column(Boolean, default=False)
+    rotation_interval_days: Mapped[int | None] = mapped_column(Integer)
+    verify_interval_hours: Mapped[int] = mapped_column(Integer, default=24)
+    auto_reconcile: Mapped[bool] = mapped_column(Boolean, default=False)
+    maintenance_window: Mapped[dict | None] = mapped_column(JSONB)
+    max_release_wait_minutes: Mapped[int] = mapped_column(Integer, default=240)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)

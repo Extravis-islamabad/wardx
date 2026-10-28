@@ -69,6 +69,19 @@ class Settings(BaseSettings):
     # How often a gateway checks for kill requests and expired check-outs.
     gateway_watch_seconds: float = 2.0
 
+    # ── Rotation (docs/phase1/ROTATION.md) ──
+    # The global safety switch: nothing is rotated, verified or reconciled while off,
+    # whatever the targets say. Each target also needs rotation_allowed.
+    rotation_enabled: bool = False
+    # Every rotation only connects and verifies, changing nothing.
+    rotation_dry_run: bool = False
+    rotation_workers: int = 4
+    rotation_tick_seconds: int = 15
+    rotation_lease_seconds: int = 600
+    rotation_jitter_seconds: int = 300
+    rotation_connect_timeout_seconds: float = 15
+    rotation_command_timeout_seconds: float = 20
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

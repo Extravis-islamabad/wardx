@@ -19,9 +19,12 @@ from src.repositories.access.checkout_repository import CheckoutRepository
 from src.repositories.directory.directory_config_repository import DirectoryConfigRepository
 from src.repositories.identity.group_cache_repository import GroupCacheRepository
 from src.repositories.identity.user_repository import UserRepository
+from src.repositories.rotation.rotation_account_repository import RotationAccountRepository
+from src.repositories.rotation.rotation_job_repository import RotationJobRepository
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.directory.directory_service import DirectoryService
 from src.services.directory.directory_sync_service import DirectorySyncService
+from src.services.rotation.rotation_guard import RotationGuard
 
 
 def build_directory_service(session: AsyncSession) -> DirectoryService:
@@ -43,6 +46,11 @@ def build_directory_sync_service(session: AsyncSession) -> DirectorySyncService:
         GatewaySessionRepository(session),
         build_audit_service(session),
         GroupCacheRepository(session),
+        RotationGuard(
+            RotationJobRepository(session),
+            RotationAccountRepository(session),
+            build_audit_service(session),
+        ),
     )
 
 

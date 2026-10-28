@@ -29,17 +29,32 @@ class VaultService:
         version: int,
         plaintext: str,
         created_by: uuid.UUID | None,
+        status: str | None = "current",
     ) -> None:
+        """Store a version. ``status`` 'current' relabels the old current 'previous'
+        (labels only: the owner row's version pointer decides what is current)."""
         sealed = await seal(
             self._provider, plaintext.encode(), secret_aad(owner_type, owner_id, version)
         )
+        if status == "current":
+            await self._repo.demote_current(owner_type, owner_id)
         await self._repo.add(
             owner_type=owner_type,
             owner_id=owner_id,
             version=version,
             sealed=sealed,
             created_by=created_by,
+            status=status,
         )
+
+    async def label(self, owner_type: str, owner_id: uuid.UUID, version: int, status: str) -> None:
+        """Relabel one version; 'current' first relabels the old current 'previous'."""
+        if status == "current":
+            await self._repo.demote_current(owner_type, owner_id)
+        await self._repo.set_status(owner_type, owner_id, version, status)
+
+    async def labels(self, owner_type: str, owner_id: uuid.UUID) -> dict[int, str | None]:
+        return await self._repo.statuses(owner_type, owner_id)
 
     async def read(self, *, owner_type: str, owner_id: uuid.UUID, version: int) -> str:
         sealed = await self._repo.get(owner_type, owner_id, version)

@@ -50,6 +50,13 @@ def _to_dto(row: Account, active_checkouts: int = 0) -> AccountDTO:
         last_rotation_status=row.last_rotation_status,
         created_at=row.created_at,
         active_checkouts=active_checkouts,
+        rotate_after_use=row.rotate_after_use,
+        reconcile_account_id=row.reconcile_account_id,
+        sync_status=row.sync_status,
+        last_verified_at=row.last_verified_at,
+        last_verify_method=row.last_verify_method,
+        rotation_status=row.rotation_status,
+        risk_flags=tuple(row.risk_flags or ()),
     )
 
 

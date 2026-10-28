@@ -26,4 +26,7 @@ class Secret(Base):
     dek_nonce: Mapped[bytes] = mapped_column(LargeBinary)
     kek_id: Mapped[str] = mapped_column(String(64))
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    # current | previous | candidate | abandoned: a label only; accounts.secret_version
+    # is the source of truth for the current version.
+    status: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)

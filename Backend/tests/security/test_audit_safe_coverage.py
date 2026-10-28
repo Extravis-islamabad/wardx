@@ -2,8 +2,8 @@
 safe it happened in (audit.events.safe_id). Runs a representative flow through the API,
 the gateway, directory sync and break-glass, then checks the events it wrote.
 
-New event types (e.g. rotation in Phase 1 c) that are about one of these objects must set
-or resolve a safe, or this test fails. Lives under tests/security so it runs after the
+New event types that are about one of these objects (rotation jobs included, Phase 1 c)
+must set or resolve a safe, or this test fails. Lives under tests/security so it runs after the
 integration suite: it disables a directory user via sync.
 """
 
@@ -42,7 +42,7 @@ from tests.ldap_mock import BASE, OPERATORS, SVC_DN, SVC_PW, build_directory, mo
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
-SAFE_OBJECTS = ("account", "request", "checkout", "session")
+SAFE_OBJECTS = ("account", "request", "checkout", "session", "rotation_job")
 
 
 async def _scalar(sql: str, **params):
@@ -129,6 +129,43 @@ async def _directory_sync_revoke(client, admin) -> None:
         directory_service.set_connection_factory(directory_service.default_connection)
 
 
+async def _rotation_flow(client, admin) -> None:
+    """Rotate, verify (untrustworthy), and a job that needs attention, then resolved."""
+    from src.core.config import get_settings
+    from src.rotation.drivers.registry import default_registry
+    from tests.integration.rotation.fake_driver import FAKE_PLATFORM
+    from tests.integration.rotation.rotation_support import CrashAt, Lab
+
+    settings = get_settings()
+    settings.rotation_enabled = True
+    rot = Lab(client, admin)
+    try:
+        with default_registry().override(FAKE_PLATFORM, rot.driver):
+            account = await rot.account()
+            assert (await rot.run((await rot.request(account["id"]))["id"]))["status"] == (
+                "succeeded"
+            )
+            rot.device.accept_any = True
+            await rot.run((await rot.request(account["id"], "verify"))["id"])
+            rot.device.accept_any = False
+            other = await rot.account()
+
+            async def scramble():
+                rot.device.passwords[other["username"]] = "Neither-Of-Them-Works-1"
+
+            job = await rot.request(other["id"])
+            done = await rot.run(job["id"], CrashAt("persisted", scramble))
+            assert done["status"] == "needs_attention"
+            resp = await client.post(
+                f"/rotation/jobs/{job['id']}/resolve",
+                headers=admin,
+                json={"action": "keep_current", "note": "checked by hand"},
+            )
+            assert resp.status_code == 200, resp.text
+    finally:
+        settings.rotation_enabled = False
+
+
 async def test_every_account_related_event_records_its_safe(client, admin, make_user, gateway, lab):
     start = await _scalar("SELECT COALESCE(MAX(seq), 0) FROM audit.events")
 
@@ -163,6 +200,9 @@ async def test_every_account_related_event_records_its_safe(client, admin, make_
     )
     assert resp.status_code == 200, resp.text
 
+    # Rotation: request, run, verify, needs attention and its resolution.
+    await _rotation_flow(client, admin)
+
     async with session_factory()() as s:
         rows = (
             await s.execute(
@@ -183,6 +223,13 @@ async def test_every_account_related_event_records_its_safe(client, admin, make_
         "session.end",
         "checkout.revoke",
         "secret.emergency_reveal",
+        "rotation.request_rotate",
+        "rotation.succeeded",
+        "rotation.request_verify",
+        "rotation.verify",
+        "rotation.verify_untrustworthy",
+        "rotation.needs_attention",
+        "rotation.resolve",
     ):
         assert expected in actions, f"the flow did not produce {expected}"
 

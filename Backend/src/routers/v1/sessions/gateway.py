@@ -2,6 +2,7 @@
 
 GET  /gateway/info                         — gateway host, port and login format
 POST /targets/{target_id}/host-key/reset   — clear a target's pinned SSH host key
+POST /targets/{target_id}/host-key/learn   — pin the key the target presents now (no login)
 """
 
 from __future__ import annotations
@@ -10,8 +11,8 @@ import uuid
 
 from fastapi import APIRouter, Depends
 
-from src.contracts.dto.inventory.target_dto import TargetDTO
 from src.contracts.schemas.responses.common import (
+    CONFLICT_RESPONSE,
     FORBIDDEN_RESPONSE,
     NOT_FOUND_RESPONSE,
     UNAUTHORIZED_RESPONSE,
@@ -25,27 +26,9 @@ from src.core.permissions import ACCESS_USE, INVENTORY_MANAGE
 from src.dependencies.auth import ActorDep, require_permission
 from src.dependencies.sessions import HostKeyServiceDep
 from src.gateway.naming import SEPARATOR
+from src.routers.v1.inventory.targets import target_response
 
 router = APIRouter(tags=["sessions"])
-
-
-def _target_response(dto: TargetDTO) -> TargetResponse:
-    return TargetResponse(
-        id=dto.id,
-        name=dto.name,
-        address=dto.address,
-        platform=dto.platform,
-        protocol=dto.protocol,
-        port=dto.port,
-        description=dto.description,
-        tags=dto.tags,
-        external_ref=dto.external_ref,
-        is_active=dto.is_active,
-        ssh_host_key_fingerprint=dto.ssh_host_key_fingerprint,
-        ssh_host_key_learned_at=dto.ssh_host_key_learned_at,
-        created_at=dto.created_at,
-        updated_at=dto.updated_at,
-    )
 
 
 @router.get(
@@ -77,4 +60,23 @@ async def reset_host_key(
     target_id: uuid.UUID, service: HostKeyServiceDep, actor: ActorDep
 ) -> APIResponse[TargetResponse]:
     target = await service.reset(actor, target_id)
-    return ok(_target_response(target), "Host key cleared; the next session pins a new one")
+    return ok(target_response(target), "Host key cleared; the next session pins a new one")
+
+
+@router.post(
+    "/targets/{target_id}/host-key/learn",
+    response_model=APIResponse[TargetResponse],
+    dependencies=[Depends(require_permission(INVENTORY_MANAGE))],
+    summary="Pin the SSH host key a target presents now, without sending any credential",
+    responses={
+        **UNAUTHORIZED_RESPONSE,
+        **FORBIDDEN_RESPONSE,
+        **NOT_FOUND_RESPONSE,
+        **CONFLICT_RESPONSE,
+    },
+)
+async def learn_host_key(
+    target_id: uuid.UUID, service: HostKeyServiceDep, actor: ActorDep
+) -> APIResponse[TargetResponse]:
+    target = await service.learn(actor, target_id)
+    return ok(target_response(target), f"Pinned {target.ssh_host_key_fingerprint}")

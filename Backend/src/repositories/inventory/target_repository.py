@@ -32,6 +32,8 @@ def _to_dto(row: Target) -> TargetDTO:
         ssh_host_key_learned_at=row.ssh_host_key_learned_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        rotation_allowed=row.rotation_allowed,
+        policy_overrides=dict(row.policy_overrides or {}),
     )
 
 

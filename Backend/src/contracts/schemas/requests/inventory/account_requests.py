@@ -28,6 +28,11 @@ class AccountUpdate(BaseModel):
     description: str | None = None
     exclusive_checkout: bool | None = None
     max_checkout_minutes: int | None = Field(None, ge=1, le=1440)
+    # Rotation overrides: they can only make the safe's policy stricter.
+    rotate_after_use: bool | None = None
+    rotation_interval_days: int | None = Field(None, ge=1, le=3650)
+    password_length: int | None = Field(None, ge=12, le=128)
+    reconcile_account_id: uuid.UUID | None = None
 
 
 class SecretSet(BaseModel):

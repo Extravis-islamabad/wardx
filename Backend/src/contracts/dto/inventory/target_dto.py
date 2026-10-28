@@ -25,6 +25,8 @@ class TargetDTO:
     ssh_host_key_learned_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    rotation_allowed: bool = False
+    policy_overrides: dict | None = None
 
 
 @dataclass(frozen=True)

@@ -29,6 +29,7 @@ from src.core.enums import CheckoutStatus, Protocol, Role, SafePermission
 from src.dependencies.access import build_access_request_service, build_checkout_service
 from src.dependencies.identity import build_auth_service, build_mfa_service
 from src.dependencies.inventory import build_account_service, build_target_service
+from src.dependencies.rotation import build_rotation_guard
 from src.dependencies.safes import build_safe_access_service
 from src.dependencies.sessions import (
     build_command_rule_service,
@@ -167,6 +168,10 @@ class Broker:
                     "(needs 'use' or 'retrieve' on its safe)"
                 )
 
+            try:
+                await build_rotation_guard(session).ensure_normal_access(account.id)
+            except AppError as exc:
+                raise GatewayDenied(exc.message) from exc
             checkout, owns = await self._obtain_checkout(session, actor, account)
             try:
                 secret = await build_vault_service(session).read(

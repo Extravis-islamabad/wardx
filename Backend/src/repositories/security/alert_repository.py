@@ -68,3 +68,15 @@ class AlertRepository(BaseRepository):
         row.acknowledged_by = by
         row.acknowledged_at = at
         await self._session.flush()
+
+    async def open_ids_for(self, kind: str, object_id: uuid.UUID) -> list[uuid.UUID]:
+        """Unacknowledged alerts of one kind about one object."""
+        return list(
+            await self._session.scalars(
+                select(Alert.id).where(
+                    Alert.kind == kind,
+                    Alert.object_id == object_id,
+                    Alert.acknowledged_at.is_(None),
+                )
+            )
+        )

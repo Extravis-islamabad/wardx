@@ -9,10 +9,12 @@ from __future__ import annotations
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from src.core.config import Settings
+from src.core.config import Settings, get_settings
 from src.core.db import session_factory
+from src.core.tenant import current_tenant
 from src.dependencies.access import build_checkout_service
 from src.dependencies.directory import build_directory_sync_service
+from src.dependencies.rotation import build_rotation_scheduler_service, build_rotation_worker
 from src.errors.exceptions import ConflictError
 
 logger = structlog.get_logger(__name__)
@@ -57,6 +59,43 @@ async def directory_sync_tick() -> None:
         )
 
 
+async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
+    """Rotation housekeeping, then run due jobs (ROTATION.md sections 4 to 6).
+
+    The empty-password scan and release checks touch no device and always run. Due
+    rotations and verifies are queued only while WARDX_ROTATION_ENABLED is on, and the
+    engine refuses every job (without connecting) while either switch is off.
+    """
+    settings = settings or get_settings()
+    sessions = current_tenant().session_factory()
+    result: dict[str, int] = {}
+    for name, step in (
+        ("scan", lambda s: s.scan_empty_passwords()),
+        ("release", lambda s: s.release_waiting()),
+        (
+            "enqueue",
+            lambda s: s.enqueue_due(
+                enabled=settings.rotation_enabled, jitter_seconds=settings.rotation_jitter_seconds
+            ),
+        ),
+    ):
+        async with sessions() as session:
+            try:
+                out = await step(build_rotation_scheduler_service(session))
+            except Exception:
+                logger.exception("rotation_tick_failed", step=name)
+                await session.rollback()
+                continue
+        if isinstance(out, dict):
+            result.update({f"{name}_{k}": v for k, v in out.items()})
+        else:
+            result[name] = out
+    result["ran"] = await build_rotation_worker(settings).run_once()
+    if any(result.values()):
+        logger.info("rotation_tick", **result)
+    return result
+
+
 def build_scheduler(settings: Settings) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(
@@ -72,6 +111,14 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
         "interval",
         seconds=60,
         id="directory_sync",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        rotation_tick,
+        "interval",
+        seconds=settings.rotation_tick_seconds,
+        id="rotation",
         max_instances=1,
         coalesce=True,
     )

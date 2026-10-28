@@ -7,13 +7,29 @@ import uuid
 from src.contracts.dto.inventory.target_dto import TargetDTO, TargetFilterDTO
 from src.core.context import Actor
 from src.core.enums import DEFAULT_PORTS, Protocol, SafePermission
-from src.errors.exceptions import ForbiddenError, NotFoundError
+from src.errors.exceptions import AppError, ForbiddenError, NotFoundError
 from src.repositories.inventory.account_repository import AccountRepository
 from src.repositories.inventory.target_repository import TargetRepository
+from src.rotation.policy import PolicyError, apply_overrides, platform_default
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET, ensure_no_active_checkouts
 from src.services.safes.safe_access_service import SafeAccessService
 from src.services.vault.vault_service import VaultService
+
+
+class InvalidTargetPolicy(AppError):
+    status_code = 422
+    code = "invalid_policy"
+
+
+def check_overrides(platform: str, overrides: dict | None) -> dict:
+    """Policy overrides must give a safe, satisfiable policy for the platform."""
+    overrides = {k: v for k, v in (overrides or {}).items() if v is not None}
+    try:
+        apply_overrides(platform_default(platform), overrides)
+    except PolicyError as exc:
+        raise InvalidTargetPolicy(f"Password policy override: {exc}") from exc
+    return overrides
 
 
 class TargetService:
@@ -49,6 +65,9 @@ class TargetService:
     async def create(self, actor: Actor, values: dict) -> TargetDTO:
         port = values.pop("port", None)
         values["port"] = port or DEFAULT_PORTS[Protocol(values["protocol"])]
+        values["policy_overrides"] = check_overrides(
+            values["platform"], values.get("policy_overrides")
+        )
         target = await self._targets.create(values)
         await self._audit.record(
             actor,
@@ -63,6 +82,12 @@ class TargetService:
     async def update(self, actor: Actor, target_id: uuid.UUID, changes: dict) -> TargetDTO:
         if "protocol" in changes and "port" not in changes:
             changes["port"] = DEFAULT_PORTS[Protocol(changes["protocol"])]
+        if "policy_overrides" in changes or "platform" in changes:
+            current = await self.get(target_id)
+            changes["policy_overrides"] = check_overrides(
+                changes.get("platform") or current.platform,
+                changes.get("policy_overrides", current.policy_overrides),
+            )
         target = await self._targets.update(target_id, changes)
         if target is None:
             raise NotFoundError("Target not found")
@@ -72,7 +97,8 @@ class TargetService:
             object_type="target",
             object_id=target.id,
             details={
-                k: str(v) if not isinstance(v, bool | int | list) else v for k, v in changes.items()
+                k: str(v) if not isinstance(v, bool | int | list | dict) else v
+                for k, v in changes.items()
             },
         )
         await self._targets.commit()

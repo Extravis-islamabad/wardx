@@ -67,6 +67,17 @@ def account_response(dto: AccountDTO) -> AccountResponse:
         max_checkout_minutes=dto.max_checkout_minutes,
         active_checkouts=dto.active_checkouts,
         created_at=dto.created_at,
+        rotation_interval_days=dto.rotation_interval_days,
+        rotate_after_use=dto.rotate_after_use,
+        password_length=dto.password_length,
+        reconcile_account_id=dto.reconcile_account_id,
+        sync_status=dto.sync_status,
+        last_verified_at=dto.last_verified_at,
+        last_verify_method=dto.last_verify_method,
+        last_rotated_at=dto.last_rotated_at,
+        last_rotation_status=dto.last_rotation_status,
+        rotation_status=dto.rotation_status,
+        risk_flags=list(dto.risk_flags),
     )
 
 

@@ -46,6 +46,7 @@ from src.repositories.identity.user_repository import UserRepository
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.audit.audit_service import AuditService
 from src.services.directory.directory_service import SYNC_DISABLED, DirectoryService
+from src.services.rotation.rotation_guard import RotationGuard
 
 SYNC_LOCK_KEY = 0x5741_5244_00D5
 
@@ -106,7 +107,9 @@ class DirectorySyncService:
         sessions: GatewaySessionRepository,
         audit: AuditService,
         group_cache: GroupCacheRepository,
+        rotation: RotationGuard | None = None,
     ) -> None:
+        self._rotation = rotation
         self._directory = directory
         self._config = config
         self._users = users
@@ -243,7 +246,8 @@ class DirectorySyncService:
     async def _cut_off(self, user: UserDTO, actor: Actor, result: SyncResultDTO) -> None:
         """End everything the user holds right now."""
         now = utcnow()
-        revoked = await self._checkouts.revoke_active_for_user(user.id, now)
+        revoked_rows = await self._checkouts.revoke_active_for_user(user.id, now)
+        revoked = [co_id for co_id, _ in revoked_rows]
         for checkout_id in revoked:
             await self._audit.record(
                 actor,
@@ -263,5 +267,7 @@ class DirectorySyncService:
                 object_id=session_id,
                 details={"reason": "directory sync disabled the user", "user": user.username},
             )
+        if self._rotation is not None:
+            await self._rotation.after_use([acc for _, acc in revoked_rows])
         result.revoked_checkouts += len(revoked)
         result.killed_sessions += len(killed)

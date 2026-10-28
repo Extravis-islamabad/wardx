@@ -15,6 +15,7 @@ from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
 from src.dependencies.identity import build_alert_service
 from src.dependencies.inventory import build_account_service
+from src.dependencies.rotation import build_rotation_guard
 from src.dependencies.safes import build_approval_policy_service, build_safe_access_service
 from src.dependencies.vault import build_vault_service
 from src.repositories.access.access_request_repository import AccessRequestRepository
@@ -63,6 +64,7 @@ def build_checkout_service(session: AsyncSession) -> CheckoutService:
         build_vault_service(session),
         build_audit_service(session),
         build_notification_service(session),
+        build_rotation_guard(session),
     )
 
 

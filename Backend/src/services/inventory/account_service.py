@@ -7,6 +7,10 @@ Safe rules (docs/phase1/SAFES_AND_APPROVALS.md):
   the account's safe, and on the destination safe too when an edit moves it.
 - New accounts without a safe go into the Default safe (still needing
   ``manage_accounts`` there).
+- A password account never stores an empty (or blank) password: WardX refuses it.
+  Existing empty ones are flagged high_risk_empty_password by the scheduler's scan.
+- A reconcile account (rotation) is another password account on the same target that
+  is not itself reconciled through this one.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from dataclasses import replace
 from src.contracts.dto.inventory.account_dto import AccountDTO, AccountFilterDTO
 from src.core.context import Actor
 from src.core.enums import DEFAULT_SAFE_ID, SafePermission
-from src.errors.exceptions import ConflictError, NotFoundError
+from src.errors.exceptions import AppError, ConflictError, NotFoundError
 from src.models import utcnow
 from src.repositories.inventory.account_repository import AccountRepository
 from src.repositories.inventory.target_repository import TargetRepository
@@ -28,6 +32,12 @@ from src.services.vault.vault_service import VaultService
 
 # vault.secrets owner_type for account credentials.
 ACCOUNT_SECRET = "account"
+HIGH_RISK_EMPTY_PASSWORD = "high_risk_empty_password"
+
+
+class EmptySecretRefused(AppError):
+    status_code = 422
+    code = "empty_secret"
 
 
 async def ensure_no_active_checkouts(
@@ -88,6 +98,9 @@ class AccountService:
         )
         await self._accounts.commit()
         return rows, total
+
+    async def listable_safe_ids(self, actor: Actor) -> frozenset[uuid.UUID]:
+        return await self._access.listable_safe_ids(actor)
 
     async def safe_ids_for(self, account_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
         return await self._accounts.safe_ids_for(account_ids)
@@ -157,6 +170,8 @@ class AccountService:
             )
         else:
             changes.pop("safe_id")
+        if changes.get("reconcile_account_id") is not None:
+            await self._check_reconcile(account, changes["reconcile_account_id"])
         await self._accounts.update(account_id, changes)
         details = {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in changes.items()}
         if "safe_id" in changes:
@@ -206,9 +221,23 @@ class AccountService:
         )
         await self._accounts.commit()
 
+    async def _check_reconcile(self, account: AccountDTO, reconcile_id: uuid.UUID) -> None:
+        if reconcile_id == account.id:
+            raise ConflictError("An account cannot be its own reconcile account")
+        other = await self._accounts.get(reconcile_id)
+        if other is None or other.target_id != account.target_id:
+            raise ConflictError("The reconcile account must be an account on the same target")
+        if other.reconcile_account_id == account.id:
+            raise ConflictError("Those two accounts would reconcile each other")
+        if other.secret_type != "password":
+            raise ConflictError("The reconcile account must be a password account")
+
     async def _store_secret(self, actor: Actor, account: AccountDTO, value: str) -> int:
         """Store the next secret version. The caller holds the account row lock."""
-        version = account.secret_version + 1
+        if account.secret_type == "password" and not value.strip():
+            raise EmptySecretRefused("A password account cannot store an empty password")
+        # Rotation keeps abandoned candidates as versions too: never reuse a number.
+        version = await self._vault.next_version(ACCOUNT_SECRET, account.id)
         await self._vault.store(
             owner_type=ACCOUNT_SECRET,
             owner_id=account.id,
@@ -217,6 +246,17 @@ class AccountService:
             created_by=actor.id,
         )
         await self._accounts.update(
-            account.id, {"secret_version": version, "secret_updated_at": utcnow()}
+            account.id,
+            {
+                "secret_version": version,
+                "secret_updated_at": utcnow(),
+                "risk_flags": [f for f in account.risk_flags if f != HIGH_RISK_EMPTY_PASSWORD],
+                "risk_checked_version": version,
+                # A secret set by hand is unknown to the device until a verify; an
+                # untrustworthy verify still needs its review (confirm or reconcile).
+                "sync_status": account.sync_status
+                if account.sync_status == "verify_untrustworthy"
+                else "unknown",
+            },
         )
         return version

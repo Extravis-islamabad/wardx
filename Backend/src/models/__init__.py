@@ -4,6 +4,7 @@ from src.models.access.access_request import AccessRequest
 from src.models.access.checkout import Checkout
 from src.models.access.request_decision import RequestDecision
 from src.models.access.rotation_job import RotationJob
+from src.models.access.rotation_job_step import RotationJobStep
 from src.models.audit.audit_event import AuditEvent
 from src.models.base import TZ, Base, utcnow
 from src.models.identity.directory_config import DirectoryConfig
@@ -38,6 +39,7 @@ __all__ = [
     "Notification",
     "RequestDecision",
     "RotationJob",
+    "RotationJobStep",
     "Safe",
     "SafeApprovalLevel",
     "SafeMember",

@@ -32,11 +32,13 @@ from src.core.enums import Platform
 from src.core.permissions import INVENTORY_MANAGE, INVENTORY_VIEW
 from src.dependencies.auth import ActorDep, require_permission
 from src.dependencies.inventory import TargetServiceDep
+from src.services.rotation.rotation_service import non_rotatable_reason
 
 router = APIRouter(prefix="/targets", tags=["inventory"])
 
 
-def _to_response(dto: TargetDTO) -> TargetResponse:
+def target_response(dto: TargetDTO) -> TargetResponse:
+    """Shared with the gateway router (host-key pins)."""
     return TargetResponse(
         id=dto.id,
         name=dto.name,
@@ -52,6 +54,9 @@ def _to_response(dto: TargetDTO) -> TargetResponse:
         ssh_host_key_learned_at=dto.ssh_host_key_learned_at,
         created_at=dto.created_at,
         updated_at=dto.updated_at,
+        rotation_allowed=dto.rotation_allowed,
+        policy_overrides=dto.policy_overrides or {},
+        non_rotatable_reason=non_rotatable_reason(dto.protocol, dto.platform),
     )
 
 
@@ -74,7 +79,7 @@ async def list_targets(
         page_size=paging.page_size,
     )
     return PaginatedAPIResponse[TargetResponse](
-        data=[_to_response(t) for t in rows],
+        data=[target_response(t) for t in rows],
         total=total,
         page=paging.page,
         page_size=paging.page_size,
@@ -91,7 +96,7 @@ async def list_targets(
 async def get_target(
     target_id: uuid.UUID, service: TargetServiceDep
 ) -> APIResponse[TargetResponse]:
-    return ok(_to_response(await service.get(target_id)))
+    return ok(target_response(await service.get(target_id)))
 
 
 @router.post(
@@ -110,7 +115,11 @@ async def get_target(
 async def create_target(
     request: TargetCreate, service: TargetServiceDep, actor: ActorDep
 ) -> APIResponse[TargetResponse]:
-    return ok(_to_response(await service.create(actor, request.model_dump())))
+    values = request.model_dump()
+    values["policy_overrides"] = (
+        request.policy_overrides.model_dump(exclude_none=True) if (request.policy_overrides) else {}
+    )
+    return ok(target_response(await service.create(actor, values)))
 
 
 @router.patch(
@@ -130,7 +139,10 @@ async def update_target(
     target_id: uuid.UUID, request: TargetUpdate, service: TargetServiceDep, actor: ActorDep
 ) -> APIResponse[TargetResponse]:
     changes = request.model_dump(exclude_unset=True)
-    return ok(_to_response(await service.update(actor, target_id, changes)))
+    if "policy_overrides" in changes:
+        overrides = request.policy_overrides
+        changes["policy_overrides"] = overrides.model_dump(exclude_none=True) if overrides else {}
+    return ok(target_response(await service.update(actor, target_id, changes)))
 
 
 @router.delete(

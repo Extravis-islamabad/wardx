@@ -44,6 +44,13 @@ class AccountDTO:
     last_rotation_status: str | None
     created_at: datetime
     active_checkouts: int = 0
+    rotate_after_use: bool = False
+    reconcile_account_id: uuid.UUID | None = None
+    sync_status: str = "unknown"
+    last_verified_at: datetime | None = None
+    last_verify_method: str | None = None
+    rotation_status: str = "idle"
+    risk_flags: tuple[str, ...] = ()
 
     @property
     def target_id(self) -> uuid.UUID:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from src.models import Secret
 from src.repositories.base import BaseRepository
@@ -21,6 +21,7 @@ class SecretRepository(BaseRepository):
         version: int,
         sealed: SealedSecret,
         created_by: uuid.UUID | None,
+        status: str | None = None,
     ) -> None:
         self._session.add(
             Secret(
@@ -33,9 +34,43 @@ class SecretRepository(BaseRepository):
                 dek_nonce=sealed.dek_nonce,
                 kek_id=sealed.kek_id,
                 created_by=created_by,
+                status=status,
             )
         )
         await self._session.flush()
+
+    async def set_status(
+        self, owner_type: str, owner_id: uuid.UUID, version: int, status: str
+    ) -> None:
+        await self._session.execute(
+            update(Secret)
+            .where(
+                Secret.owner_type == owner_type,
+                Secret.owner_id == owner_id,
+                Secret.version == version,
+            )
+            .values(status=status)
+        )
+
+    async def demote_current(self, owner_type: str, owner_id: uuid.UUID) -> None:
+        """Relabel the current version 'previous' (the caller labels the new current)."""
+        await self._session.execute(
+            update(Secret)
+            .where(
+                Secret.owner_type == owner_type,
+                Secret.owner_id == owner_id,
+                Secret.status == "current",
+            )
+            .values(status="previous")
+        )
+
+    async def statuses(self, owner_type: str, owner_id: uuid.UUID) -> dict[int, str | None]:
+        rows = await self._session.execute(
+            select(Secret.version, Secret.status).where(
+                Secret.owner_type == owner_type, Secret.owner_id == owner_id
+            )
+        )
+        return dict(rows.all())
 
     async def get(self, owner_type: str, owner_id: uuid.UUID, version: int) -> SealedSecret | None:
         row = await self._session.scalar(

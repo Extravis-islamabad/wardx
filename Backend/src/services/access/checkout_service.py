@@ -15,6 +15,10 @@ Rules:
   and lazily before each check-out of the account.
 - Every decision, check-out, reveal and check-in is audited in the same
   transaction as the change it records.
+- Rotation (docs/phase1/ROTATION.md): a pending, running or attention-needing rotation,
+  or an untrustworthy verify, refuses new check-outs (RotationGuard). When a check-out
+  ends (check-in, revoke, expiry) on an account that rotates after use, the rotation is
+  queued, waiting for every holder to release the account.
 """
 
 from __future__ import annotations
@@ -39,6 +43,7 @@ from src.repositories.access.checkout_repository import CheckoutRepository
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET, AccountService
 from src.services.notify.notification_service import NotificationService
+from src.services.rotation.rotation_guard import RotationGuard
 from src.services.vault.vault_service import VaultService
 
 EXPIRY_LOCK_KEY = 0x5741_5244_00E1
@@ -53,8 +58,10 @@ class CheckoutService:
         vault: VaultService,
         audit: AuditService,
         notifications: NotificationService,
+        rotation: RotationGuard,
     ) -> None:
         self._checkouts = checkouts
+        self._rotation = rotation
         self._requests = requests
         self._accounts = accounts
         self._vault = vault
@@ -106,6 +113,7 @@ class CheckoutService:
         await self._accounts.authorise(actor, account, *needed)
         if account.secret_version == 0:
             raise ConflictError("No secret is stored for this account yet")
+        await self._rotation.ensure_normal_access(account.id)
         now = utcnow()
 
         request: AccessRequestDTO | None = None
@@ -249,6 +257,7 @@ class CheckoutService:
             safe_id=co.account.safe_id,
             details={"account_id": str(co.account_id)},
         )
+        await self._rotation.after_use([co.account_id])
         await self._checkouts.commit()
         return await self.get(co.id)
 
@@ -299,4 +308,5 @@ class CheckoutService:
                 safe_id=safes.get(acc_id),
                 details={"account_id": str(acc_id)},
             )
+        await self._rotation.after_use([acc for _, acc in expired])
         return len(expired)
