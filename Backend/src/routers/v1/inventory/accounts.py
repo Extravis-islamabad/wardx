@@ -44,7 +44,8 @@ from src.dependencies.inventory import AccountServiceDep
 router = APIRouter(prefix="/accounts", tags=["inventory"])
 
 
-def _to_response(dto: AccountDTO) -> AccountResponse:
+def account_response(dto: AccountDTO) -> AccountResponse:
+    """Shared with the break-glass router."""
     return AccountResponse(
         id=dto.id,
         target=TargetBriefResponse(
@@ -91,7 +92,7 @@ async def list_accounts(
         page_size=paging.page_size,
     )
     return PaginatedAPIResponse[AccountResponse](
-        data=[_to_response(a) for a in rows],
+        data=[account_response(a) for a in rows],
         total=total,
         page=paging.page,
         page_size=paging.page_size,
@@ -108,7 +109,7 @@ async def list_accounts(
 async def get_account(
     account_id: uuid.UUID, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
-    return ok(_to_response(await service.get_visible(actor, account_id)))
+    return ok(account_response(await service.get_visible(actor, account_id)))
 
 
 @router.post(
@@ -129,7 +130,7 @@ async def create_account(
     request: AccountCreate, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
     account = await service.create(actor, request.model_dump(exclude={"secret"}), request.secret)
-    return ok(_to_response(account))
+    return ok(account_response(account))
 
 
 @router.patch(
@@ -148,7 +149,7 @@ async def update_account(
     account_id: uuid.UUID, request: AccountUpdate, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
     changes = request.model_dump(exclude_unset=True)
-    return ok(_to_response(await service.update(actor, account_id, changes)))
+    return ok(account_response(await service.update(actor, account_id, changes)))
 
 
 @router.put(
@@ -166,9 +167,8 @@ async def update_account(
 async def set_secret(
     account_id: uuid.UUID, request: SecretSet, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
-    return ok(
-        _to_response(await service.set_secret(actor, account_id, request.value)), "Secret stored"
-    )
+    account = await service.set_secret(actor, account_id, request.value)
+    return ok(account_response(account), "Secret stored")
 
 
 @router.delete(

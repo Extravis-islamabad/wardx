@@ -150,6 +150,8 @@ data: migrations only add, backfill and move.
 - **Using it:**
   - `POST /accounts/{id}/emergency-reveal {reason}`, with a reason of at least 20 characters.
   - It reveals from any safe, regardless of membership, and records an emergency check-out.
+  - `GET /emergency/accounts` (also `access.emergency`) lists accounts in every safe so a
+    holder can pick one. It returns metadata only, never a secret.
   - Audited as `secret.emergency_reveal`, and creates a **high-severity alert**.
 - **Security alerts:**
   - Stored in `security.alerts` (severity, kind, message, object refs, acknowledged by/at).

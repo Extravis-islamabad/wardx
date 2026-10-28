@@ -181,6 +181,13 @@ async def test_reveal_rules(client, admin, make_user):
     holder = await make_holder(client, admin, make_user)
     account = await _locked_account(client, admin, make_user)
     url = f"/accounts/{account['id']}/emergency-reveal"
+    # Holders can find accounts in safes they are not members of (metadata only).
+    params = {"search": account["target"]["name"]}
+    found = await client.get("/emergency/accounts", headers=holder["headers"], params=params)
+    assert [a["id"] for a in found.json()["data"]] == [account["id"]]
+    assert "value" not in found.text
+    plain_headers = await make_user(f"plainlist{tag()}")
+    assert (await client.get("/emergency/accounts", headers=plain_headers)).status_code == 403
     short = await client.post(url, headers=holder["headers"], json={"reason": "too short"})
     assert short.status_code == 422
     plain = await make_user(f"plain{tag()}")

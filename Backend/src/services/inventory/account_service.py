@@ -59,6 +59,14 @@ class AccountService:
         filters = replace(filters, safe_ids=visible)
         return await self._accounts.list(filters, page=page, page_size=page_size)
 
+    async def list_any_safe(
+        self, filters: AccountFilterDTO, *, page: int, page_size: int
+    ) -> tuple[list[AccountDTO], int]:
+        """Every account, whatever its safe: only for break-glass holders (the router gates)."""
+        return await self._accounts.list(
+            replace(filters, safe_ids=None), page=page, page_size=page_size
+        )
+
     async def get_visible(self, actor: Actor, account_id: uuid.UUID) -> AccountDTO:
         """The account, if the actor may list its safe; otherwise 404."""
         account = await self.get(account_id)
