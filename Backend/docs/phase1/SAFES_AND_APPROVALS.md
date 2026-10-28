@@ -301,7 +301,7 @@ data: migrations only add, backfill and move.
   `approve` on the account's safe, plus a match with the current level. A group level uses
   the group cache, so it fails closed while the directory is down. `access.approve` stays
   in the role bundles, but no route checks it any more.
-- **Request lists:**
+- **Request lists** (the queue is filtered and paged in SQL):
   - `mine` lists your own requests.
   - `queue` lists the pending requests you can decide now.
   - Otherwise, the list shows requests on accounts in safes you can list, plus your own.

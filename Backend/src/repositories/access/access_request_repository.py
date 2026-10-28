@@ -7,7 +7,8 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import Text, bindparam, exists, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError
 
 from src.contracts.dto.access.access_request_dto import (
@@ -95,14 +96,53 @@ class AccessRequestRepository(BaseRepository):
         decisions = await self.decisions_for([r.id for r in rows])
         return [_to_dto(r, decisions.get(r.id, ())) for r in rows], total
 
-    async def pending(self) -> list[AccessRequestDTO]:
-        """Every pending request, oldest first (for the approvals queue)."""
+    async def decidable(
+        self,
+        *,
+        user_id: uuid.UUID,
+        groups: frozenset[str],
+        approve_safe_ids: frozenset[uuid.UUID],
+        page: int,
+        page_size: int,
+    ) -> tuple[list[AccessRequestDTO], int]:
+        """Pending requests ``user_id`` can decide at their current level, oldest first,
+        paged in the database. ``approve_safe_ids``: safes where the user holds 'approve';
+        ``groups``: their verified directory groups."""
+        if not approve_safe_ids:
+            return [], 0
+        level_matches = text(
+            "EXISTS (SELECT 1 FROM jsonb_array_elements(access.requests.policy -> 'levels') lv "
+            "WHERE (lv ->> 'position')::int = access.requests.current_level AND ("
+            "lv ->> 'approver_type' = 'safe_approvers' "
+            "OR (lv ->> 'approver_type' = 'user' AND lv ->> 'approver_key' = :me) "
+            "OR (lv ->> 'approver_type' = 'group' AND lv ->> 'approver_key' = ANY(:groups))))"
+        ).bindparams(
+            bindparam("me", str(user_id)),
+            bindparam("groups", sorted(groups), type_=ARRAY(Text)),
+        )
+        conditions = [
+            AccessRequest.status == RequestStatus.PENDING,
+            AccessRequest.requester_id != user_id,
+            AccessRequest.account_id.in_(
+                select(Account.id).where(Account.safe_id.in_(approve_safe_ids))
+            ),
+            ~exists().where(
+                RequestDecision.request_id == AccessRequest.id,
+                RequestDecision.approver_id == user_id,
+            ),
+            level_matches,
+        ]
+        total = await self._session.scalar(
+            select(func.count()).select_from(AccessRequest).where(*conditions)
+        )
         rows = (
             (
                 await self._session.execute(
                     select(AccessRequest)
-                    .where(AccessRequest.status == RequestStatus.PENDING)
+                    .where(*conditions)
                     .order_by(AccessRequest.created_at)
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
                 )
             )
             .unique()
@@ -110,7 +150,7 @@ class AccessRequestRepository(BaseRepository):
             .all()
         )
         decisions = await self.decisions_for([r.id for r in rows])
-        return [_to_dto(r, decisions.get(r.id, ())) for r in rows]
+        return [_to_dto(r, decisions.get(r.id, ())) for r in rows], total or 0
 
     async def decisions_for(
         self, request_ids: Sequence[uuid.UUID]

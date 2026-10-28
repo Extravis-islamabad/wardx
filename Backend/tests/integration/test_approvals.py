@@ -190,3 +190,25 @@ async def test_account_shows_its_safes_approval_need(client, admin, make_user):
     plain = await approval_safe(client, admin, make_user)
     resp = await request_access(client, plain["keeper"]["headers"], plain["account"]["id"])
     assert resp.status_code == 409
+
+
+async def test_queue_is_paged_in_the_database(client, admin, make_user):
+    lab = await approval_safe(client, admin, make_user, levels=[{"required_approvals": 1}])
+    sid, account_id = lab["safe_id"], lab["account"]["id"]
+    approver = await person(client, make_user, admin, sid, APPROVER_PERMS)
+    created = []
+    for _ in range(3):
+        requester = await person(client, make_user, admin, sid, REQUESTER_PERMS)
+        resp = await request_access(client, requester["headers"], account_id)
+        created.append(resp.json()["data"]["id"])
+
+    async def page(n: int) -> dict:
+        params = {"queue": True, "page": n, "page_size": 2}
+        return (await client.get("/requests", headers=approver["headers"], params=params)).json()
+
+    first, second = await page(1), await page(2)
+    assert first["total"] == second["total"] == 3
+    assert [r["id"] for r in first["data"]] + [r["id"] for r in second["data"]] == created
+    # Deciding one removes it from the queue.
+    await decide(client, approver["headers"], created[0])
+    assert (await page(1))["total"] == 2

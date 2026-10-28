@@ -76,9 +76,7 @@ class AccessRequestService:
         queue: bool = False,
     ) -> tuple[list[AccessRequestDTO], int]:
         if queue:
-            ready = [r for r in await self.queue(actor) if not status or r.status == status]
-            start = (page - 1) * page_size
-            return ready[start : start + page_size], len(ready)
+            return await self.queue(actor, page=page, page_size=page_size)
         if mine:
             filters = AccessRequestFilterDTO(requester_id=actor.id, status=status)
         elif actor.can(ACCESS_VIEW_ALL):
@@ -92,13 +90,22 @@ class AccessRequestService:
             )
         return await self._requests.list(filters, page=page, page_size=page_size)
 
-    async def queue(self, actor: Actor) -> list[AccessRequestDTO]:
-        """Pending requests the actor can decide at their current level, oldest first."""
-        return [
-            r
-            for r in await self._requests.pending()
-            if await self._approvers.why_not(actor, r) is None
-        ]
+    async def queue(
+        self, actor: Actor, *, page: int, page_size: int
+    ) -> tuple[list[AccessRequestDTO], int]:
+        """Pending requests the actor can decide at their current level, oldest first,
+        filtered and paged in the database (the same rules as ApproverService.why_not)."""
+        perms = await self._access.permissions_by_safe(actor)
+        principals = await self._access.principals(actor)
+        return await self._requests.decidable(
+            user_id=actor.id,
+            groups=principals.groups,
+            approve_safe_ids=frozenset(
+                sid for sid, p in perms.items() if SafePermission.APPROVE in p
+            ),
+            page=page,
+            page_size=page_size,
+        )
 
     async def get(self, request_id: uuid.UUID, *, lock: bool = False) -> AccessRequestDTO:
         req = await self._requests.get(request_id, lock=lock)
