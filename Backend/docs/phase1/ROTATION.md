@@ -235,9 +235,9 @@ waits for release, no holder is ever left with a stale password mid-session.
 - **`inventory.targets`:** `rotation_allowed` (default false), `policy_overrides` (JSONB:
   min/max length, symbols, and so on).
 - **`inventory.accounts`:** `reconcile_account_id`, `sync_status`, `last_verified_at`,
-  `rotation_status`. The existing `rotation_interval_days`, `rotate_after_checkin` (to be
-  renamed `rotate_after_use`), `password_length`, `last_rotated_at` and
-  `last_rotation_status` are kept.
+  `rotation_status`, `rotate_after_use`. The existing `rotation_interval_days`,
+  `password_length`, `last_rotated_at` and `last_rotation_status` are kept.
+  `rotate_after_checkin` was merged into `rotate_after_use` and dropped (§14, fix 3).
 - **Safe policy:**
   - `rotate_after_use`
   - `rotation_interval_days` (default for its accounts)
@@ -436,8 +436,8 @@ Where the spec left a question open, the more restrictive choice was taken:
 8. **Policy:** account `password_length` only lengthens; the effective interval is the
    shorter of account and safe; `rotate_after_use` is on if either says so. Policies
    need at least 10 distinct characters and may only use symbols from the safe set.
-9. **`rotate_after_checkin`** is kept (no longer read) and copied into the new
-   `rotate_after_use` column, instead of renaming it (additive migration).
+9. **`rotate_after_checkin`** was first kept and copied into `rotate_after_use`; review
+   fix 3 (§14) then merged and dropped it, so `rotate_after_use` is the only setting.
 10. **Holders** include check-outs still marked active after their expiry until the sweep
     closes them (at most `expiry_sweep_seconds`).
 11. **Dry run** (per request, or `WARDX_ROTATION_DRY_RUN` for all) still needs both
@@ -445,3 +445,33 @@ Where the spec left a question open, the more restrictive choice was taken:
     the negative check, and changes nothing.
 12. **Unreachable verifies** keep an earlier `in_sync`/`out_of_sync`/`unverified`
     conclusion and count; three in a row raise a medium alert.
+
+## 14. Review fixes (2026-10-28, after the core + Linux review)
+
+1. **One rotation per account at a time.** Every rotation, verify or reconcile run holds a
+   PostgreSQL advisory lock keyed on the account id, on its own connection, for the whole
+   run (`RotationEngine.run`). A second run of the same account does nothing and returns:
+   this covers a second worker or scheduler process, and the case where a job's lease
+   expired while a slow run was still on the device and another worker claimed it. The
+   lock is released when the run ends, and by PostgreSQL if the process dies. Once it
+   holds the lock, a run re-reads the job and does nothing if an earlier run already
+   finished it. This is on top of the one-open-job-per-account index (which also stops a
+   verify starting while a rotation is open) and per-target serialisation.
+   Tests: `tests/integration/rotation/test_concurrency.py` (mutation-checked: with the lock
+   disabled, the two overlap tests fail).
+2. **Scheduler.** Scheduled rotation and scheduled verify are also tested through the real
+   background scheduler (see the test notes below when added).
+3. **One after-use setting.** Migration `018_rotation_fixes.sql` merges
+   `rotate_after_checkin` into `rotate_after_use` (TRUE in either stays TRUE), then drops
+   `rotate_after_checkin`. No code, schema, API or UI reads the old column.
+4. **Learn host key** (see the host-key notes below when added).
+5. **Break-glass while a rotation needs attention or is untrustworthy.** Normal check-outs
+   and sessions are blocked; break-glass is never blocked by rotation. It always reveals the
+   account's **current** version (`accounts.secret_version`, the vault's source of truth),
+   never an unpromoted candidate, and returns a `notice`:
+   - job needs attention: names the current version and the candidate version the device
+     may hold instead (versions only, never a value), and says both are kept until an
+     administrator resolves the job;
+   - last verify untrustworthy: says the current version is stored but not verified.
+   Tests: `tests/integration/rotation/test_break_glass_rotation.py`.
+
