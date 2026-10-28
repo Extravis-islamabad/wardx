@@ -60,12 +60,34 @@ class AccountService:
         return await self._accounts.list(filters, page=page, page_size=page_size)
 
     async def list_any_safe(
-        self, filters: AccountFilterDTO, *, page: int, page_size: int
+        self,
+        actor: Actor,
+        filters: AccountFilterDTO,
+        *,
+        page: int,
+        page_size: int,
+        reason: str | None = None,
     ) -> tuple[list[AccountDTO], int]:
-        """Every account, whatever its safe: only for break-glass holders (the router gates)."""
-        return await self._accounts.list(
+        """Every account, whatever its safe: only for break-glass holders (the router gates).
+        Every call is audited (who, when, the filters and an optional reason); no alert."""
+        rows, total = await self._accounts.list(
             replace(filters, safe_ids=None), page=page, page_size=page_size
         )
+        await self._audit.record(
+            actor,
+            "account.emergency_list",
+            object_type="account",
+            details={
+                "search": filters.search,
+                "target_id": str(filters.target_id) if filters.target_id else None,
+                "page": page,
+                "page_size": page_size,
+                "reason": reason,
+                "results": total,
+            },
+        )
+        await self._accounts.commit()
+        return rows, total
 
     async def get_visible(self, actor: Actor, account_id: uuid.UUID) -> AccountDTO:
         """The account, if the actor may list its safe; otherwise 404."""

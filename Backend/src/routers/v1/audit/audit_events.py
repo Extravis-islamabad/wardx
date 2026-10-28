@@ -32,7 +32,7 @@ from src.dependencies.auth import require_permission
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 
-def _to_response(dto: AuditEventDTO) -> AuditEventResponse:
+def audit_event_response(dto: AuditEventDTO) -> AuditEventResponse:
     return AuditEventResponse(
         seq=dto.seq,
         id=dto.id,
@@ -73,7 +73,7 @@ async def list_events(
         page_size=paging.page_size,
     )
     return PaginatedAPIResponse[AuditEventResponse](
-        data=[_to_response(e) for e in rows],
+        data=[audit_event_response(e) for e in rows],
         total=total,
         page=paging.page,
         page_size=paging.page_size,

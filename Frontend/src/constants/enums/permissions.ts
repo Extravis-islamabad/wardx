@@ -15,7 +15,8 @@ export enum PERMISSIONS {
   ACCESS_EMERGENCY = 'access.emergency',
   SESSIONS_VIEW_ALL = 'sessions.view_all',
   SESSIONS_TERMINATE = 'sessions.terminate',
-  COMMAND_POLICY_VIEW = 'policy.view',
+  /** Read command rules and use the rule tester: admin and auditor only. */
+  COMMAND_POLICY_VIEW = 'commands.view',
   COMMAND_POLICY_MANAGE = 'policy.manage',
   AUDIT_VIEW = 'audit.view',
   ALERTS_ACKNOWLEDGE = 'alerts.acknowledge',

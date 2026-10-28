@@ -88,6 +88,25 @@ data: migrations only add, backfill and move.
     once, without a connect timeout on every request. Any successful contact ends the wait:
     a sign-in, a sync, or the admin's test lookup.
 
+### Read scopes (product-owner follow-ups)
+
+- **Command rules:**
+  - Reading the rules (`GET /command-rules`) and the rule tester
+    (`POST /command-rules/test`, which could probe the rules) need `commands.view`. Only
+    the admin and auditor roles hold it.
+  - Writing rules still needs `policy.manage`.
+  - The retired `policy.view`, which every role held, is gone.
+  - The gateway applies rules server-side, so connecting needs no read permission.
+- **Break-glass lookup:** every `GET /emergency/accounts` call is audited as
+  `account.emergency_list`. The event records who and when, the filters, the result
+  count, and the optional `reason` query parameter. It raises no alert.
+- **Safe-scoped audit:** `GET /safes/{safe_id}/audit` lists events about the safe, its
+  accounts, and those accounts' requests and check-outs.
+  - It needs `view_audit` on the safe, or the global `audit.view`.
+  - A member without `view_audit` gets 403; someone who can't list the safe gets 404.
+  - Limitation: events of accounts deleted from or moved out of the safe aren't included.
+    The global audit trail still has them.
+
 ### Directory outage, safe health and break-glass coverage
 
 - **Directory reachability:** WardX records the outcome of its latest directory contact:

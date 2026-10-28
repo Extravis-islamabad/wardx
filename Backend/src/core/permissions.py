@@ -20,7 +20,10 @@ ACCESS_VIEW_ALL = "access.view_all"
 ACCESS_REVOKE = "access.revoke"
 SESSIONS_VIEW_ALL = "sessions.view_all"
 SESSIONS_TERMINATE = "sessions.terminate"
-POLICY_VIEW = "policy.view"
+# Read command rules and use the rule tester (the tester can probe the rules). The gateway
+# applies rules server-side, so connecting needs no read permission. Replaces the retired
+# policy.view, which every role held.
+COMMANDS_VIEW = "commands.view"
 POLICY_MANAGE = "policy.manage"
 AUDIT_VIEW = "audit.view"
 USERS_MANAGE = "users.manage"
@@ -38,7 +41,7 @@ ACCESS_EMERGENCY = "access.emergency"
 # Your own profile: who am I, sign out, change password, your own MFA.
 PROFILE_SELF = "profile.self"
 
-_EVERYONE = frozenset({INVENTORY_VIEW, ACCESS_USE, POLICY_VIEW, DASHBOARD_VIEW, PROFILE_SELF})
+_EVERYONE = frozenset({INVENTORY_VIEW, ACCESS_USE, DASHBOARD_VIEW, PROFILE_SELF})
 
 ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
     Role.ADMIN: frozenset(
@@ -51,7 +54,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             ACCESS_REVOKE,
             SESSIONS_VIEW_ALL,
             SESSIONS_TERMINATE,
-            POLICY_VIEW,
+            COMMANDS_VIEW,
             POLICY_MANAGE,
             AUDIT_VIEW,
             USERS_MANAGE,
@@ -63,7 +66,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
         }
     ),
     Role.APPROVER: _EVERYONE | {ACCESS_APPROVE},
-    Role.AUDITOR: _EVERYONE | {ACCESS_VIEW_ALL, SESSIONS_VIEW_ALL, AUDIT_VIEW},
+    Role.AUDITOR: _EVERYONE | {ACCESS_VIEW_ALL, SESSIONS_VIEW_ALL, AUDIT_VIEW, COMMANDS_VIEW},
     Role.USER: _EVERYONE,
 }
 

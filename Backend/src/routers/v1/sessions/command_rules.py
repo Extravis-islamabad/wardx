@@ -31,7 +31,7 @@ from src.contracts.schemas.responses.sessions.command_rule_responses import (
     CommandRuleResponse,
     CommandTestResultResponse,
 )
-from src.core.permissions import POLICY_MANAGE, POLICY_VIEW
+from src.core.permissions import COMMANDS_VIEW, POLICY_MANAGE
 from src.dependencies.auth import ActorDep, require_permission
 from src.dependencies.sessions import CommandRuleServiceDep
 
@@ -54,7 +54,7 @@ def _to_response(dto: CommandRuleDTO) -> CommandRuleResponse:
 @router.get(
     "",
     response_model=APIResponse[list[CommandRuleResponse]],
-    dependencies=[Depends(require_permission(POLICY_VIEW))],
+    dependencies=[Depends(require_permission(COMMANDS_VIEW))],
     summary="List command rules",
     responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
 )
@@ -117,7 +117,7 @@ async def delete_rule(
 @router.post(
     "/test",
     response_model=APIResponse[CommandTestResultResponse],
-    dependencies=[Depends(require_permission(POLICY_VIEW))],
+    dependencies=[Depends(require_permission(COMMANDS_VIEW))],
     summary="Test a command against the rules",
     responses={
         **UNAUTHORIZED_RESPONSE,

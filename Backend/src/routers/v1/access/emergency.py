@@ -1,7 +1,7 @@
 """Break-glass router (access.emergency).
 
 GET  /emergency/accounts                     — every account, whatever its safe, to pick
-                                               one in an emergency (no secrets)
+                                               one in an emergency (no secrets; audited)
 POST /accounts/{account_id}/emergency-reveal — reveal any account's secret with a reason
                                                (audited as secret.emergency_reveal, high alert)
 """
@@ -46,11 +46,17 @@ router = APIRouter(tags=["access"])
 )
 async def emergency_accounts(
     service: AccountServiceDep,
+    actor: ActorDep,
     paging: Annotated[PageParams, Depends()],
     search: Annotated[str | None, Query(max_length=100)] = None,
+    reason: Annotated[str | None, Query(max_length=2000)] = None,
 ) -> PaginatedAPIResponse[AccountResponse]:
     rows, total = await service.list_any_safe(
-        AccountFilterDTO(search=search), page=paging.page, page_size=paging.page_size
+        actor,
+        AccountFilterDTO(search=search),
+        page=paging.page,
+        page_size=paging.page_size,
+        reason=reason,
     )
     return PaginatedAPIResponse[AccountResponse](
         data=[account_response(a) for a in rows],

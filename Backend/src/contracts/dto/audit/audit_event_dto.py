@@ -33,3 +33,5 @@ class AuditFilterDTO:
     object_id: uuid.UUID | None = None
     since: datetime | None = None
     until: datetime | None = None
+    # Events about this safe, its accounts, and their requests and check-outs.
+    safe_id: uuid.UUID | None = None

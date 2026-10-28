@@ -27,6 +27,7 @@ from src.repositories.safes.safe_repository import SafeRepository
 from src.services.directory.group_membership_service import GroupMembershipService
 from src.services.safes.approval_policy_service import ApprovalPolicyService
 from src.services.safes.safe_access_service import SafeAccessService
+from src.services.safes.safe_audit_service import SafeAuditService
 from src.services.safes.safe_health_service import SafeHealthService
 from src.services.safes.safe_service import SafeService
 
@@ -72,6 +73,16 @@ async def get_approval_policy_service(session: SQLSessionDep) -> ApprovalPolicyS
     return build_approval_policy_service(session)
 
 
+def build_safe_audit_service(session: AsyncSession) -> SafeAuditService:
+    return SafeAuditService(
+        SafeRepository(session), build_safe_access_service(session), build_audit_service(session)
+    )
+
+
+async def get_safe_audit_service(session: SQLSessionDep) -> SafeAuditService:
+    return build_safe_audit_service(session)
+
+
 def build_safe_health_service(session: AsyncSession) -> SafeHealthService:
     return SafeHealthService(
         SafeHealthRepository(session),
@@ -91,3 +102,4 @@ async def get_safe_service(session: SQLSessionDep) -> SafeService:
 SafeServiceDep = Annotated[SafeService, Depends(get_safe_service)]
 SafeHealthServiceDep = Annotated[SafeHealthService, Depends(get_safe_health_service)]
 ApprovalPolicyServiceDep = Annotated[ApprovalPolicyService, Depends(get_approval_policy_service)]
+SafeAuditServiceDep = Annotated[SafeAuditService, Depends(get_safe_audit_service)]

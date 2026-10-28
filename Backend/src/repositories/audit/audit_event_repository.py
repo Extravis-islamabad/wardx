@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import Row, func, select, text
+from sqlalchemy import Row, func, literal, select, text, union
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
-from src.models import AuditEvent
+from src.models import AccessRequest, Account, AuditEvent, Checkout
 from src.repositories.base import BaseRepository
 
 _AUDIT_LOCK_KEY = 0x5741_5244_00A1
@@ -29,6 +29,17 @@ def _to_dto(row: AuditEvent) -> AuditEventDTO:
         prev_hash=row.prev_hash,
         hash=row.hash,
         key_version=row.key_version,
+    )
+
+
+def _safe_objects(safe_id):
+    """The safe, the accounts in it now, and those accounts' requests and check-outs."""
+    accounts = select(Account.id).where(Account.safe_id == safe_id)
+    return union(
+        select(literal(safe_id).label("id")),
+        accounts,
+        select(AccessRequest.id).where(AccessRequest.account_id.in_(accounts)),
+        select(Checkout.id).where(Checkout.account_id.in_(accounts)),
     )
 
 
@@ -82,6 +93,8 @@ class AuditEventRepository(BaseRepository):
             conditions.append(AuditEvent.occurred_at >= filters.since)
         if filters.until:
             conditions.append(AuditEvent.occurred_at < filters.until)
+        if filters.safe_id:
+            conditions.append(AuditEvent.object_id.in_(_safe_objects(filters.safe_id)))
         total = await self._session.scalar(
             select(func.count()).select_from(AuditEvent).where(*conditions)
         )

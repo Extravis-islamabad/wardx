@@ -10,6 +10,7 @@ from src.routers.v1.health import health
 from src.routers.v1.identity import auth, mfa, users
 from src.routers.v1.inventory import accounts, targets
 from src.routers.v1.notify import notifications
+from src.routers.v1.safes import audit as safe_audit
 from src.routers.v1.safes import members, policy, safes
 from src.routers.v1.security import alerts
 from src.routers.v1.sessions import command_rules, gateway, sessions
@@ -26,6 +27,7 @@ for _module in (
     safes,
     members,
     policy,
+    safe_audit,
     notifications,
     requests,
     checkouts,
