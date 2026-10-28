@@ -1,11 +1,8 @@
-"""Directory (LDAP / Active Directory) configuration schemas."""
+"""Directory (LDAP / Active Directory) configuration and sync request shapes."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from src.core.enums import Role
 
@@ -62,61 +59,11 @@ class DirectoryConfigIn(BaseModel):
         return v
 
 
-class DirectoryConfigOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    enabled: bool
-    server_url: str
-    start_tls: bool
-    verify_tls: bool
-    ca_cert_pem: str | None
-    bind_dn: str
-    has_bind_password: bool
-    user_base_dn: str
-    user_filter: str
-    attr_username: str
-    attr_email: str
-    attr_full_name: str
-    group_base_dn: str | None
-    group_filter: str | None
-    role_mappings: list[RoleMapping]
-    default_role: Role | None
-    timeout_seconds: int
-    sync_interval_minutes: int
-    sync_max_disable_percent: int
-    last_sync_at: datetime | None
-    last_sync_status: str | None
-    last_sync_summary: dict[str, Any] | None
-    updated_at: datetime
-
-
 class DirectoryTest(BaseModel):
     username: str = Field(min_length=1, max_length=255)
-
-
-class DirectoryTestResult(BaseModel):
-    dn: str
-    username: str
-    email: str | None
-    full_name: str | None
-    groups: list[str]
-    role: Role | None
 
 
 class SyncRequest(BaseModel):
     dry_run: bool = False
     # Apply even past the disable limit, after an admin has reviewed the preview.
     force: bool = False
-
-
-class SyncResultOut(BaseModel):
-    status: str
-    dry_run: bool
-    checked: int
-    disabled: list[dict[str, str]]
-    enabled: list[str]
-    role_changes: list[dict[str, str]]
-    profile_updates: int
-    problems: list[str]
-    revoked_checkouts: int
-    killed_sessions: int

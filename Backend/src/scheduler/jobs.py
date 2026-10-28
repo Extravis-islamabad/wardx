@@ -13,8 +13,8 @@ from sqlalchemy import text
 from src.core.config import Settings
 from src.core.db import session_factory
 from src.dependencies.access import build_checkout_service
+from src.dependencies.directory import build_directory_sync_service
 from src.errors.exceptions import ConflictError
-from src.services import directory_sync
 
 logger = structlog.get_logger(__name__)
 
@@ -45,9 +45,10 @@ async def directory_sync_tick() -> None:
     """Every minute: run the directory sync if its interval has passed."""
     async with session_factory()() as session:
         try:
-            if not await directory_sync.sync_due(session):
+            service = build_directory_sync_service(session)
+            if not await service.sync_due():
                 return
-            result = await directory_sync.run_sync(session)
+            result = await service.run_sync()
         except ConflictError:
             await session.rollback()  # another node is syncing, or it was just switched off
             return

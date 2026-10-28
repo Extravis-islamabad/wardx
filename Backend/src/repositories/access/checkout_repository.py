@@ -133,3 +133,18 @@ class CheckoutRepository(BaseRepository):
         if account_id is not None:
             stmt = stmt.where(Checkout.account_id == account_id)
         return [(co_id, acc_id) for co_id, acc_id in (await self._session.execute(stmt)).all()]
+
+    async def revoke_active_for_user(self, user_id: uuid.UUID, now: datetime) -> list[uuid.UUID]:
+        """Revoke every active check-out the user holds; their ids."""
+        return list(
+            (
+                await self._session.execute(
+                    update(Checkout)
+                    .where(Checkout.user_id == user_id, Checkout.status == CheckoutStatus.ACTIVE)
+                    .values(status=CheckoutStatus.REVOKED, checked_in_at=now)
+                    .returning(Checkout.id)
+                )
+            )
+            .scalars()
+            .all()
+        )

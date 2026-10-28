@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import pytest
 
-from src.contracts.schemas.identity import UserCreate
+from src.contracts.schemas.requests.identity.user_requests import UserCreate
 from src.core.security import create_token, decode_token, hash_password, verify_password
 from src.errors.exceptions import UnauthorizedError
 

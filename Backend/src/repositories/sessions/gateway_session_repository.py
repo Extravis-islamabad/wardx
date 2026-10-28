@@ -173,3 +173,24 @@ class GatewaySessionRepository(BaseRepository):
             .returning(GatewaySession.id, GatewaySession.checkout_id, GatewaySession.user_id)
         )
         return [sid for sid, _checkout_id, _user_id in rows.all()]
+
+    async def request_kill_for_user(
+        self, user_id: uuid.UUID, now: datetime, reason: str
+    ) -> list[uuid.UUID]:
+        """Ask the gateway to end the user's live sessions (not already being killed)."""
+        return list(
+            (
+                await self._session.execute(
+                    update(GatewaySession)
+                    .where(
+                        GatewaySession.user_id == user_id,
+                        GatewaySession.status == "active",
+                        GatewaySession.terminate_requested_at.is_(None),
+                    )
+                    .values(terminate_requested_at=now, close_reason=reason)
+                    .returning(GatewaySession.id)
+                )
+            )
+            .scalars()
+            .all()
+        )

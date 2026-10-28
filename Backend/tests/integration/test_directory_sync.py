@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import text
 
 from src.core.db import session_factory
-from src.services import directory_service
+from src.services.directory import directory_service
 from tests.integration.test_directory import CONFIG
 from tests.ldap_mock import ADMINS, BASE, SVC_DN, SVC_PW, build_directory, mock_factory
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import ldap3
 import pytest
 
-from src.services import directory_service
+from src.services.directory import directory_service
 from tests.ldap_mock import (
     ADMINS,
     AUDITORS,

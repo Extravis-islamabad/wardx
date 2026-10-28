@@ -12,14 +12,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.core.config import Settings, get_settings, resolve_jwt_secret, resolve_vault_kek
 from src.core.db import dispose_engine, init_engine, session_factory
 from src.core.migration_runner import run_migrations
+from src.dependencies.identity import build_user_service
 from src.errors.handlers import register_exception_handlers
-from src.routers.v1 import auth, dashboard, directory, health, users
+from src.routers.v1 import dashboard, health
 from src.routers.v1.access import checkouts, requests
 from src.routers.v1.audit import audit_events
+from src.routers.v1.directory import directory
+from src.routers.v1.identity import auth, mfa, users
 from src.routers.v1.inventory import accounts, targets
 from src.routers.v1.sessions import command_rules, gateway, sessions
 from src.scheduler.jobs import build_scheduler
-from src.services import user_service, vault_service
+from src.services.vault.vault_service import set_keyring
 from src.vault.envelope import Keyring
 
 logger = structlog.get_logger(__name__)
@@ -28,13 +31,11 @@ logger = structlog.get_logger(__name__)
 async def startup(settings: Settings) -> None:
     # Fail fast on missing keys before touching the database.
     resolve_jwt_secret(settings)
-    vault_service.set_keyring(
-        Keyring.from_base64(resolve_vault_kek(settings), settings.vault_kek_retired)
-    )
+    set_keyring(Keyring.from_base64(resolve_vault_kek(settings), settings.vault_kek_retired))
     engine = init_engine(settings.database_url, settings.db_pool_size)
     await run_migrations(engine)
     async with session_factory()() as session:
-        await user_service.bootstrap_admin(session, settings)
+        await build_user_service(session).bootstrap_admin(settings)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -90,6 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     for module in (
         health,
         auth,
+        mfa,
         users,
         targets,
         accounts,

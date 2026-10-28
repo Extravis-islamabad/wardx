@@ -52,3 +52,10 @@ class MfaEnrollmentRequired(AppError):
 
     status_code = 403
     code = "mfa_enrollment_required"
+
+
+class DirectoryUnavailable(AppError):
+    """The directory (LDAP / AD) could not be reached or used."""
+
+    status_code = 502
+    code = "directory_unavailable"

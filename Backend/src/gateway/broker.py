@@ -23,6 +23,7 @@ from src.core.context import Actor
 from src.core.db import session_factory
 from src.core.enums import CheckoutStatus, Protocol, Role
 from src.dependencies.access import build_access_request_service, build_checkout_service
+from src.dependencies.identity import build_auth_service, build_mfa_service
 from src.dependencies.inventory import build_account_service, build_target_service
 from src.dependencies.sessions import (
     build_command_rule_service,
@@ -33,7 +34,6 @@ from src.dependencies.vault import build_vault_service
 from src.errors.exceptions import AppError
 from src.gateway.policy import CommandPolicy
 from src.models import utcnow
-from src.services import auth_service, mfa_service
 from src.services.inventory.account_service import ACCOUNT_SECRET
 
 GATEWAY_REASON = "Interactive session via WardX gateway"
@@ -84,9 +84,7 @@ class Broker:
 
     async def authenticate(self, username: str, password: str, source_ip: str | None) -> Actor:
         async with session_factory()() as session:
-            user = await auth_service.authenticate(
-                session,
-                self.settings,
+            user = await build_auth_service(session).authenticate(
                 username=username,
                 password=password,
                 source_ip=source_ip,
@@ -98,14 +96,12 @@ class Broker:
 
     async def mfa_enabled(self, actor: Actor) -> bool:
         async with session_factory()() as session:
-            return await mfa_service.is_enabled(session, actor.id)
+            return await build_mfa_service(session).is_enabled(actor.id)
 
     async def verify_mfa(self, actor: Actor, code: str) -> bool:
         async with session_factory()() as session:
             try:
-                await mfa_service.verify_login_code(
-                    session,
-                    self.settings,
+                await build_mfa_service(session).verify_login_code(
                     user_id=actor.id,
                     code=code,
                     source_ip=actor.source_ip,
@@ -127,9 +123,8 @@ class Broker:
         command: str | None,
     ) -> Grant:
         async with session_factory()() as session:
-            if mfa_service.is_required(
-                self.settings, actor.role
-            ) and not await mfa_service.is_enabled(session, actor.id):
+            mfa = build_mfa_service(session)
+            if mfa.is_required(actor.role) and not await mfa.is_enabled(actor.id):
                 raise GatewayDenied(
                     "Your role requires MFA. Set it up in the WardX console, then reconnect."
                 )
