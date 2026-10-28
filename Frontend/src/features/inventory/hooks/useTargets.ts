@@ -57,3 +57,17 @@ export function useAcceptTargetHostKey() {
     onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.targetsAll() }),
   });
 }
+
+/** Read the presented API-SSL certificate (a mutation: it opens a connection, never cached). */
+export function useProbeTargetTlsCert() {
+  return useMutation({ mutationFn: (id: string) => targetsService.probeTlsCert(id) });
+}
+
+export function useAcceptTargetTlsCert() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, fingerprint }: { id: string; fingerprint: string }) =>
+      targetsService.acceptTlsCert(id, fingerprint),
+    onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.targetsAll() }),
+  });
+}

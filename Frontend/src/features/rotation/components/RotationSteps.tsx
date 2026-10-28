@@ -12,6 +12,8 @@ const OUTCOME_VARIANT: Record<string, StatusVariant> = {
   unreachable: StatusVariant.WARNING,
   host_key_mismatch: StatusVariant.DANGER,
   ambiguous: StatusVariant.WARNING,
+  channel_unavailable: StatusVariant.DANGER,
+  refused: StatusVariant.DANGER,
 };
 
 const color = (s: RotationStep) => {
@@ -38,6 +40,7 @@ export function RotationSteps({ jobId }: { jobId: string }) {
               variant={OUTCOME_VARIANT[s.outcome] ?? StatusVariant.OUTLINE}
             />
             {s.secret_version ? <Typography.Text type="secondary"> v{s.secret_version}</Typography.Text> : null}
+            {s.channel ? <Typography.Text type="secondary"> · via {s.channel}</Typography.Text> : null}
             <Typography.Text type="secondary"> · {fmtTime(s.finished_at)}</Typography.Text>
             {s.detail && <div className="text-xs">{s.detail}</div>}
             {s.transcript && (

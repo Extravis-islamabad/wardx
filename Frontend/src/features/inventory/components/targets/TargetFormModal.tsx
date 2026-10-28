@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input, InputNumber, Modal, Select, Switch } from 'antd';
 import { useEffect } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
-import { PLATFORMS, Protocol } from '@/constants/enums/inventory';
+import { API_SSL_DEFAULT_PORT, PLATFORMS, Protocol, usesTlsApi } from '@/constants/enums/inventory';
 import { useSaveTarget } from '@/features/inventory/hooks';
 import {
   targetFormSchema,
@@ -34,6 +34,8 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
     resolver: zodResolver(targetFormSchema),
     defaultValues: targetFormValuesFrom(target),
   });
+
+  const platform = useWatch({ control, name: 'platform' });
 
   useEffect(() => {
     if (open) reset(targetFormValuesFrom(target));
@@ -105,6 +107,35 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
             />
           </FormField>
         </div>
+        {usesTlsApi(platform) && (
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              label="API-SSL port"
+              htmlFor="target-api-port"
+              hint={`Blank = ${API_SSL_DEFAULT_PORT}. Passwords change only over API-SSL with a pinned certificate.`}
+              error={errors.api_port?.message}
+            >
+              <Controller
+                control={control}
+                name="api_port"
+                render={({ field }) => (
+                  <InputNumber {...field} id="target-api-port" className="!w-full" min={1} max={65535} />
+                )}
+              />
+            </FormField>
+            <FormField
+              label="API is TLS (API-SSL)"
+              htmlFor="target-api-tls"
+              hint="Off: the device offers only the cleartext API (8728). It can be vaulted, never rotated."
+            >
+              <Controller
+                control={control}
+                name="api_tls"
+                render={({ field }) => <Switch id="target-api-tls" checked={field.value} onChange={field.onChange} />}
+              />
+            </FormField>
+          </div>
+        )}
         <FormField label="Tags" htmlFor="target-tags">
           <Controller
             control={control}

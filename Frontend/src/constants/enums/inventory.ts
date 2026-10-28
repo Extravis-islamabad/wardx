@@ -17,6 +17,11 @@ export const PLATFORMS: { value: string; label: string }[] = [
 
 export const DEFAULT_PLATFORM = 'cisco_ios';
 
+/** Platforms rotated over a TLS API (MikroTik API-SSL): they also pin a TLS certificate. */
+export const TLS_API_PLATFORMS: readonly string[] = ['mikrotik_routeros'];
+export const API_SSL_DEFAULT_PORT = 8729;
+export const usesTlsApi = (platform: string | null | undefined) => !!platform && TLS_API_PLATFORMS.includes(platform);
+
 export enum Protocol {
   SSH = 'ssh',
   TELNET = 'telnet',

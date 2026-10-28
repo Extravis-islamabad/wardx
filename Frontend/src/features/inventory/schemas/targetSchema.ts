@@ -14,6 +14,9 @@ export const targetFormSchema = z.object({
   rotation_allowed: z.boolean(),
   min_length: z.number().int().min(12).max(128).nullable(),
   max_length: z.number().int().min(12).max(128).nullable(),
+  // MikroTik: the API-SSL port (null = 8729) and whether the device's API is TLS at all.
+  api_port: z.number().int().min(1).max(65535).nullable(),
+  api_tls: z.boolean(),
 });
 
 export type TargetFormValues = z.infer<typeof targetFormSchema>;
@@ -29,6 +32,8 @@ export const targetFormDefaults: TargetFormValues = {
   rotation_allowed: false,
   min_length: null,
   max_length: null,
+  api_port: null,
+  api_tls: true,
 };
 
 export const targetFormValuesFrom = (target: Target | null | undefined): TargetFormValues =>
@@ -44,6 +49,8 @@ export const targetFormValuesFrom = (target: Target | null | undefined): TargetF
         rotation_allowed: !!target.rotation_allowed,
         min_length: (target.policy_overrides?.min_length as number | undefined) ?? null,
         max_length: (target.policy_overrides?.max_length as number | undefined) ?? null,
+        api_port: target.api_port ?? null,
+        api_tls: target.api_tls !== false,
       }
     : targetFormDefaults;
 

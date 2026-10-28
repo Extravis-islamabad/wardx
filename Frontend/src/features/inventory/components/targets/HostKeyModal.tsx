@@ -1,52 +1,33 @@
-import { Alert, Checkbox, Descriptions, Modal, Spin } from 'antd';
-import { useEffect, useState } from 'react';
+import { Descriptions, Modal } from 'antd';
 import { Box, Button, ModalFooter, ModalTitle } from '@/components';
-import { useAcceptTargetHostKey, useProbeTargetHostKey } from '@/features/inventory/hooks';
-import type { HostKeyProbe, Target } from '@/services/inventory-services';
-import { notify } from '@/utils/notify';
+import { usesTlsApi } from '@/constants/enums/inventory';
+import {
+  useAcceptTargetHostKey,
+  useAcceptTargetTlsCert,
+  useProbeTargetHostKey,
+  useProbeTargetTlsCert,
+} from '@/features/inventory/hooks';
+import type { Target } from '@/services/inventory-services';
+import { fmtTime } from '@/utils/format';
+import { IdentityPinSection } from './IdentityPinSection';
 
 interface HostKeyModalProps {
   target: Target | null;
   onClose: () => void;
 }
 
-const Fingerprint = ({ value }: { value: string | null | undefined }) =>
-  value ? <code className="break-all">{value}</code> : <>—</>;
-
 /**
- * Pin (or re-pin) a target's SSH host key in two steps: read the key the device presents
+ * Pin (or re-pin) a target's identities, each in two steps: read what the device presents
  * (no credential is sent), then accept it only after comparing the fingerprint with the
- * device. The server pins it only if the device still presents exactly that fingerprint.
+ * device. SSH targets pin their host key; MikroTik targets also pin the API-SSL
+ * certificate, and rotation is refused until both are pinned.
  */
 export function HostKeyModal({ target, onClose }: HostKeyModalProps) {
-  const [probe, setProbe] = useState<HostKeyProbe | null>(null);
-  const [compared, setCompared] = useState(false);
-  const { mutateAsync: readKey, isPending: reading, isError: readFailed } = useProbeTargetHostKey();
-  const { mutateAsync: acceptKey, isPending: accepting } = useAcceptTargetHostKey();
-
-  useEffect(() => {
-    setProbe(null);
-    setCompared(false);
-    if (!target) return;
-    readKey(target.id)
-      .then((r) => setProbe(r.data))
-      .catch(() => {
-        // apiClient's interceptor already toasted the failure.
-      });
-  }, [target, readKey]);
-
-  const accept = async () => {
-    if (!target || !probe) return;
-    try {
-      const r = await acceptKey({ id: target.id, fingerprint: probe.presented_fingerprint });
-      notify.success(r.message ?? 'Host key pinned');
-      onClose();
-    } catch {
-      // apiClient's interceptor already toasted the failure (e.g. the key changed meanwhile).
-    }
-  };
-
-  const alreadyPinned = probe?.matches_pin && !probe?.mismatch_at;
+  const { mutateAsync: probeKey } = useProbeTargetHostKey();
+  const { mutateAsync: acceptKey, isPending: acceptingKey } = useAcceptTargetHostKey();
+  const { mutateAsync: probeCert } = useProbeTargetTlsCert();
+  const { mutateAsync: acceptCert, isPending: acceptingCert } = useAcceptTargetTlsCert();
+  const withCert = !!target && usesTlsApi(target.platform) && target.api_tls !== false;
 
   return (
     <Modal
@@ -54,82 +35,57 @@ export function HostKeyModal({ target, onClose }: HostKeyModalProps) {
       title={<ModalTitle>{target ? `Host key: ${target.name}` : 'Host key'}</ModalTitle>}
       onCancel={onClose}
       footer={null}
+      width={withCert ? 720 : 560}
       destroyOnHidden
     >
-      <Box className="px-2 border-0">
-        {reading && (
-          <div className="flex justify-center py-6">
-            <Spin />
-          </div>
-        )}
-        {readFailed && !reading && (
-          <Alert type="error" showIcon title="Could not read the device's host key." />
-        )}
-        {probe && (
-          <>
-            {probe.mismatch_at && (
-              <Alert
-                className="!mb-3"
-                type="error"
-                showIcon
-                title="The device presented a key other than the pinned one."
-                description="Rotation and verify are blocked for this target until you compare and accept a key."
-              />
-            )}
-            <Descriptions size="small" column={1} bordered>
-              <Descriptions.Item label="Presented now">
-                <Fingerprint value={probe.presented_fingerprint} /> ({probe.key_type})
-              </Descriptions.Item>
-              <Descriptions.Item label="Pinned">
-                <Fingerprint value={probe.pinned_fingerprint} />
-              </Descriptions.Item>
-              {probe.mismatch_fingerprint && (
-                <Descriptions.Item label="Mismatch seen">
-                  <Fingerprint value={probe.mismatch_fingerprint} />
-                </Descriptions.Item>
-              )}
-            </Descriptions>
-            {alreadyPinned ? (
-              <Alert className="!mt-3" type="success" showIcon title="The device presents the pinned key." />
-            ) : (
+      {target && (
+        <Box className="px-2 border-0">
+          <IdentityPinSection
+            title="SSH host key"
+            targetId={target.id}
+            probe={probeKey}
+            accept={acceptKey}
+            accepting={acceptingKey}
+            mismatchTitle="The device presented a host key other than the pinned one."
+            details={(p) => <Descriptions.Item label="Key type">{p.key_type}</Descriptions.Item>}
+            compareHint={
               <>
-                <Alert
-                  className="!mt-3"
-                  type="warning"
-                  showIcon
-                  title="Compare before accepting"
-                  description={
-                    <>
-                      On the device console (not over this network path), show its key fingerprint, e.g.{' '}
-                      <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> on Linux, and check it is
-                      exactly the one presented above.
-                    </>
-                  }
-                />
-                <Checkbox className="!mt-3" checked={compared} onChange={(e) => setCompared(e.target.checked)}>
-                  I compared this fingerprint with the device and it matches.
-                </Checkbox>
+                Compare it with the fingerprint read on the device itself or over a trusted path (not this network
+                path), e.g. <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> on Linux, and check it is
+                exactly the one presented above.
               </>
-            )}
-          </>
-        )}
-        <ModalFooter>
-          <Button variant="admin" size="small" onClick={onClose}>
-            {alreadyPinned ? 'Close' : 'Cancel'}
-          </Button>
-          {probe && !alreadyPinned && (
-            <Button
-              variant="primary"
-              size="small"
-              disabled={!compared}
-              loading={accepting}
-              onClick={() => void accept()}
-            >
-              {probe.pinned_fingerprint ? 'Accept new key' : 'Accept key'}
-            </Button>
+            }
+          />
+          {withCert && (
+            <IdentityPinSection
+              title="API-SSL certificate"
+              targetId={target.id}
+              probe={probeCert}
+              accept={acceptCert}
+              accepting={acceptingCert}
+              mismatchTitle="The device presented an API-SSL certificate other than the pinned one."
+              details={(p) => (
+                <>
+                  <Descriptions.Item label="Subject">{p.subject}</Descriptions.Item>
+                  <Descriptions.Item label="Valid until">{p.not_after ? fmtTime(p.not_after) : '—'}</Descriptions.Item>
+                </>
+              )}
+              compareHint={
+                <>
+                  On the device console, run <code>/certificate print detail where name=&lt;api-ssl certificate&gt;</code>{' '}
+                  and check its <code>fingerprint</code> is the one presented above (RouterOS prints it in lower case
+                  without colons). Rotation is refused until both identities are pinned.
+                </>
+              }
+            />
           )}
-        </ModalFooter>
-      </Box>
+          <ModalFooter>
+            <Button variant="admin" size="small" onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </Box>
+      )}
     </Modal>
   );
 }

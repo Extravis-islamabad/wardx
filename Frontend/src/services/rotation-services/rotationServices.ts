@@ -11,6 +11,8 @@ export interface RotationStep {
   transcript: string | null;
   started_at: string;
   finished_at: string;
+  /** The device channel the step used (api-ssl, ssh), when it used one. */
+  channel?: string | null;
 }
 
 export interface RotationJob {
@@ -81,6 +83,8 @@ export interface AccountRotation {
   rotation_enabled: boolean;
   host_key_pinned: boolean;
   non_rotatable_reason: string | null;
+  /** Why the target's pinned identities block rotation now (missing pin, changed key or certificate). */
+  identity_blocker?: string | null;
   effective_policy: Record<string, unknown> | null;
   policy_error: string | null;
   effective_interval_days: number | null;

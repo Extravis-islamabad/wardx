@@ -12,6 +12,18 @@ export interface HostKeyProbe {
   mismatch_fingerprint: string | null;
 }
 
+/** The API-SSL certificate a target presents now (SHA-256 over DER, AA:BB:...), next to the pin. */
+export interface TlsCertProbe {
+  target_id: string;
+  presented_fingerprint: string;
+  subject: string;
+  not_after: string | null;
+  pinned_fingerprint: string | null;
+  matches_pin: boolean;
+  mismatch_at: string | null;
+  mismatch_fingerprint: string | null;
+}
+
 export interface Target {
   id: string;
   name: string;
@@ -28,6 +40,15 @@ export interface Target {
   /** Set when the device presented another key: rotation and verify are blocked until a key is accepted. */
   host_key_mismatch_at?: string | null;
   host_key_mismatch_fingerprint?: string | null;
+  /** MikroTik API-SSL port (null = 8729). */
+  api_port?: number | null;
+  /** False: the device offers only the cleartext API, so it is never rotated. */
+  api_tls?: boolean;
+  /** Pinned API-SSL certificate (SHA-256 over DER); a mismatch blocks rotation and verify. */
+  tls_cert_fingerprint?: string | null;
+  tls_cert_learned_at?: string | null;
+  tls_cert_mismatch_at?: string | null;
+  tls_cert_mismatch_fingerprint?: string | null;
   created_at: string;
   updated_at: string;
   /** Rotation's per-target switch (off by default). */
@@ -77,6 +98,18 @@ export const targetsService = {
 
   async resetHostKey(id: string): Promise<ApiResponse<Target>> {
     const { data } = await apiClient.post<ApiResponse<Target>>(`${BASE}/${id}/host-key/reset`);
+    return data;
+  },
+
+  /** Read the API-SSL certificate the target presents now (TLS handshake only; pins nothing). */
+  async probeTlsCert(id: string): Promise<ApiResponse<TlsCertProbe>> {
+    const { data } = await apiClient.post<ApiResponse<TlsCertProbe>>(`${BASE}/${id}/tls-cert/probe`);
+    return data;
+  },
+
+  /** Pin the certificate, only if the device still presents the fingerprint that was compared. */
+  async acceptTlsCert(id: string, fingerprint: string): Promise<ApiResponse<Target>> {
+    const { data } = await apiClient.post<ApiResponse<Target>>(`${BASE}/${id}/tls-cert/accept`, { fingerprint });
     return data;
   },
 };

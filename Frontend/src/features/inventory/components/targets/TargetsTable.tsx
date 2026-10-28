@@ -1,6 +1,6 @@
 import { Space, Tooltip, type TablePaginationConfig, type TableProps } from 'antd';
 import { Button, DataTable, StatusTag } from '@/components';
-import { Protocol, platformLabel } from '@/constants/enums/inventory';
+import { Protocol, platformLabel, usesTlsApi } from '@/constants/enums/inventory';
 import { StatusVariant } from '@/constants/enums/status';
 import { tableStateProps } from '@/lib/tableStateProps';
 import type { Target } from '@/services/inventory-services';
@@ -17,7 +17,32 @@ interface TargetsTableProps {
   onDelete: (target: Target) => void;
 }
 
-const HostKeyCell = ({ target }: { target: Target }) => {
+const CertCell = ({ target }: { target: Target }) => {
+  if (!usesTlsApi(target?.platform) || target?.api_tls === false) return null;
+  if (target.tls_cert_mismatch_at) {
+    return (
+      <Tooltip
+        title={`API-SSL presented ${target.tls_cert_mismatch_fingerprint ?? 'an unreadable certificate'} instead of the pinned ${target.tls_cert_fingerprint ?? '(none)'}. Rotation and verify are blocked until a certificate is accepted.`}
+      >
+        <StatusTag label="cert changed" variant={StatusVariant.DANGER} />
+      </Tooltip>
+    );
+  }
+  if (target.tls_cert_fingerprint) {
+    return (
+      <Tooltip title={`API-SSL ${target.tls_cert_fingerprint} — pinned ${target.tls_cert_learned_at ?? ''}`}>
+        <StatusTag label="cert pinned" variant={StatusVariant.SUCCESS} />
+      </Tooltip>
+    );
+  }
+  return (
+    <Tooltip title="Rotation needs the API-SSL certificate pinned (Host key)">
+      <StatusTag label="cert not pinned" variant={StatusVariant.OUTLINE} />
+    </Tooltip>
+  );
+};
+
+const SshKeyCell = ({ target }: { target: Target }) => {
   if (target?.host_key_mismatch_at) {
     return (
       <Tooltip
@@ -43,6 +68,13 @@ const HostKeyCell = ({ target }: { target: Target }) => {
   }
   return <>—</>;
 };
+
+const HostKeyCell = ({ target }: { target: Target }) => (
+  <Space size={4} wrap>
+    <SshKeyCell target={target} />
+    <CertCell target={target} />
+  </Space>
+);
 
 export function TargetsTable({
   query,
