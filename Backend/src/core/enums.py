@@ -69,3 +69,13 @@ class CheckoutStatus(StrEnum):
     RETURNED = "returned"
     EXPIRED = "expired"
     REVOKED = "revoked"
+
+
+class KeyPurpose(StrEnum):
+    """What a tenant key protects (Backend/TENANCY_KEYS.md §2)."""
+
+    VAULT = "vault"
+    BACKUP = "backup"
+    FILES = "files"
+    AUDIT = "audit"
+    IDENTITY = "identity"

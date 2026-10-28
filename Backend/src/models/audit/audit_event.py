@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, String
+from sqlalchemy import BigInteger, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,3 +30,5 @@ class AuditEvent(Base):
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     prev_hash: Mapped[str] = mapped_column(String(64))
     hash: Mapped[str] = mapped_column(String(64))
+    # None: legacy SHA-256 event; otherwise the audit key version that HMAC'd it.
+    key_version: Mapped[int | None] = mapped_column(Integer)

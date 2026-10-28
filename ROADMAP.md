@@ -24,13 +24,13 @@ cross-tenant isolation, which is deferred with tenancy (below).
 | Identity: local users, argon2id, JWT, lockout, TOTP MFA, LDAP/AD sign-in, directory sync | ✅ |
 | Access: request → approve (never your own) → check-out → reveal → check-in, expiry | ✅ |
 | SSH session gateway: injection, deny rules, recording, kill, host-key pinning | ✅ |
-| Hash-chained append-only audit with verification | ✅ |
+| Hash-chained append-only audit with verification; keyed (HMAC) since the tenancy seams | ✅ |
 | Re-layer backend and frontend onto exact MonetX layering | ✅ |
 | Permission codenames instead of role checks | ✅ |
 | Tenant key management design (`Backend/TENANCY_KEYS.md`, revision 3, decisions in §10) | ✅ approved |
 | Tenancy core (Part A): parent and tenant DBs, file and SoftHSM2 providers, key hierarchy, re-wrap job, recording encryption, cross-tenant tests on | ⏸ |
 | Tenancy hardening (Part B): audit sink and checkpoints, backup/restore, ceremony tooling, TPM provider, cloud KMS, compromise tooling | ⏸ |
-| Tenancy seams so Phase 1 needs no rewrite: key-provider interface (file provider only), keyed HMAC audit chain, single default-tenant context | ⬜ |
+| Tenancy seams so Phase 1 needs no rewrite: key-provider interface (file provider only), keyed HMAC audit chain, single default-tenant context | ✅ |
 | MonetX envelope and pagination shape; MonetX integration contract (SSO, device sync, credential provider for NCM) | ⬜ |
 
 > **Tenancy deferred (2026-10-28).** Parts A and B are on hold. `Backend/TENANCY_KEYS.md`

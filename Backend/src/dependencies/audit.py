@@ -11,13 +11,19 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import get_settings, resolve_audit_legacy_max_seq
 from src.dependencies.database import SQLSessionDep
+from src.dependencies.keys import build_tenant_key_service
 from src.repositories.audit.audit_event_repository import AuditEventRepository
 from src.services.audit.audit_service import AuditService
 
 
 def build_audit_service(session: AsyncSession) -> AuditService:
-    return AuditService(AuditEventRepository(session))
+    return AuditService(
+        AuditEventRepository(session),
+        build_tenant_key_service(session),
+        legacy_max_seq=resolve_audit_legacy_max_seq(get_settings()),
+    )
 
 
 async def get_audit_service(session: SQLSessionDep) -> AuditService:

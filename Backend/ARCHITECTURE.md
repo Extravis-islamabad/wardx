@@ -41,5 +41,13 @@ Reference module: **inventory** (targets, accounts). Copy it.
   entry in `PUBLIC_ROUTES` (reviewed); crypto refuses wrong keys and any tampered byte; the audit
   table is append-only and edits or deletions break the chain; cross-tenant tests switch on with
   the tenancy step.
+- **Tenancy seams** (multi-tenancy is deferred; `TENANCY_KEYS.md` is the approved design):
+  - Take the DB session from `SQLSessionDep` (or `current_tenant().session_factory()` outside a
+    request), never from `core.db` directly in new code.
+  - Encrypt only through the vault service or `TenantKeyService`. Both go through the
+    `KeyProvider` (`src/keys/`), and nothing else touches key-encryption keys.
+    `tests/security/test_key_boundary.py` enforces this.
+  - Per-tenant purpose keys (`KeyPurpose`) are created through `TenantKeyService` and stored
+    only wrapped in `keystore.tenant_keys`.
 - **Migrations**: raw SQL `migrations/NNN_name.sql`, applied in order, idempotent.
 - No file over 500 lines; split by sub-area like MonetX.

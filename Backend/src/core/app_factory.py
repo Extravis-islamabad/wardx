@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.core.config import (
     Settings,
     get_settings,
+    pin_dev_audit_legacy_max_seq,
     resolve_jwt_secret,
     resolve_vault_kek,
 )
@@ -21,6 +22,7 @@ from src.dependencies.identity import build_user_service
 from src.errors.handlers import register_exception_handlers
 from src.keys.file_provider import FileKeyProvider
 from src.keys.runtime import set_key_provider
+from src.repositories.audit.audit_event_repository import AuditEventRepository
 from src.routers.v1 import api_router
 from src.scheduler.jobs import build_scheduler
 
@@ -36,6 +38,11 @@ async def startup(settings: Settings) -> None:
     engine = init_engine(settings.database_url, settings.db_pool_size)
     await run_migrations(engine)
     async with session_factory()() as session:
+        # Before any new (keyed) event: pin where a dev database's legacy chain ends.
+        pin_dev_audit_legacy_max_seq(
+            settings, await AuditEventRepository(session).last_unkeyed_seq()
+        )
+        await session.rollback()
         await build_user_service(session).bootstrap_admin(settings)
 
 

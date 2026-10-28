@@ -28,6 +28,7 @@ def _to_dto(row: AuditEvent) -> AuditEventDTO:
         details=row.details,
         prev_hash=row.prev_hash,
         hash=row.hash,
+        key_version=row.key_version,
     )
 
 
@@ -37,6 +38,14 @@ class AuditEventRepository(BaseRepository):
         await self._session.execute(
             text("SELECT pg_advisory_xact_lock(:k)"), {"k": _AUDIT_LOCK_KEY}
         )
+
+    async def last_unkeyed_seq(self) -> int:
+        """The newest legacy (pre-HMAC) event, or 0 when there are none."""
+        return (
+            await self._session.scalar(
+                select(func.max(AuditEvent.seq)).where(AuditEvent.key_version.is_(None))
+            )
+        ) or 0
 
     async def last_hash(self) -> str | None:
         return await self._session.scalar(

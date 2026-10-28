@@ -29,6 +29,11 @@ class Settings(BaseSettings):
 
     vault_kek: str = ""
     vault_kek_retired: str = ""
+    # Last audit seq allowed to be an unkeyed (pre-HMAC) legacy event. 0 = none, the
+    # right value for every new install. Kept outside the database on purpose: a
+    # database superuser must not be able to widen it. Development pins it once
+    # in .wardx/audit-legacy-max-seq.
+    audit_legacy_max_seq: int = 0
 
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str = ""
@@ -106,6 +111,29 @@ def resolve_vault_kek(settings: Settings) -> str:
     if settings.is_production:
         raise RuntimeError("WARDX_VAULT_KEK is required in production")
     return _dev_secret_file("kek.key", 32)
+
+
+AUDIT_LEGACY_FILE = "audit-legacy-max-seq"
+
+
+def resolve_audit_legacy_max_seq(settings: Settings) -> int:
+    if settings.audit_legacy_max_seq:
+        return settings.audit_legacy_max_seq
+    path = DEV_STATE_DIR / AUDIT_LEGACY_FILE
+    if settings.environment == "development" and path.exists():
+        return int(path.read_text().strip() or 0)
+    return 0
+
+
+def pin_dev_audit_legacy_max_seq(settings: Settings, last_unkeyed_seq: int) -> None:
+    """Development only: record, once, where this database's legacy audit segment ends."""
+    path = DEV_STATE_DIR / AUDIT_LEGACY_FILE
+    if settings.environment != "development" or settings.audit_legacy_max_seq or path.exists():
+        return
+    DEV_STATE_DIR.mkdir(mode=0o700, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(f"{last_unkeyed_seq}\n")
 
 
 @lru_cache

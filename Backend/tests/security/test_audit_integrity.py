@@ -168,3 +168,82 @@ async def test_truncated_tail_is_detected(client, admin):
                         for k, v in last.items()
                     },
                 )
+
+
+async def test_chain_rewritten_without_the_key_is_detected(client, admin):
+    """A superuser drops the guard, edits events and recomputes the whole chain with plain
+    SHA-256 (all they can do without the audit key). Verification fails."""
+    from src.services.audit.audit_chain import GENESIS_HASH, canonical, chain_hash
+
+    await _ensure_events(client, admin)
+    async with session_factory()() as session:
+        original = (
+            await session.execute(
+                text("SELECT seq, actor_name, prev_hash, hash, key_version FROM audit.events")
+            )
+        ).all()
+        rows = (
+            (await session.execute(text("SELECT * FROM audit.events ORDER BY seq")))
+            .mappings()
+            .all()
+        )
+        async with _TriggersOff(session):
+            prev = GENESIS_HASH
+            for r in rows:
+                body = canonical(
+                    event_id=r["id"],
+                    occurred_at=r["occurred_at"],
+                    actor_id=r["actor_id"],
+                    actor_name="forger",
+                    action=r["action"],
+                    object_type=r["object_type"],
+                    object_id=r["object_id"],
+                    outcome=r["outcome"],
+                    source_ip=r["source_ip"],
+                    details=r["details"],
+                )
+                h = chain_hash(prev, body)
+                await session.execute(
+                    text(
+                        "UPDATE audit.events SET actor_name = 'forger', key_version = NULL, "
+                        "prev_hash = :p, hash = :h WHERE seq = :s"
+                    ),
+                    {"p": prev, "h": h, "s": r["seq"]},
+                )
+                prev = h
+        result = await _verify(client, admin)
+        assert result["ok"] is False and result["broken_at_seq"] == rows[0]["seq"]
+        async with _TriggersOff(session):
+            for seq, actor, p, h, kv in original:
+                await session.execute(
+                    text(
+                        "UPDATE audit.events SET actor_name = :a, prev_hash = :p, hash = :h, "
+                        "key_version = :k WHERE seq = :s"
+                    ),
+                    {"a": actor, "p": p, "h": h, "k": kv, "s": seq},
+                )
+    assert (await _verify(client, admin))["ok"] is True
+
+
+async def test_audit_key_is_stored_wrapped_and_rows_are_immutable(client, admin):
+    await _ensure_events(client, admin, 1)
+    async with session_factory()() as session:
+        row = (
+            (
+                await session.execute(
+                    text("SELECT * FROM keystore.tenant_keys WHERE purpose = 'audit'")
+                )
+            )
+            .mappings()
+            .one()
+        )
+        # 32-byte key + 16-byte GCM tag: wrapped, never the raw key.
+        assert row["state"] == "active" and len(row["wrapped_key"]) == 48
+        for statement in (
+            "DELETE FROM keystore.tenant_keys",
+            "UPDATE keystore.tenant_keys SET wrapped_key = '\\x00'",
+            "UPDATE keystore.tenant_keys SET version = 9",
+        ):
+            with pytest.raises(Exception, match="keystore.tenant_keys"):
+                await session.execute(text(statement))
+            await session.rollback()

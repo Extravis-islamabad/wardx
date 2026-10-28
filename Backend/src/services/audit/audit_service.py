@@ -1,7 +1,8 @@
-"""Writes, lists and verifies the hash-chained audit trail.
+"""Writes, lists and verifies the keyed, hash-chained audit trail.
 
 ``record`` runs inside the caller's transaction, so an action and its audit
-event commit or roll back together.
+event commit or roll back together. Each event is HMAC'd with the tenant's
+audit key (see audit_chain.py for the chain rules).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import Any
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
 from src.core.context import Actor
+from src.core.enums import KeyPurpose
 from src.models import AuditEvent, utcnow
 from src.repositories.audit.audit_event_repository import AuditEventRepository
 from src.services.audit.audit_chain import (
@@ -20,13 +22,19 @@ from src.services.audit.audit_chain import (
     chain_hash,
     verify_events,
 )
+from src.services.keys.tenant_key_service import TenantKeyService
 
 _VERIFY_BATCH = 2000
 
 
 class AuditService:
-    def __init__(self, repo: AuditEventRepository) -> None:
+    def __init__(
+        self, repo: AuditEventRepository, keys: TenantKeyService, *, legacy_max_seq: int = 0
+    ) -> None:
         self._repo = repo
+        self._tenant_keys = keys
+        # Last seq allowed to be an unkeyed legacy event; pinned outside the database.
+        self._legacy_max_seq = legacy_max_seq
 
     async def record(
         self,
@@ -38,6 +46,7 @@ class AuditService:
         outcome: str = "success",
         details: dict[str, Any] | None = None,
     ) -> AuditEventDTO:
+        key_version, key = await self._tenant_keys.active(KeyPurpose.AUDIT)
         await self._repo.lock_chain()
         prev = await self._repo.last_hash() or GENESIS_HASH
         event_id = uuid.uuid4()
@@ -54,6 +63,7 @@ class AuditService:
             outcome=outcome,
             source_ip=actor.source_ip,
             details=details,
+            key_version=key_version,
         )
         return await self._repo.add(
             AuditEvent(
@@ -68,24 +78,36 @@ class AuditService:
                 source_ip=actor.source_ip,
                 details=details,
                 prev_hash=prev,
-                hash=chain_hash(prev, body),
+                hash=chain_hash(prev, body, key),
+                key_version=key_version,
             )
         )
 
     async def verify_chain(self) -> ChainCheck:
         """Walk the whole chain in batches of ``_VERIFY_BATCH`` events."""
-        prev, total, after = GENESIS_HASH, 0, 0
+        prev, total, after, keyed_seen = GENESIS_HASH, 0, 0, False
+        keys: dict[int, bytes] = {}
         while True:
             rows = await self._repo.batch_after(after, _VERIFY_BATCH)
             if not rows:
                 return ChainCheck(True, total, prev)
-            result = verify_events(rows, prev)
+            for v in {r.key_version for r in rows if r.key_version is not None} - keys.keys():
+                key = await self._tenant_keys.version(KeyPurpose.AUDIT, v)
+                if key is not None:
+                    keys[v] = key
+            result = verify_events(
+                rows,
+                prev,
+                keys=keys,
+                legacy_max_seq=self._legacy_max_seq,
+                keyed_seen=keyed_seen,
+            )
             total += result.checked
             if not result.ok:
                 return ChainCheck(
                     False, total, result.last_hash, result.broken_at_seq, result.reason
                 )
-            prev, after = result.last_hash, rows[-1].seq
+            prev, after, keyed_seen = result.last_hash, rows[-1].seq, result.keyed_seen
 
     async def list_events(
         self, filters: AuditFilterDTO, *, page: int, page_size: int
