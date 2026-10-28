@@ -44,7 +44,6 @@ def _to_dto(row: Account, active_checkouts: int = 0) -> AccountDTO:
         exclusive_checkout=row.exclusive_checkout,
         max_checkout_minutes=row.max_checkout_minutes,
         rotation_interval_days=row.rotation_interval_days,
-        rotate_after_checkin=row.rotate_after_checkin,
         password_length=row.password_length,
         last_rotated_at=row.last_rotated_at,
         last_rotation_status=row.last_rotation_status,

@@ -34,8 +34,6 @@ class Account(Base):
     max_checkout_minutes: Mapped[int] = mapped_column(Integer, default=60)
     secret_updated_at: Mapped[datetime | None] = mapped_column(TZ)
     rotation_interval_days: Mapped[int | None] = mapped_column(Integer)
-    # Retired (kept, no longer read): rotate_after_use replaces it.
-    rotate_after_checkin: Mapped[bool] = mapped_column(Boolean, default=False)
     rotate_after_use: Mapped[bool] = mapped_column(Boolean, default=False)
     password_length: Mapped[int] = mapped_column(Integer, default=24)
     last_rotated_at: Mapped[datetime | None] = mapped_column(TZ)

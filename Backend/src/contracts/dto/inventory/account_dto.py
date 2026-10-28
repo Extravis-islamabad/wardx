@@ -38,7 +38,6 @@ class AccountDTO:
     exclusive_checkout: bool
     max_checkout_minutes: int
     rotation_interval_days: int | None
-    rotate_after_checkin: bool
     password_length: int
     last_rotated_at: datetime | None
     last_rotation_status: str | None
