@@ -24,6 +24,7 @@ class CheckoutResponse(BaseModel):
     checked_out_at: datetime
     expires_at: datetime
     checked_in_at: datetime | None
+    emergency: bool = False
 
 
 class RevealedSecretResponse(BaseModel):

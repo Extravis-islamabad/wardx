@@ -27,6 +27,7 @@ def _to_dto(row: Checkout) -> CheckoutDTO:
         checked_out_at=row.checked_out_at,
         expires_at=row.expires_at,
         checked_in_at=row.checked_in_at,
+        emergency=row.emergency,
     )
 
 

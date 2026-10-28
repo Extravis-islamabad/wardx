@@ -29,6 +29,14 @@ class MfaRepository(BaseRepository):
         row = await self._session.get(UserMfa, user_id, with_for_update=lock or None)
         return _to_dto(row) if row else None
 
+    async def enabled_for(self, user_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+        if not user_ids:
+            return set()
+        rows = await self._session.scalars(
+            select(UserMfa.user_id).where(UserMfa.user_id.in_(user_ids), UserMfa.enabled)
+        )
+        return set(rows)
+
     async def create(self, values: dict[str, Any]) -> None:
         self._session.add(UserMfa(**values))
         await self._session.flush()

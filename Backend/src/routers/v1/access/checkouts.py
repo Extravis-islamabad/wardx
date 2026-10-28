@@ -50,6 +50,7 @@ def _to_response(dto: CheckoutDTO) -> CheckoutResponse:
         checked_out_at=dto.checked_out_at,
         expires_at=dto.expires_at,
         checked_in_at=dto.checked_in_at,
+        emergency=dto.emergency,
     )
 
 

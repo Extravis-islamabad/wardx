@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +35,8 @@ class Checkout(Base):
         UUID(as_uuid=True), ForeignKey("iam.users.id")
     )
     status: Mapped[str] = mapped_column(String(20), default="active")
+    # A break-glass reveal (POST /accounts/{id}/emergency-reveal).
+    emergency: Mapped[bool] = mapped_column(Boolean, default=False)
 
     account: Mapped[Account] = relationship(lazy="joined", innerjoin=True)
     user: Mapped[User] = relationship(foreign_keys=[user_id], lazy="joined", innerjoin=True)

@@ -4,13 +4,16 @@ GET   /users                            — page through users (search)
 POST  /users                            — create a local user
 PATCH /users/{user_id}                  — change profile, role or active state
 POST  /users/{user_id}/reset-password   — set a new password (signs the user out)
-POST  /users/{user_id}/mfa/reset        — remove a user's MFA so they re-enrol
+POST  /users/{user_id}/mfa/reset        — remove a user's MFA so they re-enrol (revokes
+                                          break-glass access)
+PUT   /users/{user_id}/permissions/{codename}  — grant break-glass (access.emergency)
+DELETE /users/{user_id}/permissions/{codename} — revoke it
 """
 
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
 
@@ -34,7 +37,7 @@ from src.contracts.schemas.responses.common import (
 from src.contracts.schemas.responses.identity.user_responses import UserResponse
 from src.core.permissions import USERS_MANAGE
 from src.dependencies.auth import ActorDep, require_permission
-from src.dependencies.identity import MfaServiceDep, UserServiceDep
+from src.dependencies.identity import MfaServiceDep, UserGrantServiceDep, UserServiceDep
 from src.routers.v1.identity.mappers import user_response
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -49,14 +52,26 @@ router = APIRouter(prefix="/users", tags=["users"])
 )
 async def list_users(
     service: UserServiceDep,
+    grants: UserGrantServiceDep,
     paging: Annotated[PageParams, Depends()],
     search: Annotated[str | None, Query(max_length=100)] = None,
 ) -> PaginatedAPIResponse[UserResponse]:
     rows, total = await service.list(
         UserFilterDTO(search=search), page=paging.page, page_size=paging.page_size
     )
+    ids = [u.id for u in rows]
+    direct = await grants.codenames_for(ids)
+    mfa = await grants.mfa_enabled_for(ids)
     return PaginatedAPIResponse[UserResponse](
-        data=[user_response(u) for u in rows],
+        data=[
+            user_response(u).model_copy(
+                update={
+                    "direct_permissions": sorted(direct.get(u.id, [])),
+                    "mfa_enabled": u.id in mfa,
+                }
+            )
+            for u in rows
+        ],
         total=total,
         page=paging.page,
         page_size=paging.page_size,
@@ -142,3 +157,39 @@ async def reset_mfa(
 ) -> APIResponse[None]:
     await service.admin_reset(actor, user_id)
     return ok(None, "MFA removed; the user sets it up again at next sign-in")
+
+
+GrantableCodename = Literal["access.emergency"]
+
+
+@router.put(
+    "/{user_id}/permissions/{codename}",
+    response_model=APIResponse[None],
+    dependencies=[Depends(require_permission(USERS_MANAGE))],
+    summary="Grant break-glass access to a local, MFA-enrolled user (never yourself)",
+    responses={
+        **UNAUTHORIZED_RESPONSE,
+        **FORBIDDEN_RESPONSE,
+        **NOT_FOUND_RESPONSE,
+        **CONFLICT_RESPONSE,
+    },
+)
+async def grant_permission(
+    user_id: uuid.UUID, codename: GrantableCodename, service: UserGrantServiceDep, actor: ActorDep
+) -> APIResponse[None]:
+    await service.grant(actor, user_id, codename)
+    return ok(None, "Granted; a high-severity alert was raised")
+
+
+@router.delete(
+    "/{user_id}/permissions/{codename}",
+    response_model=APIResponse[None],
+    dependencies=[Depends(require_permission(USERS_MANAGE))],
+    summary="Revoke break-glass access",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
+)
+async def revoke_permission(
+    user_id: uuid.UUID, codename: GrantableCodename, service: UserGrantServiceDep, actor: ActorDep
+) -> APIResponse[None]:
+    await service.revoke(actor, user_id, codename)
+    return ok(None, "Revoked; a high-severity alert was raised")

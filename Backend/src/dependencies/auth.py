@@ -10,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.contracts.dto.identity.user_dto import UserDTO
 from src.core.context import Actor
 from src.core.enums import Role
-from src.dependencies.identity import AuthServiceDep, MfaServiceDep
+from src.dependencies.identity import AuthServiceDep, MfaServiceDep, UserGrantServiceDep
 from src.errors.exceptions import ForbiddenError, MfaEnrollmentRequired, UnauthorizedError
 
 _bearer = HTTPBearer(auto_error=False)
@@ -45,9 +45,13 @@ async def get_current_user(
 CurrentUserDep = Annotated[UserDTO, Depends(get_current_user)]
 
 
-async def get_actor(user: CurrentUserDep, request: Request) -> Actor:
+async def get_actor(user: CurrentUserDep, request: Request, grants: UserGrantServiceDep) -> Actor:
     return Actor(
-        id=user.id, username=user.username, role=Role(user.role), source_ip=client_ip(request)
+        id=user.id,
+        username=user.username,
+        role=Role(user.role),
+        source_ip=client_ip(request),
+        grants=await grants.codenames(user.id),
     )
 
 
@@ -55,7 +59,8 @@ ActorDep = Annotated[Actor, Depends(get_actor)]
 
 
 def require_permission(*codenames: str):
-    """Dependency factory: the actor, if their role holds ANY of the codenames.
+    """Dependency factory: the actor, if they hold ANY of the codenames (through their
+    role or a direct grant).
 
     Use as ``dependencies=[Depends(require_permission("inventory.manage"))]`` and
     take ``ActorDep`` in the handler when it needs the actor; FastAPI resolves

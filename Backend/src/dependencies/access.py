@@ -14,14 +14,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import get_settings
 from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
+from src.dependencies.identity import build_alert_service
 from src.dependencies.inventory import build_account_service
 from src.dependencies.safes import build_safe_access_service
 from src.dependencies.vault import build_vault_service
 from src.repositories.access.access_request_repository import AccessRequestRepository
 from src.repositories.access.checkout_repository import CheckoutRepository
+from src.repositories.identity.mfa_repository import MfaRepository
+from src.repositories.identity.user_repository import UserRepository
 from src.repositories.inventory.account_repository import AccountRepository
 from src.services.access.access_request_service import AccessRequestService
 from src.services.access.checkout_service import CheckoutService
+from src.services.access.emergency_service import EmergencyAccessService
 
 
 def build_access_request_service(session: AsyncSession) -> AccessRequestService:
@@ -54,3 +58,22 @@ async def get_checkout_service(session: SQLSessionDep) -> CheckoutService:
 
 AccessRequestServiceDep = Annotated[AccessRequestService, Depends(get_access_request_service)]
 CheckoutServiceDep = Annotated[CheckoutService, Depends(get_checkout_service)]
+
+
+def build_emergency_access_service(session: AsyncSession) -> EmergencyAccessService:
+    return EmergencyAccessService(
+        build_account_service(session),
+        CheckoutRepository(session),
+        UserRepository(session),
+        MfaRepository(session),
+        build_vault_service(session),
+        build_alert_service(session),
+        build_audit_service(session),
+    )
+
+
+async def get_emergency_access_service(session: SQLSessionDep) -> EmergencyAccessService:
+    return build_emergency_access_service(session)
+
+
+EmergencyAccessServiceDep = Annotated[EmergencyAccessService, Depends(get_emergency_access_service)]

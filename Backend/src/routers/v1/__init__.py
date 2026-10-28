@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from src.routers.v1.access import checkouts, requests
+from src.routers.v1.access import checkouts, emergency, requests
 from src.routers.v1.audit import audit_events
 from src.routers.v1.dashboard import dashboard
 from src.routers.v1.directory import directory
@@ -10,6 +10,7 @@ from src.routers.v1.health import health
 from src.routers.v1.identity import auth, mfa, users
 from src.routers.v1.inventory import accounts, targets
 from src.routers.v1.safes import members, safes
+from src.routers.v1.security import alerts
 from src.routers.v1.sessions import command_rules, gateway, sessions
 
 api_router = APIRouter()
@@ -25,6 +26,8 @@ for _module in (
     members,
     requests,
     checkouts,
+    emergency,
+    alerts,
     audit_events,
     dashboard,
     gateway,

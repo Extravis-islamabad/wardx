@@ -15,7 +15,7 @@ from fastapi.routing import APIRoute
 
 from src.core.app_factory import create_app
 from src.core.enums import Role
-from src.core.permissions import ROLE_PERMISSIONS
+from src.core.permissions import ALL_PERMISSIONS, DIRECT_GRANT_ONLY, ROLE_PERMISSIONS
 
 # Reachable without a codename. Changing this list is a security review item.
 PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
@@ -79,10 +79,16 @@ def test_public_list_has_no_stale_or_gated_entries():
 
 
 def test_every_codename_is_a_known_permission():
-    # A typo in a codename would lock everyone out of a route (admin holds them all).
-    known = ROLE_PERMISSIONS[Role.ADMIN]
-    unknown = sorted({c for _, _, codes in ROUTES for c in codes} - known)
+    # A typo in a codename would lock everyone out of a route.
+    unknown = sorted({c for _, _, codes in ROUTES for c in codes} - ALL_PERMISSIONS)
     assert unknown == []
+
+
+def test_admin_holds_everything_but_direct_grant_only_codenames():
+    # Break-glass (access.emergency) is a per-user grant only: no role holds it.
+    assert ALL_PERMISSIONS - ROLE_PERMISSIONS[Role.ADMIN] == DIRECT_GRANT_ONLY
+    for role in Role:
+        assert not ROLE_PERMISSIONS[role] & DIRECT_GRANT_ONLY
 
 
 def _fill(path: str) -> str:

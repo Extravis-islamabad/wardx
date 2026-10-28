@@ -21,6 +21,7 @@ class CheckoutDTO:
     checked_out_at: datetime
     expires_at: datetime
     checked_in_at: datetime | None
+    emergency: bool = False
 
     @property
     def account_id(self) -> uuid.UUID:

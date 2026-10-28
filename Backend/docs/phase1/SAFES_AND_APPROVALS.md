@@ -90,12 +90,30 @@ data: migrations only add, backfill and move.
 
 ### Break-glass (`access.emergency`)
 
+- **Break-glass must not depend on the directory.** Only **local** users (`auth_source`
+  `local`) who are **enrolled in MFA** can hold it. Granting it to a directory user, or to
+  a local user without MFA, is refused (409 `not_eligible`). Directory groups and roles can
+  never hold it: it is a per-user direct grant only.
 - **Granting it:**
   - A per-user grant in `iam.user_permissions` (direct user grants, the MonetX "UBAC" idea).
-    Only a holder of `users.manage` can grant it, never to themselves.
+    Only a holder of `users.manage` can grant it, never to themselves (403
+    `self_grant_forbidden`, audited as a failure). That includes re-granting after an
+    automatic revoke: another admin must do it.
+  - API: `PUT` / `DELETE /users/{id}/permissions/access.emergency`. A revoke stamps
+    `revoked_at`; grant rows are kept as history.
   - The grant and the revoke are each audited and each raise a high-severity alert.
   - `/auth/me` returns the caller's effective global permissions (role bundle plus direct
     grants), and the frontend gates on that list.
+- **Safeguards:**
+  - At the time of use, an emergency reveal also requires the holder to still be local,
+    active and enrolled in MFA. A refusal is audited as a failure.
+  - A holder can't turn their own MFA off while holding the grant (409 with a clear
+    message).
+  - An admin MFA reset on a holder revokes the grant automatically, in the same
+    transaction. The revocation is audited (`user.revoke`, reason `mfa_reset`) and raises a
+    high alert.
+- **Eligible holder** (used by the health check and coverage warning below): local, active,
+  enrolled in MFA, and holding the grant.
 - **Using it:**
   - `POST /accounts/{id}/emergency-reveal {reason}`, with a reason of at least 20 characters.
   - It reveals from any safe, regardless of membership, and records an emergency check-out.
@@ -105,6 +123,11 @@ data: migrations only add, backfill and move.
   - Unacknowledged high alerts show as a banner on the dashboard for holders of
     `audit.view`. An admin acknowledges them, which is audited.
   - Alerts are never deleted.
+  - API:
+    - `GET /alerts`, filtered by `severity` and `acknowledged`, needs `audit.view`.
+    - `POST /alerts/{id}/acknowledge` needs `alerts.acknowledge`, a new admin codename.
+  - A database trigger refuses any delete, and any update other than acknowledging an
+    unacknowledged alert.
 
 ### Migration (no data loss)
 
@@ -133,6 +156,9 @@ data: migrations only add, backfill and move.
   and 404 for unlisted accounts.
 - **Deleting a target** deletes its accounts, so it needs `manage_accounts` on every safe
   those accounts sit in.
+- **Emergency check-out:** it lasts min(60 min, the account's limit). It ignores
+  exclusivity, which is the point of break-glass. It is refused while the holder already
+  holds an active check-out of the account.
 - **Reveal** re-checks `retrieve` on every call, so removing a member stops their next reveal
   even mid check-out. A check-out the gateway took for a `use`-only member can't be revealed.
 

@@ -22,3 +22,12 @@ class UserResponse(BaseModel):
     auth_source: str = "local"
     disabled_reason: str | None = None
     created_at: datetime
+    # Direct per-user grants (break-glass) and MFA state, filled in on the users list.
+    direct_permissions: list[str] = []
+    mfa_enabled: bool | None = None
+
+
+class MeResponse(UserResponse):
+    # Effective global permissions: the role's bundle plus direct grants. The console
+    # gates on this list.
+    permissions: list[str]

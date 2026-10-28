@@ -3,7 +3,7 @@
 POST /auth/login             — password sign-in (returns tokens, or an MFA challenge)
 POST /auth/refresh           — new tokens from a refresh token
 POST /auth/logout            — sign out of every session
-GET  /auth/me                — the signed-in user
+GET  /auth/me                — the signed-in user and their effective permissions
 POST /auth/change-password   — change your own (local) password
 """
 
@@ -27,8 +27,8 @@ from src.contracts.schemas.responses.identity.auth_responses import (
     LoginResultResponse,
     TokenPairResponse,
 )
-from src.contracts.schemas.responses.identity.user_responses import UserResponse
-from src.core.permissions import PROFILE_SELF
+from src.contracts.schemas.responses.identity.user_responses import MeResponse
+from src.core.permissions import PROFILE_SELF, effective_permissions
 from src.dependencies.auth import ActorDep, CurrentUserDep, client_ip, require_permission
 from src.dependencies.identity import AuthServiceDep
 from src.routers.v1.identity.mappers import login_response, token_response, user_response
@@ -79,13 +79,22 @@ async def logout(service: AuthServiceDep, actor: ActorDep) -> APIResponse[None]:
 
 @router.get(
     "/me",
-    response_model=APIResponse[UserResponse],
+    response_model=APIResponse[MeResponse],
     dependencies=[Depends(require_permission(PROFILE_SELF))],
-    summary="The signed-in user",
+    summary="The signed-in user and their effective permissions",
     responses={**UNAUTHORIZED_RESPONSE},
 )
-async def me(user: CurrentUserDep) -> APIResponse[UserResponse]:
-    return ok(user_response(user))
+async def me(user: CurrentUserDep, actor: ActorDep) -> APIResponse[MeResponse]:
+    perms = sorted(effective_permissions(actor.role, actor.grants))
+    return ok(
+        MeResponse(
+            **{
+                **user_response(user).model_dump(),
+                "direct_permissions": sorted(actor.grants),
+                "permissions": perms,
+            }
+        )
+    )
 
 
 @router.post(

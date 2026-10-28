@@ -14,12 +14,15 @@ class Actor:
     username: str
     role: Role
     source_ip: str | None = None
+    # Direct per-user grants (iam.user_permissions), on top of the role's bundle.
+    grants: frozenset[str] = frozenset()
 
     def can(self, codename: str) -> bool:
-        """Whether the actor holds a permission codename (see src/core/permissions.py)."""
+        """Whether the actor holds a permission codename (see src/core/permissions.py):
+        through their role, or a direct grant."""
         from src.core.permissions import role_has
 
-        return role_has(self.role, codename)
+        return role_has(self.role, codename) or codename in self.grants
 
 
 # Background jobs act as the system: no user id, audited under this name.

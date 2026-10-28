@@ -7,7 +7,10 @@ Rules:
   with the same code cannot both win); each recovery code works once.
 - Failed codes count toward the same lockout as failed passwords, and the
   failure audit commits before the error is raised.
-- Roles in ``mfa_required_roles`` cannot turn MFA off.
+- Roles in ``mfa_required_roles`` cannot turn MFA off, and neither can a holder
+  of break-glass access (it requires MFA); an administrator revokes it first.
+- An administrator's MFA reset of a break-glass holder revokes the grant in the
+  same transaction (audited, high alert).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from src.core import totp
 from src.core.config import Settings
 from src.core.context import Actor
 from src.core.enums import Role
+from src.core.permissions import DIRECT_GRANT_ONLY
 from src.errors.exceptions import (
     AccountLockedError,
     ConflictError,
@@ -31,6 +35,7 @@ from src.models import utcnow
 from src.repositories.identity.mfa_repository import MfaRepository
 from src.repositories.identity.user_repository import UserRepository
 from src.services.audit.audit_service import AuditService
+from src.services.identity.user_grant_service import UserGrantService
 from src.services.vault.vault_service import VaultService
 
 MFA_SECRET = "mfa_totp"
@@ -44,12 +49,14 @@ class MfaService:
         vault: VaultService,
         audit: AuditService,
         settings: Settings,
+        grants: UserGrantService,
     ) -> None:
         self._mfa = mfa
         self._users = users
         self._vault = vault
         self._audit = audit
         self._settings = settings
+        self._grants = grants
 
     def is_required(self, role: str) -> bool:
         return role in self._settings.mfa_required_roles
@@ -174,6 +181,11 @@ class MfaService:
         user = await self._users.get(actor.id, lock=True)
         if self.is_required(user.role):
             raise ConflictError("Your role requires MFA; it cannot be turned off")
+        if await self._grants.codenames(actor.id) & DIRECT_GRANT_ONLY:
+            raise ConflictError(
+                "You hold break-glass access, which requires MFA. Ask another administrator "
+                "to revoke it before turning MFA off."
+            )
         if not await self._check_code(actor.id, code):
             raise UnauthorizedError("That code is not valid")
         await self._remove(actor.id)
@@ -194,6 +206,8 @@ class MfaService:
             object_id=user_id,
             details={"username": user.username},
         )
+        # Break-glass requires MFA: the grant goes with it.
+        await self._grants.revoke_after_mfa_reset(actor, user_id, user.username)
         await self._mfa.commit()
 
     # ── Internals ──

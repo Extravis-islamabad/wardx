@@ -27,6 +27,12 @@ DASHBOARD_VIEW = "dashboard.view"
 # Create and edit safes, and manage the members of any safe. Grants no access to the
 # accounts inside: list, use and retrieve need safe membership (separation of duties).
 SAFES_MANAGE = "safes.manage"
+# Acknowledge security alerts (reading them needs AUDIT_VIEW).
+ALERTS_ACKNOWLEDGE = "alerts.acknowledge"
+# Break-glass: reveal any account regardless of safe membership, with a reason, audited
+# and alerted. No role holds it: only a direct per-user grant (iam.user_permissions) to
+# a local, MFA-enrolled user.
+ACCESS_EMERGENCY = "access.emergency"
 # Your own profile: who am I, sign out, change password, your own MFA.
 PROFILE_SELF = "profile.self"
 
@@ -49,6 +55,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             USERS_MANAGE,
             DIRECTORY_MANAGE,
             SAFES_MANAGE,
+            ALERTS_ACKNOWLEDGE,
             DASHBOARD_VIEW,
             PROFILE_SELF,
         }
@@ -61,3 +68,14 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
 
 def role_has(role: Role | str, codename: str) -> bool:
     return codename in ROLE_PERMISSIONS.get(Role(role), frozenset())
+
+
+# Codenames only ever held through a direct user grant, never through a role.
+DIRECT_GRANT_ONLY = frozenset({ACCESS_EMERGENCY})
+# Every codename that exists (routes may only gate on these).
+ALL_PERMISSIONS: frozenset[str] = ROLE_PERMISSIONS[Role.ADMIN] | DIRECT_GRANT_ONLY
+
+
+def effective_permissions(role: Role | str, grants: frozenset[str] = frozenset()) -> frozenset[str]:
+    """The role's bundle plus the user's direct grants."""
+    return ROLE_PERMISSIONS.get(Role(role), frozenset()) | (grants & ALL_PERMISSIONS)
