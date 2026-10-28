@@ -55,3 +55,20 @@ LAB_USERS="wardx_rot_demo:$(cat lab/.secrets/linux-demo)" docker run -d --name w
 #    Rotation tab shows the job succeed with a clean verify.
 # 4. Clean up: docker rm -f wardx-lab-linux-demo && rm lab/.secrets/linux-demo
 ```
+
+## MikroTik CHR lab state
+
+What is configured on `wardx-lab-mikrotik` (checked read-only on 2026-10-28):
+
+| Item | State |
+|---|---|
+| Users | `admin` only (password in `lab/.secrets/mikrotik-admin`). Tests create and remove their own `wardx_rot_*` users; nothing else is ever changed on `admin`. |
+| Certificate | `wardx-lab-api`: self-signed, RSA 2048, SHA-256, created **on the device**. Its private key exists only on the CHR; no certificate or key file is kept on this machine. |
+| `api-ssl` (8729, host 8739) | enabled, using `wardx-lab-api` |
+| `api` (8728, host 8738) and `telnet` | still enabled (CHR defaults), so tests can check that WardX **refuses** rotation over cleartext. Disable them on real devices (see `Backend/docs/phase1/ONBOARDING_MIKROTIK.md`). |
+
+The certificate was created with the same commands as the product onboarding doc. Trust in
+WardX comes from pinning its SHA-256 fingerprint through the Host key flow, never from turning
+off certificate checks. If the CHR container is ever rebuilt, recreate the certificate with those
+commands and accept the new fingerprint in WardX.
+
