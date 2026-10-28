@@ -33,5 +33,9 @@ class Target(Base):
     # device-specific policy caps.
     rotation_allowed: Mapped[bool] = mapped_column(Boolean, default=False)
     policy_overrides: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Set when the device presented another host key: rotation and verify are blocked
+    # until an administrator re-learns the key.
+    host_key_mismatch_at: Mapped[datetime | None] = mapped_column(TZ)
+    host_key_mismatch_fingerprint: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)

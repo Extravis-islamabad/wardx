@@ -37,12 +37,23 @@ from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET
 from src.services.rotation.rotation_outcomes import _CLEAR_RISK, RotationOutcomesMixin, next_sync
 from src.services.security.alert_service import AlertService
+from src.services.sessions.host_key_service import HostKeyService
 from src.services.vault.vault_service import VaultService
 
 SYNC_FOR = {VERIFIED: IN_SYNC, UNTRUSTWORTHY: VERIFY_UNTRUSTWORTHY, INCONCLUSIVE: UNVERIFIED}
 
 
 class RotationStore(RotationOutcomesMixin):
+    async def record_host_key_mismatch(
+        self, ctx: RotationContextDTO, presented: str | None, *, source: str
+    ) -> None:
+        """The target presented another host key: record it on the target, which blocks
+        every later rotation and verify there until an administrator accepts a key."""
+        if self._host_keys is not None:
+            await self._host_keys.record_mismatch(
+                SYSTEM_ACTOR, ctx.target.id, presented=presented, source=source
+            )
+
     def __init__(
         self,
         jobs: RotationJobRepository,
@@ -51,8 +62,10 @@ class RotationStore(RotationOutcomesMixin):
         audit: AuditService,
         alerts: AlertService,
         *,
+        host_keys: HostKeyService | None = None,
         lease_seconds: int = 600,
     ) -> None:
+        self._host_keys = host_keys
         self._jobs = jobs
         self._accounts = accounts
         self._vault = vault

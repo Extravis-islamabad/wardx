@@ -1,5 +1,5 @@
 export { inventoryKeys } from './inventoryKeys';
-export { useTargets, useSaveTarget, useDeleteTarget, useResetTargetHostKey, useLearnTargetHostKey } from './useTargets';
+export { useTargets, useSaveTarget, useDeleteTarget, useResetTargetHostKey, useProbeTargetHostKey, useAcceptTargetHostKey } from './useTargets';
 export {
   useAccounts,
   useCreateAccount,

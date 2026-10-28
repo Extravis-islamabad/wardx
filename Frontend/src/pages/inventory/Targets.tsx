@@ -5,8 +5,8 @@ import { Button, ConfirmModal, PageShell } from '@/components';
 import { PERMISSIONS } from '@/constants/enums/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { usePagination } from '@/hooks';
-import { TargetFormModal, TargetsTable } from '@/features/inventory/components';
-import { useDeleteTarget, useLearnTargetHostKey, useResetTargetHostKey, useTargets } from '@/features/inventory/hooks';
+import { HostKeyModal, TargetFormModal, TargetsTable } from '@/features/inventory/components';
+import { useDeleteTarget, useResetTargetHostKey, useTargets } from '@/features/inventory/hooks';
 import type { Target } from '@/services/inventory-services';
 import { notify } from '@/utils/notify';
 
@@ -22,7 +22,7 @@ export default function Targets() {
   const targets = useTargets({ page, page_size, search: search || undefined });
   const { mutateAsync: removeTarget } = useDeleteTarget();
   const { mutateAsync: resetHostKey } = useResetTargetHostKey();
-  const { mutateAsync: learnHostKey } = useLearnTargetHostKey();
+  const [hostKeyTarget, setHostKeyTarget] = useState<Target | null>(null);
 
   return (
     <PageShell
@@ -61,15 +61,10 @@ export default function Targets() {
           setFormOpen(true);
         }}
         onResetHostKey={setResetTarget}
-        onLearnHostKey={(t) => {
-          learnHostKey(t.id)
-            .then((r) => notify.success(r.message ?? 'Host key pinned'))
-            .catch(() => {
-              // apiClient's interceptor already toasted the failure.
-            });
-        }}
+        onLearnHostKey={canManage ? setHostKeyTarget : undefined}
         onDelete={setDeleteTarget}
       />
+      {canManage && <HostKeyModal target={hostKeyTarget} onClose={() => setHostKeyTarget(null)} />}
       {canManage && (
         <TargetFormModal
           open={formOpen}

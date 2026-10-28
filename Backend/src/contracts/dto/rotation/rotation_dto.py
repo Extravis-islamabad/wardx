@@ -160,6 +160,7 @@ class RotationTargetDTO:
     rotation_allowed: bool
     policy_overrides: dict[str, Any]
     ssh_host_key: str | None
+    host_key_mismatch_at: datetime | None = None
 
 
 @dataclass(frozen=True)

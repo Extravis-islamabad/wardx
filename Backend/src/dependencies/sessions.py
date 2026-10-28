@@ -47,7 +47,16 @@ def build_gateway_session_service(session: AsyncSession) -> GatewaySessionServic
 
 
 def build_host_key_service(session: AsyncSession) -> HostKeyService:
-    return HostKeyService(TargetRepository(session), build_audit_service(session))
+    from src.dependencies.identity import build_alert_service
+    from src.dependencies.safes import build_safe_access_service
+
+    return HostKeyService(
+        TargetRepository(session),
+        AccountRepository(session),
+        build_safe_access_service(session),
+        build_alert_service(session),
+        build_audit_service(session),
+    )
 
 
 async def get_session_service(session: SQLSessionDep) -> SessionService:

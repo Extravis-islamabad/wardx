@@ -22,6 +22,8 @@ class TargetResponse(BaseModel):
     is_active: bool
     ssh_host_key_fingerprint: str | None = None
     ssh_host_key_learned_at: datetime | None = None
+    host_key_mismatch_at: datetime | None = None
+    host_key_mismatch_fingerprint: str | None = None
     created_at: datetime
     updated_at: datetime
     rotation_allowed: bool = False

@@ -86,6 +86,12 @@ def refusal(ctx: RotationContextDTO, driver: PlatformDriver | None, *, enabled: 
         return f"The {target.platform} driver does not rotate over {target.protocol}"
     if account.secret_type != "password":
         return "Only passwords are rotated (SSH keys come later)"
+    if target.host_key_mismatch_at is not None:
+        return (
+            f"{target.name} presented a host key other than the pinned one. Rotation and "
+            "verify are blocked until an administrator compares fingerprints and accepts a "
+            "key (Targets → Host key). Nothing was sent."
+        )
     if target.protocol == Protocol.SSH and not target.ssh_host_key:
         return (
             f"{target.name} has no pinned SSH host key; pin it (Targets → Learn host key) "

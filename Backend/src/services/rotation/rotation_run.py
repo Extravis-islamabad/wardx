@@ -200,6 +200,10 @@ class JobRun:
         step = (step_name, result, self.n)
         who = f"{self.ctx.account.username}@{self.ctx.target.name}"
         if result.outcome == Outcome.HOST_KEY_MISMATCH:
+            async with self.e.store() as st:
+                await st.record_host_key_mismatch(
+                    self.ctx, result.presented_fingerprint, source="rotation"
+                )
             await self.fail(
                 result.detail,
                 step,
@@ -424,6 +428,10 @@ class JobRun:
             sync = OUT_OF_SYNC
         elif pos.outcome == Outcome.HOST_KEY_MISMATCH:
             who = f"{self.ctx.account.username}@{self.ctx.target.name}"
+            async with self.e.store() as st:
+                await st.record_host_key_mismatch(
+                    self.ctx, pos.presented_fingerprint, source="verify"
+                )
             await self.fail(
                 pos.detail,
                 steps[-1],

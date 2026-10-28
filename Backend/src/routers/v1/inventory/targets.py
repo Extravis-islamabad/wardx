@@ -52,6 +52,8 @@ def target_response(dto: TargetDTO) -> TargetResponse:
         is_active=dto.is_active,
         ssh_host_key_fingerprint=dto.ssh_host_key_fingerprint,
         ssh_host_key_learned_at=dto.ssh_host_key_learned_at,
+        host_key_mismatch_at=dto.host_key_mismatch_at,
+        host_key_mismatch_fingerprint=dto.host_key_mismatch_fingerprint,
         created_at=dto.created_at,
         updated_at=dto.updated_at,
         rotation_allowed=dto.rotation_allowed,

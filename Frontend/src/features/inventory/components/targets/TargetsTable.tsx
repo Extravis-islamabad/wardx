@@ -18,6 +18,15 @@ interface TargetsTableProps {
 }
 
 const HostKeyCell = ({ target }: { target: Target }) => {
+  if (target?.host_key_mismatch_at) {
+    return (
+      <Tooltip
+        title={`Presented ${target.host_key_mismatch_fingerprint ?? 'an unreadable key'} instead of the pinned ${target.ssh_host_key_fingerprint ?? '(none)'}. Rotation and verify are blocked until a key is accepted.`}
+      >
+        <StatusTag label="key changed" variant={StatusVariant.DANGER} />
+      </Tooltip>
+    );
+  }
   if (target?.ssh_host_key_fingerprint) {
     return (
       <Tooltip title={`${target.ssh_host_key_fingerprint} — pinned ${target?.ssh_host_key_learned_at ?? ''}`}>
@@ -86,10 +95,10 @@ export function TargetsTable({
           <Button variant="admin" size="small" onClick={() => onEdit(t)}>
             Edit
           </Button>
-          {onLearnHostKey && !t?.ssh_host_key_fingerprint && t?.protocol === Protocol.SSH && (
-            <Tooltip title="Read and pin the key the target presents now; no credential is sent">
+          {onLearnHostKey && t?.protocol === Protocol.SSH && (
+            <Tooltip title="Read the key the device presents (no credential sent), compare it, then accept">
               <Button variant="admin" size="small" onClick={() => onLearnHostKey(t)}>
-                Learn host key
+                {t?.host_key_mismatch_at ? 'Review host key' : 'Host key'}
               </Button>
             </Tooltip>
           )}

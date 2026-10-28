@@ -27,6 +27,10 @@ class TargetDTO:
     updated_at: datetime
     rotation_allowed: bool = False
     policy_overrides: dict | None = None
+    # Set when the device presented another key: rotation and verify are blocked until an
+    # administrator accepts a key again (ROTATION.md §14, fix 4).
+    host_key_mismatch_at: datetime | None = None
+    host_key_mismatch_fingerprint: str | None = None
 
 
 @dataclass(frozen=True)

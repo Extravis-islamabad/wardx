@@ -21,6 +21,8 @@ from src.rotation.policy import platform_default
 from src.services.rotation.rotation_engine import SimulatedCrash
 
 FAKE_PLATFORM = "generic"
+# What the simulated device presents on a "host_key" fault instead of the pinned key.
+PRESENTED_FINGERPRINT = "SHA256:presentedByTheFakeDeviceInsteadOfThePin00000"
 
 
 @dataclass
@@ -76,7 +78,13 @@ class FakeDriver:
         if fault == "unreachable":
             raise DriverError(StepResult(Outcome.UNREACHABLE, "no route to host"))
         if fault == "host_key":
-            raise DriverError(StepResult(Outcome.HOST_KEY_MISMATCH, "host key mismatch"))
+            raise DriverError(
+                StepResult(
+                    Outcome.HOST_KEY_MISMATCH,
+                    "host key mismatch",
+                    presented_fingerprint=PRESENTED_FINGERPRINT,
+                )
+            )
         if not self._accepts(login.username, login.secret):
             raise DriverError(StepResult(Outcome.AUTH_FAILED, "login refused"))
         return FakeSession(login)

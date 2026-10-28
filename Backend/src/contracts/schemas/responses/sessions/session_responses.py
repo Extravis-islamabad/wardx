@@ -48,3 +48,13 @@ class GatewayInfoResponse(BaseModel):
     host: str
     port: int
     login_format: str
+
+
+class HostKeyProbeResponse(BaseModel):
+    target_id: uuid.UUID
+    presented_fingerprint: str
+    key_type: str
+    pinned_fingerprint: str | None
+    matches_pin: bool
+    mismatch_at: datetime | None
+    mismatch_fingerprint: str | None

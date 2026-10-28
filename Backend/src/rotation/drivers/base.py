@@ -42,6 +42,9 @@ class StepResult:
     outcome: Outcome
     detail: str = ""
     transcript: str = ""
+    # HOST_KEY_MISMATCH only: the fingerprint the device presented instead of the pin
+    # (SHA256:...), when it could be read. Recorded on the target; never trusted.
+    presented_fingerprint: str | None = None
 
     @property
     def ok(self) -> bool:

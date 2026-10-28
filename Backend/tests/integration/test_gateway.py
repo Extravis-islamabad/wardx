@@ -189,6 +189,29 @@ async def test_host_key_mismatch_never_sends_the_credential(gateway, lab, device
     conn.close()
     assert "HOST KEY MISMATCH" in result.stdout
     assert len(device.logins) == logins_before
+    # Recorded on the target (blocking rotation and verify) with one high alert.
+    async with session_factory()() as s:
+        row = (
+            await s.execute(
+                text(
+                    "SELECT host_key_mismatch_at, host_key_mismatch_fingerprint "
+                    "FROM inventory.targets WHERE id = :id"
+                ),
+                {"id": lab["target"]["id"]},
+            )
+        ).one()
+        alerts = (
+            await s.execute(
+                text(
+                    "SELECT severity FROM security.alerts WHERE kind = 'target.host_key_changed' "
+                    "AND object_id = :id"
+                ),
+                {"id": lab["target"]["id"]},
+            )
+        ).all()
+    assert row.host_key_mismatch_at is not None
+    assert row.host_key_mismatch_fingerprint == device.host_key.get_fingerprint("sha256")
+    assert [a.severity for a in alerts] == ["high"]
 
     # After an admin resets the pin, the next session learns the real key again.
     resp = await client.post(f"/targets/{lab['target']['id']}/host-key/reset", headers=admin)

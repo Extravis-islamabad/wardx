@@ -2,6 +2,16 @@
 import { apiClient } from '@/lib/apiClient';
 import type { ApiResponse, PageQuery, Paginated } from '@/types/api';
 
+export interface HostKeyProbe {
+  target_id: string;
+  presented_fingerprint: string;
+  key_type: string;
+  pinned_fingerprint: string | null;
+  matches_pin: boolean;
+  mismatch_at: string | null;
+  mismatch_fingerprint: string | null;
+}
+
 export interface Target {
   id: string;
   name: string;
@@ -15,6 +25,9 @@ export interface Target {
   is_active: boolean;
   ssh_host_key_fingerprint: string | null;
   ssh_host_key_learned_at: string | null;
+  /** Set when the device presented another key: rotation and verify are blocked until a key is accepted. */
+  host_key_mismatch_at?: string | null;
+  host_key_mismatch_fingerprint?: string | null;
   created_at: string;
   updated_at: string;
   /** Rotation's per-target switch (off by default). */
@@ -50,9 +63,15 @@ export const targetsService = {
     return data;
   },
 
-  /** Pin the key the target presents now; sends no credential. */
-  async learnHostKey(id: string): Promise<ApiResponse<Target>> {
-    const { data } = await apiClient.post<ApiResponse<Target>>(`${BASE}/${id}/host-key/learn`);
+  /** Read the key the target presents now, to compare with the device; sends no credential, pins nothing. */
+  async probeHostKey(id: string): Promise<ApiResponse<HostKeyProbe>> {
+    const { data } = await apiClient.post<ApiResponse<HostKeyProbe>>(`${BASE}/${id}/host-key/probe`);
+    return data;
+  },
+
+  /** Pin the key, only if the device still presents the fingerprint that was compared. */
+  async acceptHostKey(id: string, fingerprint: string): Promise<ApiResponse<Target>> {
+    const { data } = await apiClient.post<ApiResponse<Target>>(`${BASE}/${id}/host-key/accept`, { fingerprint });
     return data;
   },
 

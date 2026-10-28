@@ -40,6 +40,16 @@ class _OneShotClient(asyncssh.SSHClient):
         return [self._secret]
 
 
+async def presented_fingerprint(host: str, port: int, timeout: float) -> str | None:  # noqa: ASYNC109
+    """The SHA256 fingerprint of the host key a device presents, or None if unreadable.
+    Opens a connection without authenticating: no credential is ever sent."""
+    try:
+        key = await asyncio.wait_for(asyncssh.get_server_host_key(host, port), timeout)
+    except (OSError, asyncssh.Error, TimeoutError):
+        return None
+    return key.get_fingerprint("sha256") if key else None
+
+
 async def ssh_login(
     target: TargetRef,
     username: str,
@@ -75,11 +85,14 @@ async def ssh_login(
             timeout,
         )
     except asyncssh.HostKeyNotVerifiable as exc:
+        presented = await presented_fingerprint(target.address, target.port, timeout)
         raise DriverError(
             StepResult(
                 Outcome.HOST_KEY_MISMATCH,
-                f"HOST KEY MISMATCH for {target.name}: it did not present the pinned key. "
+                f"HOST KEY MISMATCH for {target.name}: it presented "
+                f"{presented or 'an unknown key'}, not the pinned key. "
                 "The credential was not sent.",
+                presented_fingerprint=presented,
             )
         ) from exc
     except asyncssh.PermissionDenied as exc:

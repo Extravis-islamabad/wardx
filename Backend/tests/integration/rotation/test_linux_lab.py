@@ -58,12 +58,19 @@ class LinuxLab(Lab):
             )
             assert resp.status_code == 201, resp.text
             target = resp.json()["data"]
-            # Pin the lab's host key: read it, no credential sent.
-            learn = await self.client.post(
-                f"/targets/{target['id']}/host-key/learn", headers=self.admin
+            # Pin the lab's host key: read it (no credential sent), then accept the
+            # fingerprint that was shown, as an administrator would after comparing.
+            probe = await self.client.post(
+                f"/targets/{target['id']}/host-key/probe", headers=self.admin
             )
-            assert learn.status_code == 200, learn.text
-            self._target = learn.json()["data"]
+            assert probe.status_code == 200, probe.text
+            accept = await self.client.post(
+                f"/targets/{target['id']}/host-key/accept",
+                headers=self.admin,
+                json={"fingerprint": probe.json()["data"]["presented_fingerprint"]},
+            )
+            assert accept.status_code == 200, accept.text
+            self._target = accept.json()["data"]
         return self._target
 
     async def linux_account(self, user: str, safe_id: str | None = None) -> dict:

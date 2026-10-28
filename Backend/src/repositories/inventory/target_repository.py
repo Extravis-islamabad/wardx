@@ -30,6 +30,8 @@ def _to_dto(row: Target) -> TargetDTO:
         ssh_host_key=row.ssh_host_key,
         ssh_host_key_fingerprint=row.ssh_host_key_fingerprint,
         ssh_host_key_learned_at=row.ssh_host_key_learned_at,
+        host_key_mismatch_at=row.host_key_mismatch_at,
+        host_key_mismatch_fingerprint=row.host_key_mismatch_fingerprint,
         created_at=row.created_at,
         updated_at=row.updated_at,
         rotation_allowed=row.rotation_allowed,
@@ -88,6 +90,38 @@ class TargetRepository(BaseRepository):
             )
         )
         return result.rowcount > 0
+
+    async def accept_host_key(
+        self, target_id: uuid.UUID, *, key: str, fingerprint: str, learned_at: datetime
+    ) -> None:
+        """Pin (or re-pin) the key an administrator accepted, and clear any mismatch."""
+        await self._session.execute(
+            update(Target)
+            .where(Target.id == target_id)
+            .values(
+                ssh_host_key=key,
+                ssh_host_key_fingerprint=fingerprint,
+                ssh_host_key_learned_at=learned_at,
+                host_key_mismatch_at=None,
+                host_key_mismatch_fingerprint=None,
+            )
+        )
+
+    async def record_host_key_mismatch(
+        self, target_id: uuid.UUID, *, presented: str | None, seen_at: datetime
+    ) -> bool:
+        """Mark the target as presenting an unpinned key. True when this is a new mismatch
+        (none recorded yet, or a different presented fingerprint), so callers alert once
+        per new key rather than once per attempt."""
+        row = await self._session.get(Target, target_id, with_for_update=True)
+        if row is None:
+            return False
+        new = row.host_key_mismatch_at is None or (row.host_key_mismatch_fingerprint != presented)
+        if new:
+            row.host_key_mismatch_at = seen_at
+            row.host_key_mismatch_fingerprint = presented
+            await self._session.flush()
+        return new
 
     async def create(self, values: dict[str, Any]) -> TargetDTO:
         row = Target(**values)

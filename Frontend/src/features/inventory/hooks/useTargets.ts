@@ -44,10 +44,16 @@ export function useResetTargetHostKey() {
   });
 }
 
-export function useLearnTargetHostKey() {
+/** Read the presented key (a mutation: it opens a connection, so never cached or refetched). */
+export function useProbeTargetHostKey() {
+  return useMutation({ mutationFn: (id: string) => targetsService.probeHostKey(id) });
+}
+
+export function useAcceptTargetHostKey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => targetsService.learnHostKey(id),
+    mutationFn: ({ id, fingerprint }: { id: string; fingerprint: string }) =>
+      targetsService.acceptHostKey(id, fingerprint),
     onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.targetsAll() }),
   });
 }

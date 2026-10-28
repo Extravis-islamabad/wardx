@@ -72,6 +72,7 @@ def target_dto(row: Target) -> RotationTargetDTO:
         rotation_allowed=row.rotation_allowed,
         policy_overrides=dict(row.policy_overrides or {}),
         ssh_host_key=row.ssh_host_key,
+        host_key_mismatch_at=row.host_key_mismatch_at,
     )
 
 
