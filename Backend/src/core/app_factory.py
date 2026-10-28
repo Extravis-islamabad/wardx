@@ -14,10 +14,11 @@ from src.core.db import dispose_engine, init_engine, session_factory
 from src.core.migration_runner import run_migrations
 from src.dependencies.identity import build_user_service
 from src.errors.handlers import register_exception_handlers
-from src.routers.v1 import dashboard, health
 from src.routers.v1.access import checkouts, requests
 from src.routers.v1.audit import audit_events
+from src.routers.v1.dashboard import dashboard
 from src.routers.v1.directory import directory
+from src.routers.v1.health import health
 from src.routers.v1.identity import auth, mfa, users
 from src.routers.v1.inventory import accounts, targets
 from src.routers.v1.sessions import command_rules, gateway, sessions

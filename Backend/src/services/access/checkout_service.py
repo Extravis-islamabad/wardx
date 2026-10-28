@@ -36,6 +36,8 @@ from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET, AccountService
 from src.services.vault.vault_service import VaultService
 
+EXPIRY_LOCK_KEY = 0x5741_5244_00E1
+
 
 class CheckoutService:
     def __init__(
@@ -213,6 +215,16 @@ class CheckoutService:
         return await self.get(co.id)
 
     # ── Expiry ──
+
+    async def sweep(self) -> dict[str, int] | None:
+        """The scheduler's expiry pass: ``expire_overdue`` under a cluster-wide lock.
+
+        None when another process holds the lock, so several schedulers do not
+        double the work (the caller rolls back).
+        """
+        if not await self._checkouts.try_advisory_lock(EXPIRY_LOCK_KEY):
+            return None
+        return await self.expire_overdue()
 
     async def expire_overdue(self) -> dict[str, int]:
         """Close check-outs and requests whose time has passed. Safe to run concurrently."""

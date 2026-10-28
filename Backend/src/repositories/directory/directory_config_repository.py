@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
-
 from src.contracts.dto.directory.directory_config_dto import DirectoryConfigDTO
 from src.models import DirectoryConfig
 from src.repositories.base import BaseRepository
@@ -58,9 +56,3 @@ class DirectoryConfigRepository(BaseRepository):
                 setattr(row, key, value)
         await self._session.flush()
         return _to_dto(row)
-
-    async def try_advisory_lock(self, key: int) -> bool:
-        """Take a transaction-scoped advisory lock; False if another session holds it."""
-        return (
-            await self._session.execute(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": key})
-        ).scalar_one()

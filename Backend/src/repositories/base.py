@@ -6,6 +6,7 @@ audit event together); anything uncommitted is rolled back with the session.
 
 from __future__ import annotations
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -18,3 +19,9 @@ class BaseRepository:
 
     async def rollback(self) -> None:
         await self._session.rollback()
+
+    async def try_advisory_lock(self, key: int) -> bool:
+        """Take a transaction-scoped advisory lock; False if another session holds it."""
+        return (
+            await self._session.execute(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": key})
+        ).scalar_one()

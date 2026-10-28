@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import text
 
 from src.core.config import Settings
 from src.core.db import session_factory
@@ -18,24 +17,17 @@ from src.errors.exceptions import ConflictError
 
 logger = structlog.get_logger(__name__)
 
-_EXPIRY_LOCK_KEY = 0x5741_5244_00E1
-
 
 async def expiry_sweep() -> None:
     async with session_factory()() as session:
-        got = (
-            await session.execute(
-                text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": _EXPIRY_LOCK_KEY}
-            )
-        ).scalar_one()
-        if not got:
-            await session.rollback()
-            return
         try:
-            result = await build_checkout_service(session).expire_overdue()
+            result = await build_checkout_service(session).sweep()
         except Exception:
             logger.exception("expiry_sweep_failed")
             await session.rollback()
+            return
+        if result is None:
+            await session.rollback()  # another scheduler holds the sweep lock
             return
         if any(result.values()):
             logger.info("expiry_sweep", **result)
