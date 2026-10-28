@@ -3,7 +3,7 @@
 Scope (decided 2026-10-28): the full CyberArk Identity Security feature set, built as one
 product on the MonetX architecture, sellable standalone or integrated with MonetX.
 
-Status: ✅ built · 🟡 partial · ⬜ not started
+Status: ✅ built · 🟡 partial · ⬜ not started · ⏸ deferred
 
 ## Release plan
 
@@ -12,8 +12,9 @@ Status: ✅ built · 🟡 partial · ⬜ not started
 | **MVP: first sellable release** | **0–3** | Foundation and tenancy, vault and rotation (CPM), MonetX credential provider, session manager (PSM), discovery and JIT |
 | Later | 4–8 | Secrets management, threat analytics, cloud and vendor access and certificates, endpoint agents, workforce identity and IGA |
 
-Gate before Phase 1 starts: the security test suite (route permission coverage,
-cross-tenant isolation, crypto round-trip and tamper, audit append-only) is in CI and green.
+Gate before Phase 1 starts: the security test suite (route permission coverage, crypto
+round-trip and tamper, audit append-only) is in CI and green. ✅ met 2026-10-28, except
+cross-tenant isolation, which is deferred with tenancy (below).
 
 ## Phase 0: Foundation and re-architecture (MVP, in progress)
 
@@ -26,11 +27,36 @@ cross-tenant isolation, crypto round-trip and tamper, audit append-only) is in C
 | Hash-chained append-only audit with verification | ✅ |
 | Re-layer backend and frontend onto exact MonetX layering | ✅ |
 | Permission codenames instead of role checks | ✅ |
-| Tenant key management design (`Backend/TENANCY_KEYS.md`), reviewed before build | ⬜ |
-| Multi-tenancy, MonetX style: control-plane DB + one vault DB and KEK per tenant, tenant middleware, `X-Active-Tenant-Id` view-as, tenant provisioning | ⬜ |
+| Tenant key management design (`Backend/TENANCY_KEYS.md`, revision 3, decisions in §10) | ✅ approved |
+| Tenancy core (Part A): parent and tenant DBs, file and SoftHSM2 providers, key hierarchy, re-wrap job, recording encryption, cross-tenant tests on | ⏸ |
+| Tenancy hardening (Part B): audit sink and checkpoints, backup/restore, ceremony tooling, TPM provider, cloud KMS, compromise tooling | ⏸ |
+| Tenancy seams so Phase 1 needs no rewrite: key-provider interface (file provider only), keyed HMAC audit chain, single default-tenant context | ⬜ |
 | MonetX envelope and pagination shape; MonetX integration contract (SSO, device sync, credential provider for NCM) | ⬜ |
 
+> **Tenancy deferred (2026-10-28).** Parts A and B are on hold. `Backend/TENANCY_KEYS.md`
+> (revision 3) is the approved design to build from when it resumes. Until then WardX runs as a
+> single default tenant behind the tenancy seams above. `tests/security/test_cross_tenant.py`
+> stays skipped; **when tenancy resumes, those tests passing (none skipped) is the gate for
+> shipping it.**
+
 ## Phase 1: Digital Vault and Central Policy Manager (MVP)
+
+### Phase 1 plan (2026-10-28)
+
+Built one module at a time, in this order. Each module ships backend, frontend and tests on the
+targets/accounts template (`Backend/ARCHITECTURE.md`), in small commits with tests and the
+frontend build passing at every commit. Effort is engineer-days.
+
+| # | Module | Scope | Effort |
+|---|---|---|---|
+| 0 | Tenancy seams | Key-provider interface (file provider), keyed HMAC audit chain, default-tenant context | 2–3 |
+| a | Safes | Safes, members, per-safe permissions on top of the codenames; accounts move into safes; existing accounts kept in a default safe | 5–7 |
+| b | Approval workflow | Approval policies per safe: dual control, multi-level approver chains, ticket number field (validated against SupportX later) | 5–7 |
+| c | Rotation engine and platforms | Scheduled, after check-in and on-demand rotation; verify and reconcile; Linux/Unix over SSH, then Windows, then Cisco, Huawei and MikroTik | 12–15 |
+| d | MonetX credential provider API | App identities and authentication, credential fetch at poll time, full audit trail, API document for the MonetX team | 5–7 |
+| e | HA/DR | Active/passive API and gateway, DB replication guidance, vault behaviour on failover, DR runbook | 5–8 |
+
+Review points: after (a) and (b).
 
 - **Safes:** containers of accounts with per-safe members and permissions (list, use, retrieve,
   manage, approve).
