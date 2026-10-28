@@ -343,3 +343,105 @@ network dialects.
 15. **Q15. Dependent usages:** rotating them is out of (c). The Windows driver must detect
     services, scheduled tasks and IIS app pools running as the account and refuse rotation
     with a clear reason (§2), with a test.
+
+## 12. Additions from the product owner (2026-10-28, during the build)
+
+### 12.1 Negative check in every verify (all platforms)
+
+- After a successful login with the password being verified, the core verify flow makes
+  **exactly one** login with a deliberately wrong password: freshly generated per verify,
+  never stored or logged. It must be **refused** before the verify counts.
+  - One wrong attempt per verify run, never retried, so lockout policies (pam_faillock,
+    Windows lockout, RouterOS login limits) are not tripped.
+  - Drivers do not implement it: the engine calls `driver.verify` twice (real secret,
+    then the wrong one). Logins send the credential once per attempt (one method, no
+    keyboard-interactive-then-password retry), so one wrong attempt is one failure.
+  - Recovery decisions inside the state machine (§5 "verify C, then N") are positive
+    logins only; promotion always goes through the final verify, which carries the single
+    negative check. So a rotation run makes at most one wrong attempt.
+- **Wrong password accepted → `verify_untrustworthy`.**
+  - In a rotation, the device already holds the new password, so the candidate **is**
+    promoted (accounts.secret_version = C; the previous version is kept), but it is not
+    verified: sync state `verify_untrustworthy`, `last_verified_at` unchanged, job and
+    `last_rotation_status` = `changed_unverified`, a high alert and an audit event with
+    the safe.
+  - While `verify_untrustworthy`: new **normal** check-outs and gateway sessions are refused
+    (409 `verify_untrustworthy`, with the reason). Break-glass still works and returns the
+    current (new) password. Scheduled rotations and verifies skip the account, and an
+    on-demand verify is refused: an administrator reviews it.
+  - Review, both needing `manage_accounts` on the account's safe:
+    - **Confirm** (`POST /accounts/{id}/rotation/confirm`): accepting a known risk, so it
+      needs a written reason of at least **20 characters** (as break-glass). It is stored
+      and audited with the safe. The confirming administrator must not be the one who
+      requested that rotation (enforced). The account becomes **`confirmed_untrustworthy`**
+      (not `in_sync`): normal access works again and the untrustworthy alert is
+      acknowledged, but the account stays on the dashboard ("confirmed despite failed
+      negative check": who, when, reason) until a **later clean verify** (positive login
+      and the wrong password refused) moves it to `in_sync`, audited as
+      `rotation.accepted_risk_cleared`. A later verify where the wrong password is accepted
+      again puts it back to `verify_untrustworthy` (blocked, new alert). Inconclusive or
+      unreachable verifies leave it `confirmed_untrustworthy`.
+    - **Reconcile**: the normal reconcile flow; it clears the state only when it ends in a
+      clean verify, negative check included.
+- **Inconclusive** (the wrong-password attempt timed out or the device was unreachable):
+  the rotation stays unverified (current = new version, sync state `unverified`, job
+  `changed_unverified`). The positive login is retried on the normal verify schedule,
+  and the negative check runs again only then: never as an immediate retry, never more
+  than once per verify run. The schedule counts from `last_verify_attempt_at`.
+
+### 12.2 Onboarding check: empty passwords
+
+- WardX refuses to store an empty or blank password for a password account (422
+  `empty_secret`), on create, on set secret and on resolving a job by hand.
+- Existing empty ones are flagged `high_risk_empty_password` by the scheduler's scan
+  (each stored version is looked at once): high alert, audit with the safe, shown on the
+  account and on the dashboard. Setting or rotating to a real password clears the flag.
+  A verify or rotation that finds an empty current password flags it and stops.
+- **On the device, per platform:**
+  - **Linux:** not probed directly. The lab's reconcile account may only run
+    `chpasswd` through sudo (reading `/etc/shadow` would widen sudo), and an SSH login
+    with an empty password is refused by OpenSSH's default `PermitEmptyPasswords no`
+    whatever the account's password is, so a probe proves nothing and would spend the
+    one-wrong-attempt budget. Instead, a clean verify (stored non-empty password works,
+    a wrong one is refused) proves the device password is that non-empty value.
+  - **MikroTik (later):** a login with an empty password being accepted means it is
+    empty (and the negative check catches "accepts anything").
+  - **Windows, Cisco, Huawei (later):** no side-effect-free probe identified yet; the
+    clean verify is the evidence. Recorded per driver when built.
+
+## 13. Implementation notes and judgment calls (core and Linux, 2026-10-28)
+
+Where the spec left a question open, the more restrictive choice was taken:
+
+1. **Host keys:** rotation, verify and reconcile never pin a key themselves (no TOFU from
+   rotation). A target needs a pin from a gateway session or from the new
+   `POST /targets/{id}/host-key/learn` (reads the key, sends no credential, audited).
+2. **Blocking states:** new normal check-outs and gateway sessions are refused while the
+   account's job is waiting for release, running (claimed, candidate stored, device
+   changed, persisted) or **needs attention**, not only while waiting. Emergency
+   check-outs are always allowed.
+3. **A holder appearing mid-run** (an emergency check-out after the claim): before the
+   change is sent, holders are checked again under the account lock; if any, the
+   candidate is labelled abandoned and the job goes back to `waiting_release`.
+4. **Switch turned off mid-rotation:** a resumed job whose device may hold C goes to
+   `needs_attention` instead of failing, so the candidate is never forgotten.
+5. **One open job per account of any kind** (verify included, `needs_attention` counts as
+   open); resolving releases it. A new final state `resolved` records the resolution
+   (keep_current, use_candidate, set_secret, reconcile).
+6. **Retries:** a job is claimed at most 3 times (back-off 1, 5, 15 minutes). Exhausted
+   retries fail the job when the device is known untouched (C abandoned) and go to
+   `needs_attention` when the device state is uncertain.
+7. **"Change sent" marker:** `change_sent_at` is committed just before the change command
+   is sent, so recovery knows whether the device may hold C.
+8. **Policy:** account `password_length` only lengthens; the effective interval is the
+   shorter of account and safe; `rotate_after_use` is on if either says so. Policies
+   need at least 10 distinct characters and may only use symbols from the safe set.
+9. **`rotate_after_checkin`** is kept (no longer read) and copied into the new
+   `rotate_after_use` column, instead of renaming it (additive migration).
+10. **Holders** include check-outs still marked active after their expiry until the sweep
+    closes them (at most `expiry_sweep_seconds`).
+11. **Dry run** (per request, or `WARDX_ROTATION_DRY_RUN` for all) still needs both
+    switches: it connects (as the account or reconcile account) and verifies, including
+    the negative check, and changes nothing.
+12. **Unreachable verifies** keep an earlier `in_sync`/`out_of_sync`/`unverified`
+    conclusion and count; three in a row raise a medium alert.
