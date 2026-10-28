@@ -7,8 +7,20 @@ import { auditKeys } from '@/features/audit/hooks/auditKeys';
 import { identityKeys } from '@/features/identity/hooks/identityKeys';
 import { safesKeys } from '@/features/safes/hooks/safesKeys';
 import { notifyKeys } from '@/features/notify/hooks/notifyKeys';
+import { providerKeys } from '@/features/provider/hooks/providerKeys';
 
-export { authKeys, dashboardKeys, inventoryKeys, accessKeys, sessionsKeys, auditKeys, identityKeys, safesKeys, notifyKeys };
+export {
+  authKeys,
+  dashboardKeys,
+  inventoryKeys,
+  accessKeys,
+  sessionsKeys,
+  auditKeys,
+  identityKeys,
+  safesKeys,
+  notifyKeys,
+  providerKeys,
+};
 
 /**
  * Namespaced facade for ergonomic call sites:
@@ -25,4 +37,5 @@ export const queryKeys = {
   identity: identityKeys,
   safes: safesKeys,
   notify: notifyKeys,
+  provider: providerKeys,
 };

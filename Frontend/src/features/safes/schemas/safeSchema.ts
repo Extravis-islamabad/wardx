@@ -16,17 +16,25 @@ export const safeFormValuesFrom = (safe: Safe | null | undefined): SafeFormValue
   is_active: safe?.is_active ?? true,
 });
 
-/** The console adds users and directory groups; roles exist only for migrated members. */
+/** The console adds users, directory groups and applications; roles exist only for migrated members. */
 export const memberFormSchema = z
   .object({
-    principal_type: z.enum([PrincipalType.USER, PrincipalType.GROUP]),
+    principal_type: z.enum([PrincipalType.USER, PrincipalType.GROUP, PrincipalType.APP]),
     principal_key: z.string().trim().min(1, 'Required').max(1000),
     permissions: z.array(z.enum(SafePermission)).min(1, 'Choose at least one permission'),
   })
   .refine((v) => v.principal_type !== PrincipalType.GROUP || v.principal_key.includes('='), {
     message: 'A group is named by its distinguished name, e.g. cn=NOC,ou=groups,dc=corp,dc=example',
     path: ['principal_key'],
-  });
+  })
+  // Applications hold exactly 'fetch'; nobody else may hold it.
+  .refine(
+    (v) =>
+      v.principal_type === PrincipalType.APP
+        ? v.permissions.length === 1 && v.permissions[0] === SafePermission.FETCH
+        : !v.permissions.includes(SafePermission.FETCH),
+    { message: "Applications hold only 'fetch', and only applications can", path: ['permissions'] },
+  );
 
 export type MemberFormValues = z.infer<typeof memberFormSchema>;
 

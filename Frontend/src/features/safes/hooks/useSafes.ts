@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   safesService,
   type ApprovalPolicy,
+  type SafeAppFetch,
   type SafeInput,
   type SafeMemberInput,
 } from '@/services/safes-services';
@@ -104,5 +105,21 @@ export function useSafeAudit(safeId: string | undefined, params: PageQuery) {
     queryFn: () => safesService.audit(safeId as string, params),
     enabled: !!safeId,
     retry: false,
+  });
+}
+
+export function useSafeAppFetch(safeId: string) {
+  return useQuery({
+    queryKey: safesKeys.appFetch(safeId),
+    queryFn: async () => (await safesService.appFetch(safeId)).data,
+    enabled: !!safeId,
+  });
+}
+
+export function useSaveSafeAppFetch(safeId: string) {
+  const invalidate = useInvalidateSafes();
+  return useMutation({
+    mutationFn: (payload: SafeAppFetch) => safesService.saveAppFetch(safeId, payload),
+    onSuccess: invalidate,
   });
 }

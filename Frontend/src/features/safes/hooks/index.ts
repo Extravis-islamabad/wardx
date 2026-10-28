@@ -10,4 +10,6 @@ export {
   useSafePolicy,
   useSaveSafePolicy,
   useSafeAudit,
+  useSafeAppFetch,
+  useSaveSafeAppFetch,
 } from './useSafes';

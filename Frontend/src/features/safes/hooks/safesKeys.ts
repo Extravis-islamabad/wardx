@@ -8,5 +8,6 @@ export const safesKeys = {
   members: (safeId: string) => ['safes', 'members', safeId] as const,
   health: () => ['safes', 'health'] as const,
   policy: (safeId: string) => ['safes', 'policy', safeId] as const,
+  appFetch: (safeId: string) => ['safes', 'app-fetch', safeId] as const,
   audit: (safeId: string, params: PageQuery) => ['safes', 'audit', safeId, params] as const,
 };

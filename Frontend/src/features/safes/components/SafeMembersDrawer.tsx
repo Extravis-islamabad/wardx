@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { AddMemberModal } from './AddMemberModal';
 import { ApprovalPolicyTab } from './ApprovalPolicyTab';
 import { SafeAuditTab } from './SafeAuditTab';
+import { SafeAppFetchTab } from './SafeAppFetchTab';
 import { SafeHealthTag } from './SafeHealthTag';
 import { SafeRotationPolicyTab } from '@/features/rotation/components/SafeRotationPolicyTab';
 
@@ -22,6 +23,7 @@ const PRINCIPAL_VARIANT: Record<PrincipalType, StatusVariant> = {
   [PrincipalType.USER]: StatusVariant.INFO,
   [PrincipalType.GROUP]: StatusVariant.PRIMARY,
   [PrincipalType.ROLE]: StatusVariant.NEUTRAL,
+  [PrincipalType.APP]: StatusVariant.SUCCESS,
 };
 
 /** A safe's members, approval policy, audit and details. Role members are read-only. */
@@ -65,7 +67,13 @@ export function SafeMembersDrawer({ safe, onClose }: { safe: Safe | null; onClos
       title: 'Permissions',
       key: 'permissions',
       render: (_, m) =>
-        m?.principal_type === PrincipalType.ROLE ? (
+        m?.principal_type === PrincipalType.APP ? (
+          <Tooltip title="Applications hold only 'fetch' (credential provider)">
+            <span>
+              <StatusTag label={SafePermission.FETCH} variant={StatusVariant.OUTLINE} />
+            </span>
+          </Tooltip>
+        ) : m?.principal_type === PrincipalType.ROLE ? (
           <Tooltip title="Migrated role member: read-only">
             <Space size={4} wrap>
               {m.permissions.map((p) => (
@@ -143,6 +151,11 @@ export function SafeMembersDrawer({ safe, onClose }: { safe: Safe | null; onClos
               key: 'rotation',
               label: 'Rotation policy',
               children: <SafeRotationPolicyTab safeId={safe.id} canEdit={canManageSafes} />,
+            },
+            {
+              key: 'app-fetch',
+              label: 'Application access',
+              children: <SafeAppFetchTab safeId={safe.id} canEdit={canSeeMembers} />,
             },
             ...(canSeeAudit ? [{ key: 'audit', label: 'Audit', children: <SafeAuditTab safeId={safe.id} /> }] : []),
             {

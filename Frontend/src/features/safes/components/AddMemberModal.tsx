@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
 import { PERMISSIONS } from '@/constants/enums/permissions';
-import { PrincipalType, SAFE_PERMISSION_OPTIONS } from '@/constants/enums/safes';
+import { PrincipalType, SAFE_PERMISSION_OPTIONS, SafePermission } from '@/constants/enums/safes';
 import { useAuth } from '@/context/AuthContext';
 import { useUsers } from '@/features/identity/hooks';
+import { useApps } from '@/features/provider/hooks';
 import { useAddSafeMember } from '@/features/safes/hooks';
 import { memberFormDefaults, memberFormSchema, type MemberFormValues } from '@/features/safes/schemas/safeSchema';
 import type { Safe } from '@/services/safes-services';
@@ -19,6 +20,8 @@ export function AddMemberModal({ safe, onClose }: { safe: Safe | null; onClose: 
   const { canAccess } = useAuth();
   // Searching users needs users.manage; others enter the user's id.
   const canSearchUsers = canAccess({ permission: PERMISSIONS.USERS_MANAGE });
+  // Listing application identities needs apps.manage; others enter the app's id.
+  const canListApps = canAccess({ permission: PERMISSIONS.APPS_MANAGE });
   const [search, setSearch] = useState('');
   const { mutateAsync: addMember, isPending } = useAddSafeMember(safe?.id ?? '');
   const {
@@ -32,6 +35,10 @@ export function AddMemberModal({ safe, onClose }: { safe: Safe | null; onClose: 
   const users = useUsers(
     { ...USER_SEARCH_PAGE, search: search || undefined },
     { enabled: !!safe && canSearchUsers && principalType === PrincipalType.USER },
+  );
+  const apps = useApps(
+    { ...USER_SEARCH_PAGE, search: search || undefined },
+    { enabled: !!safe && canListApps && principalType === PrincipalType.APP },
   );
 
   useEffect(() => {
@@ -69,16 +76,53 @@ export function AddMemberModal({ safe, onClose }: { safe: Safe | null; onClose: 
                 onChange={(e) => {
                   field.onChange(e.target.value);
                   setValue('principal_key', '');
+                  // Applications hold exactly 'fetch'; people never do.
+                  setValue(
+                    'permissions',
+                    e.target.value === PrincipalType.APP ? [SafePermission.FETCH] : memberFormDefaults.permissions,
+                  );
                 }}
                 options={[
                   { value: PrincipalType.USER, label: 'WardX user' },
                   { value: PrincipalType.GROUP, label: 'Directory group' },
+                  { value: PrincipalType.APP, label: 'Application (MonetX)' },
                 ]}
               />
             )}
           />
         </FormField>
-        {principalType === PrincipalType.USER ? (
+        {principalType === PrincipalType.APP ? (
+          <FormField
+            label="Application identity"
+            htmlFor="member-app"
+            required
+            error={errors.principal_key?.message}
+            hint={canListApps ? 'It may fetch credentials from this safe (audited, not a check-out).' : "Enter the application's id (listing apps needs apps.manage)."}
+          >
+            <Controller
+              control={control}
+              name="principal_key"
+              render={({ field }) =>
+                canListApps ? (
+                  <Select
+                    id="member-app"
+                    className="w-full"
+                    showSearch
+                    filterOption={false}
+                    value={field.value || undefined}
+                    onSearch={setSearch}
+                    onChange={field.onChange}
+                    loading={apps.isLoading}
+                    placeholder="Search application identities"
+                    options={apps.data?.data?.map((a) => ({ value: a.id, label: a.name }))}
+                  />
+                ) : (
+                  <Input {...field} id="member-app" placeholder="00000000-0000-0000-0000-000000000000" />
+                )
+              }
+            />
+          </FormField>
+        ) : principalType === PrincipalType.USER ? (
           <FormField
             label="User"
             htmlFor="member-user"
@@ -135,6 +179,13 @@ export function AddMemberModal({ safe, onClose }: { safe: Safe | null; onClose: 
           </FormField>
         )}
         <FormField label="Permissions" htmlFor="member-permissions" required error={errors.permissions?.message}>
+          {principalType === PrincipalType.APP ? (
+            <Tooltip title="Fetch the credentials of this safe's accounts through the provider API">
+              <Checkbox id="member-permissions" checked disabled>
+                Fetch (the only permission an application holds)
+              </Checkbox>
+            </Tooltip>
+          ) : (
           <Controller
             control={control}
             name="permissions"
@@ -148,6 +199,7 @@ export function AddMemberModal({ safe, onClose }: { safe: Safe | null; onClose: 
               </Checkbox.Group>
             )}
           />
+          )}
         </FormField>
         <ModalFooter>
           <Button variant="admin" size="small" onClick={onClose}>

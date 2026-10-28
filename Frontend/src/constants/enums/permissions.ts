@@ -22,4 +22,6 @@ export enum PERMISSIONS {
   ALERTS_ACKNOWLEDGE = 'alerts.acknowledge',
   USERS_MANAGE = 'users.manage',
   DIRECTORY_MANAGE = 'directory.manage',
+  /** Application identities for the credential provider (admin). */
+  APPS_MANAGE = 'apps.manage',
 }

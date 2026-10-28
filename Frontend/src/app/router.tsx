@@ -31,6 +31,7 @@ const AuditTrail = lazy(() => import('@/pages/audit/AuditTrail'));
 // Identity
 const Users = lazy(() => import('@/pages/identity/Users'));
 const Directory = lazy(() => import('@/pages/identity/Directory'));
+const AppIdentities = lazy(() => import('@/pages/identity/AppIdentities'));
 
 // Own account
 const Security = lazy(() => import('@/pages/auth/Security'));
@@ -69,6 +70,7 @@ const routes = createBrowserRouter([
       { path: ROUTES.SECURITY, element: guard(ROUTES.SECURITY, <Security />) },
       { path: ROUTES.USERS, element: guard(ROUTES.USERS, <Users />) },
       { path: ROUTES.DIRECTORY, element: guard(ROUTES.DIRECTORY, <Directory />) },
+      { path: ROUTES.APPS, element: guard(ROUTES.APPS, <AppIdentities />) },
     ],
   },
   { path: '*', element: <Navigate to={ROUTES.HOME} replace /> },

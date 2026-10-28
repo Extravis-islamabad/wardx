@@ -9,6 +9,8 @@ export enum SafePermission {
   MANAGE_MEMBERS = 'manage_members',
   VIEW_AUDIT = 'view_audit',
   APPROVE = 'approve',
+  /** Application identities only, and the only permission they hold (credential provider). */
+  FETCH = 'fetch',
 }
 
 export enum PrincipalType {
@@ -16,6 +18,8 @@ export enum PrincipalType {
   GROUP = 'group',
   /** Migration only (the Default safe's members); shown read-only. */
   ROLE = 'role',
+  /** An application identity (credential provider); holds only 'fetch'. */
+  APP = 'app',
 }
 
 export enum TicketMode {

@@ -21,6 +21,10 @@ export interface Safe {
   my_permissions: SafePermission[];
   /** For safes.manage holders only (null otherwise, and for inactive safes). */
   health: SafeHealthState | null;
+  /** Credential provider: apps may fetch from an approval-required safe only when on. */
+  allow_app_fetch: boolean;
+  /** max_cache_seconds served to apps. */
+  app_cache_seconds: number;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +98,13 @@ export interface ApprovalPolicy {
   level_timeout_hours: number;
 }
 
+export interface SafeAppFetch {
+  safe_id?: string;
+  approval_required?: boolean;
+  allow_app_fetch: boolean;
+  app_cache_seconds: number;
+}
+
 const BASE = 'safes';
 
 export const safesService = {
@@ -130,6 +141,16 @@ export const safesService = {
   /** Events about the safe, its accounts and their requests and check-outs (view_audit). */
   async audit(safeId: string, params: PageQuery): Promise<Paginated<AuditEvent>> {
     const { data } = await apiClient.get<Paginated<AuditEvent>>(`${BASE}/${safeId}/audit`, { params });
+    return data;
+  },
+
+  async appFetch(safeId: string): Promise<ApiResponse<SafeAppFetch>> {
+    const { data } = await apiClient.get<ApiResponse<SafeAppFetch>>(`${BASE}/${safeId}/app-fetch`);
+    return data;
+  },
+
+  async saveAppFetch(safeId: string, payload: SafeAppFetch): Promise<ApiResponse<SafeAppFetch>> {
+    const { data } = await apiClient.put<ApiResponse<SafeAppFetch>>(`${BASE}/${safeId}/app-fetch`, payload);
     return data;
   },
 

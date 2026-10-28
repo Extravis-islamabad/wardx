@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { accountsService, type AccountInput } from '@/services/inventory-services';
+import { accountsService, type AccountInput, type SnmpSecret } from '@/services/inventory-services';
 import type { PageQuery } from '@/types/api';
 import { dashboardKeys } from '@/features/dashboard/hooks/dashboardKeys';
 import { inventoryKeys } from './inventoryKeys';
@@ -37,7 +37,7 @@ export function useUpdateAccount() {
 export function useSetAccountSecret() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, value }: { id: string; value: string }) => accountsService.setSecret(id, value),
+    mutationFn: ({ id, value }: { id: string; value: string | SnmpSecret }) => accountsService.setSecret(id, value),
     onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.accountsAll() }),
   });
 }

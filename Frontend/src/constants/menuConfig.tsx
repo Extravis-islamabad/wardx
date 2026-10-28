@@ -1,5 +1,6 @@
 import {
   ApartmentOutlined,
+  ApiOutlined,
   AuditOutlined,
   CloudServerOutlined,
   CodeOutlined,
@@ -76,6 +77,13 @@ export const menuItems: MenuItem[] = [
     icon: <ApartmentOutlined />,
     requiredModule: MODULES.IDENTITY,
     requiredPermission: PERMISSIONS.DIRECTORY_MANAGE,
+  },
+  {
+    key: ROUTES.APPS,
+    label: 'Application identities',
+    icon: <ApiOutlined />,
+    requiredModule: MODULES.IDENTITY,
+    requiredPermission: PERMISSIONS.APPS_MANAGE,
   },
 ];
 

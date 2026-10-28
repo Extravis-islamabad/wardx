@@ -36,7 +36,16 @@ export const SECRET_TYPES: { value: string; label: string }[] = [
   { value: 'enable_secret', label: 'Enable secret' },
   { value: 'ssh_key', label: 'SSH private key' },
   { value: 'api_key', label: 'API key' },
+  { value: 'snmp_v2c', label: 'SNMP v2c community' },
+  { value: 'snmp_v3', label: 'SNMP v3 (USM)' },
 ];
+
+/** SNMP accounts store a structured secret (one sealed document), not a single value. */
+export const isSnmpType = (secretType: string | null | undefined) => !!secretType?.startsWith('snmp_');
+
+export const SNMP_SECURITY_LEVELS = ['noAuthNoPriv', 'authNoPriv', 'authPriv'] as const;
+export const SNMP_AUTH_PROTOCOLS = ['MD5', 'SHA', 'SHA-224', 'SHA-256', 'SHA-384', 'SHA-512'] as const;
+export const SNMP_PRIV_PROTOCOLS = ['DES', '3DES', 'AES', 'AES-192', 'AES-256'] as const;
 
 export const DEFAULT_SECRET_TYPE = 'password';
 

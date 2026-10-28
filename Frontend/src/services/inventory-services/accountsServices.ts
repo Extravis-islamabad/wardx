@@ -45,6 +45,19 @@ export interface AccountBrief {
   safe_name?: string | null;
 }
 
+/** SNMPv2c: {version: '2c', community}. SNMPv3: USM fields, those unused by the level left out. */
+export type SnmpSecret =
+  | { version: '2c'; community: string }
+  | {
+      version: '3';
+      security_name: string;
+      security_level: 'noAuthNoPriv' | 'authNoPriv' | 'authPriv';
+      auth_protocol?: string;
+      auth_password?: string;
+      priv_protocol?: string;
+      priv_password?: string;
+    };
+
 export interface AccountInput {
   target_id: string;
   /** Omitted: the Default safe. Changing it moves the account (manage_accounts on both safes). */
@@ -55,6 +68,8 @@ export interface AccountInput {
   exclusive_checkout: boolean;
   max_checkout_minutes: number;
   secret?: string;
+  /** The initial secret of an snmp_v2c / snmp_v3 account (instead of `secret`). */
+  snmp?: SnmpSecret;
   rotate_after_use?: boolean;
   rotation_interval_days?: number | null;
   password_length?: number;
@@ -79,8 +94,10 @@ export const accountsService = {
     return data;
   },
 
-  async setSecret(id: string, value: string): Promise<ApiResponse<Account>> {
-    const { data } = await apiClient.put<ApiResponse<Account>>(`${BASE}/${id}/secret`, { value });
+  /** A plain value, or the structured secret of an SNMP account. */
+  async setSecret(id: string, value: string | SnmpSecret): Promise<ApiResponse<Account>> {
+    const body = typeof value === 'string' ? { value } : { snmp: value };
+    const { data } = await apiClient.put<ApiResponse<Account>>(`${BASE}/${id}/secret`, body);
     return data;
   },
 

@@ -23,6 +23,8 @@ export enum ROUTES {
   // Identity
   USERS = '/users',
   DIRECTORY = '/directory',
+  /** Application identities: the credential provider's clients (MonetX collectors). */
+  APPS = '/apps',
 
   // Own account
   SECURITY = '/security',

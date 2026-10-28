@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input, InputNumber, Modal, Select, Switch } from 'antd';
-import { useEffect } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
-import { SECRET_TYPES } from '@/constants/enums/inventory';
+import { isSnmpType, SECRET_TYPES } from '@/constants/enums/inventory';
 import { SafePermission } from '@/constants/enums/safes';
 import { PICKER_PAGE } from '@/constants/globals';
 import { useCreateAccount, useTargets, useUpdateAccount } from '@/features/inventory/hooks';
@@ -13,7 +13,8 @@ import {
   accountFormValuesFrom,
   type AccountFormValues,
 } from '@/features/inventory/schemas/accountSchema';
-import type { Account } from '@/services/inventory-services';
+import type { Account, SnmpSecret } from '@/services/inventory-services';
+import { emptySnmpSecret, SnmpSecretFields, snmpPayload } from './SnmpSecretFields';
 import { notify } from '@/utils/notify';
 
 interface AccountFormModalProps {
@@ -43,9 +44,17 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
     defaultValues: accountFormValuesFrom(account),
   });
 
+  const secretType = useWatch({ control, name: 'secret_type' });
+  const snmp = !editing && isSnmpType(secretType);
+  const [snmpSecret, setSnmpSecret] = useState<SnmpSecret>(emptySnmpSecret('snmp_v2c'));
+
   useEffect(() => {
     if (open) reset(accountFormValuesFrom(account));
   }, [open, account, reset]);
+
+  useEffect(() => {
+    if (isSnmpType(secretType)) setSnmpSecret(emptySnmpSecret(secretType));
+  }, [secretType]);
 
   const onSubmit = async (values: AccountFormValues) => {
     try {
@@ -57,7 +66,11 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
           payload: { safe_id, description, exclusive_checkout, max_checkout_minutes },
         });
       } else {
-        await createAccount({ ...values, secret: values.secret || undefined });
+        await createAccount(
+          snmp
+            ? { ...values, secret: undefined, snmp: snmpPayload(snmpSecret) }
+            : { ...values, secret: values.secret || undefined },
+        );
       }
       notify.success(editing ? 'Account updated' : 'Account added');
       onClose();
@@ -152,7 +165,8 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
             />
           </FormField>
         </div>
-        {!editing && (
+        {snmp && <SnmpSecretFields value={snmpSecret} onChange={setSnmpSecret} />}
+        {!editing && !snmp && (
           <FormField
             label="Current secret"
             htmlFor="account-secret"

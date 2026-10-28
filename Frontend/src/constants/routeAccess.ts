@@ -33,6 +33,7 @@ export const ROUTE_ACCESS: Partial<Record<string, RouteAccessConfig>> = {
 
   [ROUTES.USERS]: { module: MODULES.IDENTITY, permission: PERMISSIONS.USERS_MANAGE },
   [ROUTES.DIRECTORY]: { module: MODULES.IDENTITY, permission: PERMISSIONS.DIRECTORY_MANAGE },
+  [ROUTES.APPS]: { module: MODULES.IDENTITY, permission: PERMISSIONS.APPS_MANAGE },
 
   // Every signed-in user must reach their own MFA settings, including mid-enrolment.
   [ROUTES.SECURITY]: {},
