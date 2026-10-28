@@ -79,7 +79,7 @@ class PlatformDriver(Protocol):
 | **Windows** (local accounts) | WinRM over HTTPS 5986, NTLM, cert validated | none (can't change self without admin rights) | PowerShell `Set-LocalUser -Password` with a SecureString built from stdin, never in the command line | not needed | WinRM logon as the account; SMB auth if it has no WinRM rights (question Q6) |
 | **Cisco IOS / IOS-XE** | SSH CLI | `configure terminal` → `username X algorithm-type scrypt secret <pw>` → `end` | same, as an admin user | `copy running-config startup-config` (confirm prompt) | new SSH login, plus `enable` if the account uses it |
 | **Huawei VRP** | SSH CLI | `system-view` → `aaa` → `local-user X password irreversible-cipher <pw>` → `return` | same, as an admin user | `save` (answer `Y`) | new SSH login, handling the first-login "change password?" prompt by answering N |
-| **MikroTik RouterOS** | API-SSL 8729 (preferred), SSH CLI fallback | `/user/set` via the API | same, as an admin user | not needed | new API or SSH login |
+| **MikroTik RouterOS** | API-SSL 8729 only, pinned certificate (§15) | `/password` via the API | `/user/set` via the API, as an admin user | not needed | new API login; SSH only if API-SSL is off |
 
 Device notes the drivers must handle:
 - **Cisco:** the `?` key triggers help, and some IOS versions cap secret length. The policy
@@ -325,7 +325,8 @@ network dialects.
 4. **Q4. Scheduled rotation while held:** the same waiting mechanism; never under a holder.
 5. **Q5. Auto-reconcile on out-of-sync:** off by default per safe; always alert.
 6. **Q6. Windows verify:** WinRM first; SMB/NTLM fallback only if the lab shows it's needed.
-7. **Q7. MikroTik:** API-SSL first, SSH CLI fallback.
+7. **Q7. MikroTik:** API-SSL first, SSH CLI fallback. Narrowed by the owner during the build
+   (§15): changes only over API-SSL; SSH is a fallback for the verify login only.
 8. **Q8. Telnet-only devices:** never rotated; vaulted and flagged `non-rotatable (Telnet)`.
 9. **Q9. SSH key rotation:** later, as (c2).
 10. **Q10. Version retention:** current and previous, the last 5, and any version an open
@@ -404,7 +405,7 @@ network dialects.
     whatever the account's password is, so a probe proves nothing and would spend the
     one-wrong-attempt budget. Instead, a clean verify (stored non-empty password works,
     a wrong one is refused) proves the device password is that non-empty value.
-  - **MikroTik (later):** a login with an empty password being accepted means it is
+  - **MikroTik (built, §15):** a login with an empty password being accepted means it is
     empty (and the negative check catches "accepts anything").
   - **Windows, Cisco, Huawei (later):** no side-effect-free probe identified yet; the
     clean verify is the evidence. Recorded per driver when built.
@@ -505,3 +506,113 @@ Where the spec left a question open, the more restrictive choice was taken:
    - last verify untrustworthy: says the current version is stored but not verified.
    Tests: `tests/integration/rotation/test_break_glass_rotation.py`.
 
+## 15. MikroTik driver (2026-10-29)
+
+Owner's additions for this driver: passwords change **only over API-SSL with a pinned
+certificate**; SSH is used only for the verify login and only when API-SSL is not enabled;
+the cleartext API (8728) is refused like Telnet; both identities must be pinned; a mismatch on
+either blocks, and nothing ever falls back to another channel because an identity check failed.
+
+### 15.1 Design
+
+- **Two pinned identities per target.** Next to the SSH host key, a MikroTik target pins its
+  API-SSL certificate: the PEM and the SHA-256 of its DER encoding (`AA:BB:…`). Migration
+  `020_tls_cert_pin.sql` adds `api_port` (NULL = 8729), `api_tls` (FALSE = cleartext API only),
+  `tls_cert_pem`, `tls_cert_fingerprint`, `tls_cert_learned_at`, `tls_cert_mismatch_at`,
+  `tls_cert_mismatch_fingerprint`, and `access.rotation_job_steps.channel`.
+- **The Host key flow, for certificates.** `POST /targets/{id}/tls-cert/probe` (TLS handshake
+  only: no API word, no credential; pins nothing), `/accept {fingerprint}` (re-reads and pins
+  only if the device still presents exactly that fingerprint; 64 hex digits, colons optional,
+  so the RouterOS spelling can be pasted), `/reset` (clears the pin, never a mismatch). Same
+  permissions as host keys: `inventory.manage` plus `manage_accounts` on every safe with an
+  account on the target; audited once at target level and once per safe
+  (`target.tls_cert_learned|changed|reset|accept|mismatch`). The shared rules live in
+  `TargetIdentityService`. The console's Host key dialog shows both identities.
+- **Trust.** `src/transport/routeros_api.py` connects with a `CERT_REQUIRED` context whose only
+  trust anchor is the pinned certificate (partial chain allowed, expiry checked, host name not
+  checked: identity is the pin), then compares the presented fingerprint with the pin before
+  the first API word. Certificate verification is never disabled; the only unverified read is
+  the probe (and, after a failed pin check, a re-read of what was presented), neither of which
+  sends anything.
+- **Order of checks, per connection:** refuse unless both pins exist and `api_tls` → TLS
+  handshake that only the pinned certificate passes → compare the SSH host key the device
+  presents (read without authenticating) → one `/login`. A certificate mismatch therefore
+  never opens an SSH connection.
+- **Device steps.** Self change: `/password` with `old-password`, `new-password`,
+  `confirm-new-password` as API attributes. Reconcile: `/user/print ?name=` then `/user/set
+  =.id= =password=` as the reconcile account. Persist: not needed. Verify: one API-SSL login.
+  Transcripts show `=password=****`; every secret is also redacted by the transcript.
+- **Engine.** New outcomes `channel_unavailable` (API-SSL refused, closed or not TLS: the job
+  goes to `needs_attention` with exactly "API-SSL not enabled on device"; nothing is sent) and
+  `refused` (a precondition failed before sending: the job fails). A `host_key_mismatch`
+  carries which identity failed and is recorded on the target (SSH: `host_key_mismatch_*`,
+  TLS: `tls_cert_mismatch_*`, one high `target.tls_cert_changed` alert per new certificate);
+  every later rotation and verify is refused before connecting until an explicit accept.
+  Each step records its channel (`api-ssl`, `ssh`).
+- **Empty passwords (§12.2).** When the stored password is refused over the API, the driver
+  makes one API-SSL login with an empty password (`empty_password_probe`). Accepted means the
+  device password is empty: the account is flagged `high_risk_empty_password` (high alert) and
+  the job stops. The probe takes the place of the run's single negative check (which only
+  follows an accepted login), so a run still makes at most one login with a password WardX did
+  not store. Never over SSH, where such an account accepts anything; there the negative check
+  catches it.
+
+### 15.2 Findings on the CHR (RouterOS 7.25)
+
+1. `/password` over the API works for an account with the `password` policy (group `read`
+   has it); a wrong old password answers `failure: Bad old password!`.
+2. Login refusal answers `invalid user name or password (6)`. A user without rights calling
+   `/user/set` gets `not enough permissions (9)`.
+3. An empty-password account: the API accepts only the empty password; SSH accepts any.
+4. Passwords set over the API appeared neither in `/system history` (its redo/undo hold no
+   password) nor in `/log` (it records "password changed by <user>"). Checked by the lab test
+   after each self change; not guaranteed by MikroTik.
+5. With api-ssl disabled, the QEMU-forwarded port accepts TCP and resets during the TLS
+   handshake; the plain API port fails TLS with `WRONG_VERSION_NUMBER`. Both are "API-SSL not
+   enabled on device"; only a TLS ClientHello is ever sent.
+6. `/certificate sign` of a self-signed certificate fails with `CA not found` unless
+   `key-usage` includes `key-cert-sign` (the onboarding doc's Option B was fixed).
+7. Rapid repeated SSH logins as admin were refused (`Permission denied`, nothing logged on the
+   device); the lab helper keeps one SSH connection per run.
+
+### 15.3 Judgment calls (the more restrictive choice where the spec was silent)
+
+1. **Only a refusal falls back to SSH for verify.** A timeout is `unreachable` (retried later),
+   never an SSH fallback. A certificate mismatch, refusal or any device answer never falls back.
+2. **API-SSL off during a rotation:** `needs_attention` as specified; the candidate is kept
+   unpromoted for the administrator's resolution, never sent over SSH.
+3. **The SSH host key is compared on every API-SSL connection**, after the certificate check.
+   A different key blocks and is recorded; an unreadable one is noted in the transcript and
+   does not block, because no credential ever goes over SSH on that path.
+4. **A pinned certificate that no longer verifies** (e.g. expired) is `refused`, not recorded
+   as a mismatch and never re-accepted automatically: renew it on the device and accept the
+   new one.
+5. **Login result:** only the explicit "invalid user name or password" counts as refused;
+   any other answer (fatal, lost connection, other trap) is inconclusive, so a negative check
+   can never look clean by accident.
+6. **Cleartext API:** `api_tls = false` makes the target `non-rotatable (cleartext API)`
+   (vaultable, refused at request time, no certificate probe). There is no code path that
+   speaks the plain API.
+7. **Missing pins** are refused at request time (409 "learn the device identity first") and
+   again by the engine for jobs queued earlier; a recorded mismatch keeps the existing
+   behaviour (queued, then refused by the engine before connecting).
+8. **No trust on first use for certificates.** Unlike the gateway's first-seen SSH key, a
+   certificate is pinned only by an explicit accept.
+9. **Reconcile accounts** need `write` and `policy` (built-in group `full` in the lab); a
+   permission error is reported as such, never retried with another account.
+
+### 15.4 Tests and limitations
+
+- `tests/unit/transport/test_routeros_api.py`: word encoding, pin checked before any word,
+  wrong certificate, wrong fingerprint, expired pin, closed port, cleartext service, timeout,
+  traps, fatal, `!empty`, lost connection, redaction. A local TLS server with a certificate
+  generated per run; its key touches disk only under `lab/.secrets/` and is deleted at once.
+- `tests/integration/rotation/test_tls_certs.py`: the pin flow and the driver against a
+  simulated RouterOS (no CHR needed).
+- `tests/integration/rotation/test_mikrotik_lab.py` and `test_mikrotik_e2e.py`: against the
+  CHR, skipped with the reason when Docker, the container or its API-SSL is unavailable. They
+  create and remove only `wardx_rot_*` users, may disable api-ssl or swap in a temporary
+  certificate generated on the device, and always restore both.
+- Limitations: only RouterOS 7.25 (CHR) tested; the ambiguous-change recovery is covered by
+  the engine tests, not provoked on the CHR; the console dialog was checked by type-check and
+  build, not in a browser.

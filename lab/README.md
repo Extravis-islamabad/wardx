@@ -56,6 +56,50 @@ LAB_USERS="wardx_rot_demo:$(cat lab/.secrets/linux-demo)" docker run -d --name w
 # 4. Clean up: docker rm -f wardx-lab-linux-demo && rm lab/.secrets/linux-demo
 ```
 
+## Rotation tests against the MikroTik CHR
+
+`Backend/tests/integration/rotation/test_mikrotik_lab.py` and `test_mikrotik_e2e.py` use the
+running `wardx-lab-mikrotik` container (they never start, restart or remove it) and are
+skipped with the reason when Docker, the container or its API-SSL is not available. They log in
+as `admin` (password from `lab/.secrets/mikrotik-admin`) only to create, change and remove their
+own `wardx_rot_*` users. Some tests disable `api-ssl` or switch it to a temporary certificate
+generated **on the device** (`wardx_rot_cert_*`); both are always restored, and the module
+checks at the end that `api-ssl` is enabled with `wardx-lab-api` and only `admin` is left.
+
+```bash
+cd Backend && .venv/bin/python -m pytest -q -rs tests/integration/rotation -k "mikrotik or tls"
+```
+
+### The MikroTik end-to-end run by hand (console)
+
+```bash
+# 1. A wardx_rot_ user on the CHR; its password goes to lab/.secrets/, never to the screen.
+umask 077; python3 -c 'import secrets; print("Lab-" + secrets.token_urlsafe(18))' > lab/.secrets/mikrotik-demo
+cd Backend && PYTHONPATH=. .venv/bin/python - <<'PY'
+import asyncio, pathlib
+from tests.integration.rotation.mikrotik_lab import Chr
+async def main():
+    box = await Chr.connect()
+    async with box.api() as conn:
+        pw = pathlib.Path("../lab/.secrets/mikrotik-demo").read_text().strip()
+        await conn.call("/user/add", {"name": "wardx_rot_demo", "group": "read", "password": pw},
+                        secret_attrs=("password",))
+    await box.close()
+asyncio.run(main())
+PY
+# 2. Run the API with rotation on (a scratch or dev database of your own), e.g. on 8011:
+#    WARDX_ROTATION_ENABLED=true WARDX_ROTATION_TICK_SECONDS=5 .venv/bin/uvicorn main:app --port 8011
+# 3. In the console: add target 127.0.0.1, port 2232, platform MikroTik RouterOS, protocol SSH,
+#    API-SSL port 8739, "Rotation allowed". Targets → Host key: compare and accept the SSH key,
+#    then compare the API-SSL fingerprint with `/certificate print detail where
+#    name=wardx-lab-api` and accept it. Add account wardx_rot_demo with the password from the
+#    file (copy it, do not echo it), give its safe a two-level approval policy and "Rotate
+#    after use"; request, approve twice, check out, check in. The Rotation tab shows the job
+#    succeed over api-ssl with a clean verify.
+# 4. Clean up: run the step 1 snippet with `await box.remove_user("wardx_rot_demo")` in place
+#    of the `async with` block, then rm lab/.secrets/mikrotik-demo
+```
+
 ## MikroTik CHR lab state
 
 What is configured on `wardx-lab-mikrotik` (checked read-only on 2026-10-28):
@@ -66,6 +110,9 @@ What is configured on `wardx-lab-mikrotik` (checked read-only on 2026-10-28):
 | Certificate | `wardx-lab-api`: self-signed, RSA 2048, SHA-256, created **on the device**. Its private key exists only on the CHR; no certificate or key file is kept on this machine. |
 | `api-ssl` (8729, host 8739) | enabled, using `wardx-lab-api` |
 | `api` (8728, host 8738) and `telnet` | still enabled (CHR defaults), so tests can check that WardX **refuses** rotation over cleartext. Disable them on real devices (see `Backend/docs/phase1/ONBOARDING_MIKROTIK.md`). |
+
+RouterOS 7.25 self-signs only with `key-cert-sign` in `key-usage` (`wardx-lab-api` has the
+default key usage, which includes it).
 
 The certificate was created with the same commands as the product onboarding doc. Trust in
 WardX comes from pinning its SHA-256 fingerprint through the Host key flow, never from turning
