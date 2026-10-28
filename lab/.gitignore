@@ -1,0 +1,9 @@
+# Downloaded vendor images and VM disks: never committed.
+*/images/
+*.img
+*.qcow2
+*.iso
+*.zip
+
+# Lab credentials (generated locally)
+.secrets/
