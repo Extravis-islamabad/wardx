@@ -26,6 +26,7 @@ def _to_dto(row: Target) -> TargetDTO:
         tags=list(row.tags or []),
         external_ref=row.external_ref,
         is_active=row.is_active,
+        ssh_host_key=row.ssh_host_key,
         ssh_host_key_fingerprint=row.ssh_host_key_fingerprint,
         ssh_host_key_learned_at=row.ssh_host_key_learned_at,
         created_at=row.created_at,
@@ -57,8 +58,8 @@ class TargetRepository(BaseRepository):
         )
         return [_to_dto(r) for r in rows], total or 0
 
-    async def get(self, target_id: uuid.UUID) -> TargetDTO | None:
-        row = await self._session.get(Target, target_id)
+    async def get(self, target_id: uuid.UUID, *, lock: bool = False) -> TargetDTO | None:
+        row = await self._session.get(Target, target_id, with_for_update=lock or None)
         return _to_dto(row) if row else None
 
     async def create(self, values: dict[str, Any]) -> TargetDTO:

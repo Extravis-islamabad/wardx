@@ -19,6 +19,8 @@ class TargetDTO:
     tags: list[str]
     external_ref: str | None
     is_active: bool
+    # The pinned SSH host public key the gateway verifies the device against.
+    ssh_host_key: str | None
     ssh_host_key_fingerprint: str | None
     ssh_host_key_learned_at: datetime | None
     created_at: datetime
