@@ -321,6 +321,8 @@ data: migrations only add, backfill and move.
   - Approver recipients come from current memberships and the group cache. A directory
     group's members are notified only if their groups are cached.
   - The requester and anyone who already decided are never notified as approvers.
+  - The requester is told when each level completes ("Level N of M approved"). The last
+    level's notice also says the request is approved.
   - Partial approvals at a level don't notify anyone.
 - **Account API:** `requires_approval` is now a read-only reflection of the safe's
   `approval_required`. Create and update no longer accept it, and ignore it if sent.

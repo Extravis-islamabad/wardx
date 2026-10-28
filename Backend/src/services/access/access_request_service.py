@@ -12,7 +12,8 @@ Rules:
   last it is approved with ``valid_until = approved_at + approval_window_minutes``
   (stored in ``expires_at``).
 - Every decision is audited with its level; notifications go to the level's approvers
-  (on create and advance) and to the requester (on advance, approve, deny, expiry).
+  (on create and advance) and to the requester when each level completes ("level N of M
+  approved"), and on deny and expiry. Partial approvals notify nobody.
 """
 
 from __future__ import annotations
@@ -251,7 +252,8 @@ class AccessRequestService:
             details["advanced_to"] = req.current_level + 1
             notice = (
                 "request.advanced",
-                f"Your request for {_label(req)} passed level {req.current_level}",
+                f"Level {req.current_level} of {policy.last_level} approved: your request "
+                f"for {_label(req)} moves to level {req.current_level + 1}",
             )
         else:
             changes.update(
@@ -260,7 +262,11 @@ class AccessRequestService:
                 expires_at=now + timedelta(minutes=policy.approval_window_minutes),
             )
             details["final"] = True
-            notice = ("request.approved", f"Your request for {_label(req)} was approved")
+            notice = (
+                "request.approved",
+                f"Level {req.current_level} of {policy.last_level} approved: your request "
+                f"for {_label(req)} is approved",
+            )
         await self._requests.update(req.id, changes)
         await self._audit.record(
             actor,

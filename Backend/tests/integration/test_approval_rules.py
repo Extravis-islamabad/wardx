@@ -11,6 +11,7 @@ from tests.integration.approvals_support import (
     approval_safe,
     decide,
     kinds_for,
+    notifications,
     person,
     request_access,
     run_sql,
@@ -186,6 +187,14 @@ async def test_notifications_for_each_step_and_recipient(client, admin, make_use
         "request.advanced",
         "request.approved",
     ]
+    titles = sorted(
+        n["title"]
+        for n in await notifications(client, requester["headers"])
+        if n["object_id"] == rid
+    )
+    assert titles[0].startswith("Level 1 of 2 approved") and titles[1].startswith(
+        "Level 2 of 2 approved"
+    )
 
     # Denied: the requester.
     await run_sql("UPDATE access.requests SET status = 'cancelled' WHERE id = :r", r=rid)
@@ -244,3 +253,22 @@ async def test_group_approvers_come_from_the_group_cache(client, admin, make_use
     finally:
         # Directory sync tests expect only their own directory users.
         await run_sql("UPDATE iam.users SET auth_source = 'local' WHERE id = :u", u=uid)
+
+
+async def test_partial_approval_at_a_level_notifies_nobody(client, admin, make_user):
+    lab = await approval_safe(client, admin, make_user, levels=[{"required_approvals": 2}])
+    sid = lab["safe_id"]
+    requester = await person(client, make_user, admin, sid, REQUESTER_PERMS)
+    a1 = await person(client, make_user, admin, sid, APPROVER_PERMS)
+    a2 = await person(client, make_user, admin, sid, APPROVER_PERMS)
+    req = (await request_access(client, requester["headers"], lab["account"]["id"])).json()
+    rid = req["data"]["id"]
+    await decide(client, a1["headers"], rid)
+    assert await kinds_for(client, requester["headers"], rid) == []
+    await decide(client, a2["headers"], rid)
+    done = [
+        n["title"]
+        for n in await notifications(client, requester["headers"])
+        if n["object_id"] == rid
+    ]
+    assert len(done) == 1 and done[0].startswith("Level 1 of 1 approved")
