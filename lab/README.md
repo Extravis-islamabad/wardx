@@ -26,3 +26,32 @@ sh lab/lab.sh down        # removes wardx-lab-* containers only
 Lab credentials are generated locally into `lab/.secrets/` (gitignored, mode 0600) and never
 printed. Note for the MikroTik driver: **RouterOS accepts any SSH password while an account's
 password is empty**, so a successful login alone never proves a password works.
+
+## Rotation tests against the Linux lab
+
+`Backend/tests/integration/rotation/test_linux_lab.py` and `test_linux_e2e.py` start their own
+`wardx-lab-linux-<random>` container per module (random host port on 127.0.0.1, `wardx_rot_*`
+users with generated passwords passed through the environment) and remove it by name
+afterwards. Without Docker or the image they are skipped with the reason.
+
+```bash
+cd Backend && .venv/bin/python -m pytest -q -rs tests/integration/rotation
+```
+
+### The end-to-end run by hand (console)
+
+```bash
+# 1. A lab target with one account; the password goes to lab/.secrets/, never to the screen.
+umask 077; python3 -c 'import secrets; print("Lab-" + secrets.token_urlsafe(18))' > lab/.secrets/linux-demo
+LAB_USERS="wardx_rot_demo:$(cat lab/.secrets/linux-demo)" docker run -d --name wardx-lab-linux-demo \
+  --network wardx-lab -p 127.0.0.1:2242:22 -e LAB_USERS wardx-lab/linux-ssh:1
+# 2. Run the API with rotation on (a scratch or dev database of your own), e.g. on 8011:
+#    WARDX_ROTATION_ENABLED=true WARDX_ROTATION_TICK_SECONDS=5 .venv/bin/uvicorn main:app --port 8011
+# 3. In the console: add target 127.0.0.1:2242 (linux, ssh) with "Rotation allowed",
+#    Targets → Learn host key; add account wardx_rot_demo with the password from the file
+#    (copy it, do not echo it); give its safe a two-level approval policy and
+#    "Rotate after use"; request, approve twice, check out, check in; an emergency
+#    reveal before the check-in makes the job wait; check the emergency one in and the
+#    Rotation tab shows the job succeed with a clean verify.
+# 4. Clean up: docker rm -f wardx-lab-linux-demo && rm lab/.secrets/linux-demo
+```
