@@ -1,6 +1,9 @@
 """Check-out, reveal, check-in and expiry of privileged account credentials.
 
 Rules:
+- Check-out and reveal need ``retrieve`` on the account's safe; a check-out the
+  gateway takes for a session needs ``use`` or ``retrieve``. An account in a
+  safe the caller cannot list reads as 404.
 - An account that requires approval is checked out only against an approved
   request of the same person (the approver is never the requester, see
   AccessRequestService); using the request marks it used.
@@ -26,7 +29,7 @@ from src.contracts.dto.access.checkout_dto import (
     RevealedSecretDTO,
 )
 from src.core.context import SYSTEM_ACTOR, Actor
-from src.core.enums import CheckoutStatus, RequestStatus
+from src.core.enums import CheckoutStatus, RequestStatus, SafePermission
 from src.core.permissions import ACCESS_REVOKE, ACCESS_VIEW_ALL
 from src.errors.exceptions import ConflictError, ForbiddenError, NotFoundError
 from src.models import utcnow
@@ -88,8 +91,15 @@ class CheckoutService:
         reason: str | None = None,
         duration_minutes: int | None = None,
         request_id: uuid.UUID | None = None,
+        for_session: bool = False,
     ) -> CheckoutDTO:
         account = await self._accounts.get(account_id, lock=True)
+        needed = (
+            (SafePermission.USE, SafePermission.RETRIEVE)
+            if for_session
+            else (SafePermission.RETRIEVE,)
+        )
+        await self._accounts.authorise(actor, account, *needed)
         if account.secret_version == 0:
             raise ConflictError("No secret is stored for this account yet")
         now = utcnow()
@@ -168,6 +178,9 @@ class CheckoutService:
         if co.status != CheckoutStatus.ACTIVE or co.expires_at <= utcnow():
             raise ConflictError("Check-out is no longer active")
         account = await self._accounts.get(co.account_id)
+        # Membership can change mid check-out, and a session check-out (``use``) never
+        # entitles its holder to see the secret.
+        await self._accounts.authorise(actor, account, SafePermission.RETRIEVE)
         # The current version: if an admin replaced the secret mid check-out, the
         # holder needs the new one.
         value = await self._vault.read(

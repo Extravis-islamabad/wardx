@@ -16,9 +16,15 @@ class TargetBriefResponse(BaseModel):
     protocol: str
 
 
+class SafeBriefResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class AccountResponse(BaseModel):
     id: uuid.UUID
     target: TargetBriefResponse
+    safe: SafeBriefResponse
     username: str
     secret_type: str
     description: str | None

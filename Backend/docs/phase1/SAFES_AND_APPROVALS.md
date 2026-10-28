@@ -97,6 +97,28 @@ data: migrations only add, backfill and move.
   - role `admin`: all of the above plus `manage_accounts`, `manage_members` and `view_audit`;
   - `approve` for `approver` and `admin`, because that is how approvals work today.
 
+### Build decisions (where the spec was silent; the more restrictive choice was taken)
+
+- **Routes:** safes and members live under `/safes` and `/safes/{id}/members`. Reading
+  safes and changing members is gated by `inventory.view` at the route; the service then
+  requires `safes.manage` or `manage_members` on that safe. Creating and editing safes
+  needs `safes.manage`. Safes are deactivated, never deleted.
+- **Inactive safe:** its members keep only `list`, `view_audit` and `manage_members`, so
+  nobody uses, retrieves or edits its accounts until it is reactivated.
+- **New accounts** without a `safe_id` go into the Default safe, which still needs
+  `manage_accounts` there. Account routes keep their `inventory.manage` gate, so account
+  administration needs both the route codename and `manage_accounts`.
+- **Self-grant:** any add or change of your own membership is refused, narrowing included.
+  Removing a membership (yours too) is allowed, since it only narrows access. While your
+  directory groups can't be verified, every group membership change is refused with
+  `self_grant_forbidden`, because the group might be yours.
+- **Requests** (today's approval flow) need `retrieve` or `use` on the account's safe,
+  and 404 for unlisted accounts.
+- **Deleting a target** deletes its accounts, so it needs `manage_accounts` on every safe
+  those accounts sit in.
+- **Reveal** re-checks `retrieve` on every call, so removing a member stops their next reveal
+  even mid check-out. A check-out the gateway took for a `use`-only member can't be revealed.
+
 ## (b) Approval workflow
 
 ### Safe policy (set per safe)

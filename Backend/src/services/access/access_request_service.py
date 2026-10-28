@@ -1,6 +1,8 @@
 """Access requests and their approval.
 
 Rules:
+- Requesting needs ``retrieve`` or ``use`` on the account's safe (404 when the
+  requester cannot list it).
 - Only an account that requires approval takes requests, and a request never
   asks for longer than the account's check-out limit.
 - One open (pending or approved) request per person per account.
@@ -17,7 +19,7 @@ from datetime import timedelta
 from src.contracts.dto.access.access_request_dto import AccessRequestDTO, AccessRequestFilterDTO
 from src.core.config import Settings
 from src.core.context import SYSTEM_ACTOR, Actor
-from src.core.enums import RequestStatus
+from src.core.enums import RequestStatus, SafePermission
 from src.core.permissions import ACCESS_APPROVE
 from src.errors.exceptions import ConflictError, ForbiddenError, NotFoundError
 from src.models import utcnow
@@ -27,6 +29,7 @@ from src.repositories.access.access_request_repository import (
 )
 from src.repositories.inventory.account_repository import AccountRepository
 from src.services.audit.audit_service import AuditService
+from src.services.safes.safe_access_service import SafeAccessService
 
 
 class AccessRequestService:
@@ -36,11 +39,13 @@ class AccessRequestService:
         accounts: AccountRepository,
         audit: AuditService,
         settings: Settings,
+        access: SafeAccessService,
     ) -> None:
         self._requests = requests
         self._accounts = accounts
         self._audit = audit
         self._settings = settings
+        self._access = access
 
     async def list(
         self,
@@ -81,6 +86,10 @@ class AccessRequestService:
         account = await self._accounts.get(account_id)
         if account is None:
             raise NotFoundError("Account not found")
+        # A request leads to a check-out (retrieve) or a gateway session (use).
+        await self._access.require(
+            actor, account.safe_id, SafePermission.RETRIEVE, SafePermission.USE
+        )
         if not account.requires_approval:
             raise ConflictError("This account does not need approval; check it out directly")
         if duration_minutes > account.max_checkout_minutes:

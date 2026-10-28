@@ -15,6 +15,7 @@ from src.core.config import get_settings
 from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
 from src.dependencies.inventory import build_account_service
+from src.dependencies.safes import build_safe_access_service
 from src.dependencies.vault import build_vault_service
 from src.repositories.access.access_request_repository import AccessRequestRepository
 from src.repositories.access.checkout_repository import CheckoutRepository
@@ -29,6 +30,7 @@ def build_access_request_service(session: AsyncSession) -> AccessRequestService:
         AccountRepository(session),
         build_audit_service(session),
         get_settings(),
+        build_safe_access_service(session),
     )
 
 

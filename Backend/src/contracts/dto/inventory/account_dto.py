@@ -18,9 +18,16 @@ class TargetBriefDTO:
 
 
 @dataclass(frozen=True)
+class SafeBriefDTO:
+    id: uuid.UUID
+    name: str
+
+
+@dataclass(frozen=True)
 class AccountDTO:
     id: uuid.UUID
     target: TargetBriefDTO
+    safe: SafeBriefDTO
     username: str
     secret_type: str
     description: str | None
@@ -42,6 +49,10 @@ class AccountDTO:
         return self.target.id
 
     @property
+    def safe_id(self) -> uuid.UUID:
+        return self.safe.id
+
+    @property
     def has_secret(self) -> bool:
         return self.secret_version > 0
 
@@ -50,3 +61,6 @@ class AccountDTO:
 class AccountFilterDTO:
     target_id: uuid.UUID | None = None
     search: str | None = None
+    safe_id: uuid.UUID | None = None
+    # Only accounts in these safes (the caller's listable safes); None = no restriction.
+    safe_ids: frozenset[uuid.UUID] | None = None

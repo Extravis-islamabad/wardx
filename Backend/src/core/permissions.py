@@ -24,6 +24,9 @@ AUDIT_VIEW = "audit.view"
 USERS_MANAGE = "users.manage"
 DIRECTORY_MANAGE = "directory.manage"
 DASHBOARD_VIEW = "dashboard.view"
+# Create and edit safes, and manage the members of any safe. Grants no access to the
+# accounts inside: list, use and retrieve need safe membership (separation of duties).
+SAFES_MANAGE = "safes.manage"
 # Your own profile: who am I, sign out, change password, your own MFA.
 PROFILE_SELF = "profile.self"
 
@@ -45,6 +48,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             AUDIT_VIEW,
             USERS_MANAGE,
             DIRECTORY_MANAGE,
+            SAFES_MANAGE,
             DASHBOARD_VIEW,
             PROFILE_SELF,
         }

@@ -1,6 +1,10 @@
 """Database side of the gateway: who may connect, with which credential, and session records.
 
-Access follows the same rules as a check-out from the console:
+Access follows the same rules as a check-out from the console, except that a
+session needs ``use`` or ``retrieve`` on the account's safe (``use`` connects
+without ever showing the password). Accounts in safes the user cannot list do
+not exist for them here either. Then:
+
 - the user already holds an active check-out of the account: use it;
 - the account needs approval: use the user's approved request (it is spent);
 - otherwise: check the account out for the session, and check it back in after.
@@ -21,10 +25,11 @@ from src.contracts.dto.sessions.command_rule_dto import RuleScopeDTO
 from src.core.config import Settings
 from src.core.context import Actor
 from src.core.db import session_factory
-from src.core.enums import CheckoutStatus, Protocol, Role
+from src.core.enums import CheckoutStatus, Protocol, Role, SafePermission
 from src.dependencies.access import build_access_request_service, build_checkout_service
 from src.dependencies.identity import build_auth_service, build_mfa_service
 from src.dependencies.inventory import build_account_service, build_target_service
+from src.dependencies.safes import build_safe_access_service
 from src.dependencies.sessions import (
     build_command_rule_service,
     build_gateway_session_service,
@@ -136,7 +141,13 @@ class Broker:
                     f"{target.name} uses {target.protocol.upper()}; this gateway proxies SSH"
                 )
 
-            accounts = await build_account_service(session).list_for_target(target.id)
+            access = build_safe_access_service(session)
+            listable = await access.listable_safe_ids(actor)
+            accounts = [
+                a
+                for a in await build_account_service(session).list_for_target(target.id)
+                if a.safe_id in listable
+            ]
             if account_username is None:
                 if len(accounts) != 1:
                     names = ", ".join(sorted(a.username for a in accounts)) or "none"
@@ -149,6 +160,12 @@ class Broker:
                 account = next((a for a in accounts if a.username == account_username), None)
                 if account is None:
                     raise GatewayDenied(f"No account '{account_username}' on {target.name}")
+            perms = await access.permissions(actor, account.safe_id)
+            if not perms & {SafePermission.USE, SafePermission.RETRIEVE}:
+                raise GatewayDenied(
+                    f"You may not connect as {account.username} on {target.name} "
+                    "(needs 'use' or 'retrieve' on its safe)"
+                )
 
             checkout, owns = await self._obtain_checkout(session, actor, account)
             try:
@@ -203,7 +220,7 @@ class Broker:
         if held is not None:
             return held, False
 
-        body: dict = {"account_id": account.id, "reason": GATEWAY_REASON}
+        body: dict = {"account_id": account.id, "reason": GATEWAY_REASON, "for_session": True}
         if account.requires_approval:
             request = await build_access_request_service(session).usable_approval(actor, account.id)
             if request is None:
@@ -211,7 +228,7 @@ class Broker:
                     f"{account.username} needs an approved request. Request access in the "
                     "WardX console, then reconnect once it is approved."
                 )
-            body = {"account_id": account.id, "request_id": request.id}
+            body = {"account_id": account.id, "request_id": request.id, "for_session": True}
         try:
             out = await checkouts.checkout(actor, **body)
         except AppError as exc:

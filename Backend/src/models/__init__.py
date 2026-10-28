@@ -11,6 +11,8 @@ from src.models.identity.user_mfa import MfaRecoveryCode, UserMfa
 from src.models.inventory.account import Account
 from src.models.inventory.target import Target
 from src.models.keys.tenant_key import TenantKey
+from src.models.safes.safe import Safe
+from src.models.safes.safe_member import SafeMember
 from src.models.sessions.command_rule import CommandRule
 from src.models.sessions.gateway_session import GatewaySession
 from src.models.sessions.session_command import SessionCommand
@@ -27,6 +29,8 @@ __all__ = [
     "GatewaySession",
     "MfaRecoveryCode",
     "RotationJob",
+    "Safe",
+    "SafeMember",
     "Secret",
     "SessionCommand",
     "TZ",

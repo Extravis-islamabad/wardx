@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import TZ, Base, utcnow
 from src.models.inventory.target import Target
+from src.models.safes.safe import Safe
 
 
 class Account(Base):
@@ -20,6 +21,9 @@ class Account(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     target_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("inventory.targets.id", ondelete="CASCADE")
+    )
+    safe_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inventory.safes.id", ondelete="RESTRICT")
     )
     username: Mapped[str] = mapped_column(String(255))
     secret_type: Mapped[str] = mapped_column(String(20), default="password")
@@ -38,3 +42,4 @@ class Account(Base):
     updated_at: Mapped[datetime] = mapped_column(TZ, default=utcnow, onupdate=utcnow)
 
     target: Mapped[Target] = relationship(lazy="joined", innerjoin=True)
+    safe: Mapped[Safe] = relationship(lazy="joined", innerjoin=True)

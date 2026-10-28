@@ -9,6 +9,7 @@ from src.routers.v1.directory import directory
 from src.routers.v1.health import health
 from src.routers.v1.identity import auth, mfa, users
 from src.routers.v1.inventory import accounts, targets
+from src.routers.v1.safes import members, safes
 from src.routers.v1.sessions import command_rules, gateway, sessions
 
 api_router = APIRouter()
@@ -20,6 +21,8 @@ for _module in (
     users,
     targets,
     accounts,
+    safes,
+    members,
     requests,
     checkouts,
     audit_events,

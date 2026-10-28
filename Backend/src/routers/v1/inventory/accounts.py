@@ -1,6 +1,6 @@
 """Privileged accounts router.
 
-GET    /accounts                     — page through accounts (target, search)
+GET    /accounts                     — page through accounts (target, safe, search)
 GET    /accounts/{account_id}        — one account
 POST   /accounts                     — add an account, optionally with its secret
 PATCH  /accounts/{account_id}        — change check-out policy
@@ -34,6 +34,7 @@ from src.contracts.schemas.responses.common import (
 )
 from src.contracts.schemas.responses.inventory.account_responses import (
     AccountResponse,
+    SafeBriefResponse,
     TargetBriefResponse,
 )
 from src.core.permissions import INVENTORY_MANAGE, INVENTORY_VIEW
@@ -53,6 +54,7 @@ def _to_response(dto: AccountDTO) -> AccountResponse:
             platform=dto.target.platform,
             protocol=dto.target.protocol,
         ),
+        safe=SafeBriefResponse(id=dto.safe.id, name=dto.safe.name),
         username=dto.username,
         secret_type=dto.secret_type,
         description=dto.description,
@@ -76,12 +78,15 @@ def _to_response(dto: AccountDTO) -> AccountResponse:
 )
 async def list_accounts(
     service: AccountServiceDep,
+    actor: ActorDep,
     paging: Annotated[PageParams, Depends()],
     target_id: uuid.UUID | None = None,
+    safe_id: uuid.UUID | None = None,
     search: Annotated[str | None, Query(max_length=100)] = None,
 ) -> PaginatedAPIResponse[AccountResponse]:
     rows, total = await service.list(
-        AccountFilterDTO(target_id=target_id, search=search),
+        actor,
+        AccountFilterDTO(target_id=target_id, safe_id=safe_id, search=search),
         page=paging.page,
         page_size=paging.page_size,
     )
@@ -101,9 +106,9 @@ async def list_accounts(
     responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 async def get_account(
-    account_id: uuid.UUID, service: AccountServiceDep
+    account_id: uuid.UUID, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
-    return ok(_to_response(await service.get(account_id)))
+    return ok(_to_response(await service.get_visible(actor, account_id)))
 
 
 @router.post(

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
+from src.dependencies.safes import build_safe_access_service
 from src.dependencies.vault import build_vault_service
 from src.repositories.inventory.account_repository import AccountRepository
 from src.repositories.inventory.target_repository import TargetRepository
@@ -26,6 +27,7 @@ def build_target_service(session: AsyncSession) -> TargetService:
         AccountRepository(session),
         build_vault_service(session),
         build_audit_service(session),
+        build_safe_access_service(session),
     )
 
 
@@ -35,6 +37,7 @@ def build_account_service(session: AsyncSession) -> AccountService:
         TargetRepository(session),
         build_vault_service(session),
         build_audit_service(session),
+        build_safe_access_service(session),
     )
 
 

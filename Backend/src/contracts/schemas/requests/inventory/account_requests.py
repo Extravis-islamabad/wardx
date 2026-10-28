@@ -11,6 +11,8 @@ from src.core.enums import SecretType
 
 class AccountCreate(BaseModel):
     target_id: uuid.UUID
+    # The safe the account goes into; omitted = the Default safe.
+    safe_id: uuid.UUID | None = None
     username: str = Field(min_length=1, max_length=255)
     secret_type: SecretType = SecretType.PASSWORD
     description: str | None = None
@@ -22,6 +24,8 @@ class AccountCreate(BaseModel):
 
 
 class AccountUpdate(BaseModel):
+    # Moving needs manage_accounts on both safes.
+    safe_id: uuid.UUID | None = None
     description: str | None = None
     requires_approval: bool | None = None
     exclusive_checkout: bool | None = None

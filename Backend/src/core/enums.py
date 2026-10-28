@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from enum import StrEnum
 
 
@@ -79,3 +80,26 @@ class KeyPurpose(StrEnum):
     FILES = "files"
     AUDIT = "audit"
     IDENTITY = "identity"
+
+
+class SafePermission(StrEnum):
+    """What a safe member may do (docs/phase1/SAFES_AND_APPROVALS.md, section (a))."""
+
+    LIST = "list"
+    USE = "use"
+    RETRIEVE = "retrieve"
+    MANAGE_ACCOUNTS = "manage_accounts"
+    MANAGE_MEMBERS = "manage_members"
+    VIEW_AUDIT = "view_audit"
+    APPROVE = "approve"
+
+
+class PrincipalType(StrEnum):
+    USER = "user"
+    GROUP = "group"
+    # Migration only: keeps the Default safe's pre-safes access. The UI offers users and groups.
+    ROLE = "role"
+
+
+# The safe every pre-safes account was moved into (migrations/012_safes.sql).
+DEFAULT_SAFE_ID = uuid.UUID("00000000-0000-0000-0000-000000005afe")

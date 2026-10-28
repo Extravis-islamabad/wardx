@@ -9,7 +9,12 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from src.contracts.dto.inventory.account_dto import AccountDTO, AccountFilterDTO, TargetBriefDTO
+from src.contracts.dto.inventory.account_dto import (
+    AccountDTO,
+    AccountFilterDTO,
+    SafeBriefDTO,
+    TargetBriefDTO,
+)
 from src.core.enums import CheckoutStatus
 from src.errors.exceptions import ConflictError
 from src.models import Account, Checkout, Target
@@ -28,6 +33,7 @@ def _to_dto(row: Account, active_checkouts: int = 0) -> AccountDTO:
             protocol=t.protocol,
             port=t.port,
         ),
+        safe=SafeBriefDTO(id=row.safe.id, name=row.safe.name),
         username=row.username,
         secret_type=row.secret_type,
         description=row.description,
@@ -65,6 +71,10 @@ class AccountRepository(BaseRepository):
         conditions = []
         if filters.target_id:
             conditions.append(Account.target_id == filters.target_id)
+        if filters.safe_id:
+            conditions.append(Account.safe_id == filters.safe_id)
+        if filters.safe_ids is not None:
+            conditions.append(Account.safe_id.in_(filters.safe_ids))
         if filters.search:
             like = f"%{filters.search.lower()}%"
             conditions.append(

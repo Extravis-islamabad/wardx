@@ -59,3 +59,10 @@ class DirectoryUnavailable(AppError):
 
     status_code = 502
     code = "directory_unavailable"
+
+
+class SelfGrantForbidden(AppError):
+    """A safe membership for yourself, a group you are in, or your own role."""
+
+    status_code = 403
+    code = "self_grant_forbidden"
