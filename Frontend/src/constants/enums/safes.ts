@@ -18,6 +18,33 @@ export enum PrincipalType {
   ROLE = 'role',
 }
 
+export enum TicketMode {
+  OFF = 'off',
+  OPTIONAL = 'optional',
+  REQUIRED = 'required',
+}
+
+export enum ApproverType {
+  /** Every safe member holding 'approve'. */
+  SAFE_APPROVERS = 'safe_approvers',
+  /** A named user, who must hold 'approve' on the safe. */
+  USER = 'user',
+  /** A directory group (DN), which must be a member with 'approve'. */
+  GROUP = 'group',
+}
+
+export const APPROVER_TYPE_OPTIONS = [
+  { value: ApproverType.SAFE_APPROVERS, label: 'Safe approvers' },
+  { value: ApproverType.USER, label: 'Named user' },
+  { value: ApproverType.GROUP, label: 'Directory group' },
+];
+
+export const TICKET_MODE_OPTIONS = [
+  { value: TicketMode.OFF, label: 'Off' },
+  { value: TicketMode.OPTIONAL, label: 'Optional' },
+  { value: TicketMode.REQUIRED, label: 'Required' },
+];
+
 export enum SafeHealthState {
   HEALTHY = 'healthy',
   BREAK_GLASS_ONLY = 'break_glass_only',

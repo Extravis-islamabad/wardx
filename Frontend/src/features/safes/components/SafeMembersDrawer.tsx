@@ -2,14 +2,18 @@ import { PlusOutlined } from '@ant-design/icons';
 import { Alert, Descriptions, Drawer, Select, Space, Tabs, Tooltip, Typography, type TableProps } from 'antd';
 import { useState } from 'react';
 import { Button, ConfirmModal, DataTable, StatusTag } from '@/components';
-import { PrincipalType, SAFE_PERMISSION_OPTIONS, type SafePermission } from '@/constants/enums/safes';
+import { PERMISSIONS } from '@/constants/enums/permissions';
+import { PrincipalType, SAFE_PERMISSION_OPTIONS, SafePermission } from '@/constants/enums/safes';
 import { StatusVariant } from '@/constants/enums/status';
 import { useRemoveSafeMember, useSafeMembers, useUpdateSafeMember } from '@/features/safes/hooks';
 import { tableStateProps } from '@/lib/tableStateProps';
 import type { Safe, SafeMember } from '@/services/safes-services';
 import { fmtTime } from '@/utils/format';
 import { notify } from '@/utils/notify';
+import { useAuth } from '@/context/AuthContext';
 import { AddMemberModal } from './AddMemberModal';
+import { ApprovalPolicyTab } from './ApprovalPolicyTab';
+import { SafeAuditTab } from './SafeAuditTab';
 import { SafeHealthTag } from './SafeHealthTag';
 
 const DRAWER_SIZE = 900;
@@ -19,9 +23,14 @@ const PRINCIPAL_VARIANT: Record<PrincipalType, StatusVariant> = {
   [PrincipalType.ROLE]: StatusVariant.NEUTRAL,
 };
 
-/** A safe's details and members. Role members (from the migration) are read-only. */
+/** A safe's members, approval policy, audit and details. Role members are read-only. */
 export function SafeMembersDrawer({ safe, onClose }: { safe: Safe | null; onClose: () => void }) {
-  const members = useSafeMembers(safe?.id);
+  const { canAccess } = useAuth();
+  const canManageSafes = canAccess({ permission: PERMISSIONS.SAFES_MANAGE });
+  const canSeeMembers = canManageSafes || !!safe?.my_permissions.includes(SafePermission.MANAGE_MEMBERS);
+  const canSeeAudit =
+    canAccess({ permission: PERMISSIONS.AUDIT_VIEW }) || !!safe?.my_permissions.includes(SafePermission.VIEW_AUDIT);
+  const members = useSafeMembers(canSeeMembers ? safe?.id : undefined);
   const { mutateAsync: updateMember } = useUpdateSafeMember(safe?.id ?? '');
   const { mutateAsync: removeMember } = useRemoveSafeMember(safe?.id ?? '');
   const [adding, setAdding] = useState(false);
@@ -92,8 +101,10 @@ export function SafeMembersDrawer({ safe, onClose }: { safe: Safe | null; onClos
     <Drawer open={!!safe} onClose={onClose} size={DRAWER_SIZE} title={safe?.name} destroyOnHidden>
       {safe && (
         <Tabs
-          defaultActiveKey="members"
+          defaultActiveKey={canSeeMembers ? 'members' : 'policy'}
           items={[
+            ...(canSeeMembers
+              ? [
             {
               key: 'members',
               label: 'Members',
@@ -120,6 +131,14 @@ export function SafeMembersDrawer({ safe, onClose }: { safe: Safe | null; onClos
                 </>
               ),
             },
+                ]
+              : []),
+            {
+              key: 'policy',
+              label: 'Approval policy',
+              children: <ApprovalPolicyTab safe={safe} canEdit={canManageSafes} />,
+            },
+            ...(canSeeAudit ? [{ key: 'audit', label: 'Audit', children: <SafeAuditTab safeId={safe.id} /> }] : []),
             {
               key: 'details',
               label: 'Details',

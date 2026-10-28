@@ -5,6 +5,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
 import { ROUTES } from '@/constants/enums/routes';
+import { TicketMode } from '@/constants/enums/safes';
+import { useSafePolicy } from '@/features/safes/hooks';
 import { useCreateCheckout, useCreateRequest } from '@/features/access/hooks';
 import {
   accessFormDefaults,
@@ -26,12 +28,17 @@ interface RequestAccessModalProps {
 export function RequestAccessModal({ account, onClose, onCheckedOut }: RequestAccessModalProps) {
   const navigate = useNavigate();
   const needsApproval = !!account?.requires_approval;
+  // The safe's ticket mode and pattern; the server validates again.
+  const policy = useSafePolicy(needsApproval ? account?.safe?.id : undefined);
+  const ticketMode = policy.data?.ticket_mode ?? TicketMode.OFF;
+  const ticketPattern = policy.data?.ticket_pattern ?? null;
   const { mutateAsync: createRequest, isPending: requesting } = useCreateRequest();
   const { mutateAsync: createCheckout, isPending: checkingOut } = useCreateCheckout();
   const {
     control,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<AccessFormValues>({
     resolver: zodResolver(accessFormSchema),
@@ -42,8 +49,27 @@ export function RequestAccessModal({ account, onClose, onCheckedOut }: RequestAc
     if (account) reset(accessFormDefaults(account.max_checkout_minutes));
   }, [account, reset]);
 
+  const ticketProblem = (ticket: string | undefined): string | null => {
+    const value = ticket?.trim() ?? '';
+    if (ticketMode === TicketMode.OFF) return null;
+    if (!value) return ticketMode === TicketMode.REQUIRED ? 'This safe requires a ticket number' : null;
+    if (ticketPattern) {
+      try {
+        if (!new RegExp(`^(?:${ticketPattern})$`).test(value)) return `Must match ${ticketPattern}`;
+      } catch {
+        return null; // the server has the final word
+      }
+    }
+    return null;
+  };
+
   const onSubmit = async (values: AccessFormValues) => {
     if (!account) return;
+    const problem = needsApproval ? ticketProblem(values.ticket_ref) : null;
+    if (problem) {
+      setError('ticket_ref', { message: problem });
+      return;
+    }
     try {
       if (needsApproval) {
         await createRequest({ account_id: account.id, ...values, ticket_ref: values.ticket_ref || undefined });
@@ -86,8 +112,14 @@ export function RequestAccessModal({ account, onClose, onCheckedOut }: RequestAc
           />
         </FormField>
         <div className="grid grid-cols-2 gap-4">
-          {needsApproval && (
-            <FormField label="Ticket / change ref" htmlFor="access-ticket" error={errors.ticket_ref?.message}>
+          {needsApproval && ticketMode !== TicketMode.OFF && (
+            <FormField
+              label={`Ticket number (${ticketMode})`}
+              htmlFor="access-ticket"
+              required={ticketMode === TicketMode.REQUIRED}
+              hint={ticketPattern ? `Format: ${ticketPattern}` : undefined}
+              error={errors.ticket_ref?.message}
+            >
               <Controller
                 control={control}
                 name="ticket_ref"

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { safesService, type SafeInput, type SafeMemberInput } from '@/services/safes-services';
+import {
+  safesService,
+  type ApprovalPolicy,
+  type SafeInput,
+  type SafeMemberInput,
+} from '@/services/safes-services';
+import { inventoryKeys } from '@/features/inventory/hooks/inventoryKeys';
 import type { SafePermission } from '@/constants/enums/safes';
 import type { PageQuery } from '@/types/api';
 import { dashboardKeys } from '@/features/dashboard/hooks/dashboardKeys';
@@ -69,5 +75,34 @@ export function useRemoveSafeMember(safeId: string) {
   return useMutation({
     mutationFn: (memberId: string) => safesService.removeMember(safeId, memberId),
     onSuccess: invalidate,
+  });
+}
+
+export function useSafePolicy(safeId: string | undefined) {
+  return useQuery({
+    queryKey: safesKeys.policy(safeId ?? ''),
+    queryFn: async () => (await safesService.policy(safeId as string)).data,
+    enabled: !!safeId,
+  });
+}
+
+export function useSaveSafePolicy(safeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ApprovalPolicy) => safesService.savePolicy(safeId, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: safesKeys.policy(safeId) });
+      // Accounts show their safe's approval need.
+      void qc.invalidateQueries({ queryKey: inventoryKeys.accountsAll() });
+    },
+  });
+}
+
+export function useSafeAudit(safeId: string | undefined, params: PageQuery) {
+  return useQuery({
+    queryKey: safesKeys.audit(safeId ?? '', params),
+    queryFn: () => safesService.audit(safeId as string, params),
+    enabled: !!safeId,
+    retry: false,
   });
 }

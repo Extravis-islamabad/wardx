@@ -14,6 +14,7 @@ export interface Account {
   has_secret: boolean;
   secret_version: number;
   secret_updated_at: string | null;
+  /** From the safe's approval policy (the per-account flag is retired). */
   requires_approval: boolean;
   exclusive_checkout: boolean;
   max_checkout_minutes: number;
@@ -28,6 +29,8 @@ export interface AccountBrief {
   target_id: string;
   target_name: string;
   target_address: string;
+  safe_id?: string | null;
+  safe_name?: string | null;
 }
 
 export interface AccountInput {
@@ -37,7 +40,6 @@ export interface AccountInput {
   username: string;
   secret_type: string;
   description?: string;
-  requires_approval: boolean;
   exclusive_checkout: boolean;
   max_checkout_minutes: number;
   secret?: string;

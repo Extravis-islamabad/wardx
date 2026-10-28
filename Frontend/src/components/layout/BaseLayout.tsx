@@ -10,6 +10,7 @@ import { ROUTES } from '@/constants/enums/routes';
 import { StatusVariant } from '@/constants/enums/status';
 import { ThemeMode } from '@/constants/enums/theme';
 import { useAuth } from '@/context/AuthContext';
+import { NotificationBell } from '@/features/notify/components';
 import { useTheme } from '@/theme';
 
 enum UserMenuKey {
@@ -43,6 +44,7 @@ export function BaseLayout() {
       </Layout.Sider>
       <Layout>
         <Layout.Header className="flex items-center justify-end gap-3 !px-6">
+          <NotificationBell />
           <Button
             type="text"
             aria-label="Toggle theme"

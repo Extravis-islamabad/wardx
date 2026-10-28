@@ -15,8 +15,34 @@ export interface AccessRequest {
   decided_by: UserBrief | null;
   decided_at: string | null;
   decision_note: string | null;
+  /** Pending: the current level's deadline. Approved: the end of the window (valid_until). */
   expires_at: string;
   created_at: string;
+  current_level: number;
+  level_count: number;
+  levels: RequestLevel[];
+  decisions: RequestDecision[];
+  approved_at: string | null;
+  valid_until: string | null;
+  multi_use: boolean;
+  uses: number;
+}
+
+export interface RequestLevel {
+  position: number;
+  required_approvals: number;
+  approver_type: 'safe_approvers' | 'user' | 'group';
+  approver_key: string | null;
+  state: 'approved' | 'denied' | 'current' | 'waiting';
+  approvals: number;
+}
+
+export interface RequestDecision {
+  level: number;
+  approver: UserBrief;
+  approve: boolean;
+  note: string | null;
+  decided_at: string;
 }
 
 export interface RequestCreatePayload {

@@ -7,4 +7,6 @@ export const safesKeys = {
   list: (params: PageQuery) => ['safes', 'list', params] as const,
   members: (safeId: string) => ['safes', 'members', safeId] as const,
   health: () => ['safes', 'health'] as const,
+  policy: (safeId: string) => ['safes', 'policy', safeId] as const,
+  audit: (safeId: string, params: PageQuery) => ['safes', 'audit', safeId, params] as const,
 };

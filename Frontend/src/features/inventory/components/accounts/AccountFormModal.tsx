@@ -51,10 +51,10 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
     try {
       if (account) {
         // Target, username and secret type are fixed once the account exists.
-        const { safe_id, description, requires_approval, exclusive_checkout, max_checkout_minutes } = values;
+        const { safe_id, description, exclusive_checkout, max_checkout_minutes } = values;
         await updateAccount({
           id: account.id,
-          payload: { safe_id, description, requires_approval, exclusive_checkout, max_checkout_minutes },
+          payload: { safe_id, description, exclusive_checkout, max_checkout_minutes },
         });
       } else {
         await createAccount({ ...values, secret: values.secret || undefined });
@@ -102,7 +102,11 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
           htmlFor="account-safe"
           required
           error={errors.safe_id?.message}
-          hint={editing ? 'Moving needs manage_accounts on both safes.' : undefined}
+          hint={
+            editing
+              ? "Moving needs manage_accounts on both safes. Approval follows the safe's policy."
+              : "Approval follows the safe's policy."
+          }
         >
           <Controller
             control={control}
@@ -162,16 +166,7 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
             />
           </FormField>
         )}
-        <div className="grid grid-cols-3 gap-4">
-          <FormField label="Needs approval" htmlFor="account-requires-approval">
-            <Controller
-              control={control}
-              name="requires_approval"
-              render={({ field }) => (
-                <Switch id="account-requires-approval" checked={field.value} onChange={field.onChange} />
-              )}
-            />
-          </FormField>
+        <div className="grid grid-cols-2 gap-4">
           <FormField label="Exclusive" htmlFor="account-exclusive">
             <Controller
               control={control}

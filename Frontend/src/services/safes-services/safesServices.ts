@@ -1,7 +1,14 @@
 /** Wraps /api/v1/safes/*: safes, their members and their health. */
 import { apiClient } from '@/lib/apiClient';
 import type { ApiResponse, PageQuery, Paginated } from '@/types/api';
-import type { PrincipalType, SafeHealthState, SafePermission } from '@/constants/enums/safes';
+import type {
+  ApproverType,
+  PrincipalType,
+  SafeHealthState,
+  SafePermission,
+  TicketMode,
+} from '@/constants/enums/safes';
+import type { AuditEvent } from '@/services/audit-services';
 
 export interface Safe {
   id: string;
@@ -66,6 +73,25 @@ export interface SafeHealthReport {
   safes: SafeHealth[];
 }
 
+export interface ApprovalLevel {
+  position?: number;
+  required_approvals: number;
+  approver_type: ApproverType;
+  /** user: the user's id; group: the directory group's DN; null for safe approvers. */
+  approver_key: string | null;
+}
+
+export interface ApprovalPolicy {
+  safe_id?: string;
+  approval_required: boolean;
+  levels: ApprovalLevel[];
+  ticket_mode: TicketMode;
+  ticket_pattern: string | null;
+  approval_window_minutes: number;
+  approval_multi_use: boolean;
+  level_timeout_hours: number;
+}
+
 const BASE = 'safes';
 
 export const safesService = {
@@ -86,6 +112,22 @@ export const safesService = {
 
   async health(): Promise<ApiResponse<SafeHealthReport>> {
     const { data } = await apiClient.get<ApiResponse<SafeHealthReport>>(`${BASE}/health`);
+    return data;
+  },
+
+  async policy(safeId: string): Promise<ApiResponse<ApprovalPolicy>> {
+    const { data } = await apiClient.get<ApiResponse<ApprovalPolicy>>(`${BASE}/${safeId}/policy`);
+    return data;
+  },
+
+  async savePolicy(safeId: string, payload: ApprovalPolicy): Promise<ApiResponse<ApprovalPolicy>> {
+    const { data } = await apiClient.put<ApiResponse<ApprovalPolicy>>(`${BASE}/${safeId}/policy`, payload);
+    return data;
+  },
+
+  /** Events about the safe, its accounts and their requests and check-outs (view_audit). */
+  async audit(safeId: string, params: PageQuery): Promise<Paginated<AuditEvent>> {
+    const { data } = await apiClient.get<Paginated<AuditEvent>>(`${BASE}/${safeId}/audit`, { params });
     return data;
   },
 

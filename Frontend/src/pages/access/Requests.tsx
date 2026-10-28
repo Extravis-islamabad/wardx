@@ -2,7 +2,6 @@ import { Segmented } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageShell } from '@/components';
-import { RequestStatus } from '@/constants/enums/access';
 import { PERMISSIONS } from '@/constants/enums/permissions';
 import { ROUTES } from '@/constants/enums/routes';
 import { useAuth } from '@/context/AuthContext';
@@ -15,9 +14,11 @@ import { notify } from '@/utils/notify';
 
 export default function Requests() {
   const { user, canAccess } = useAuth();
-  const canDecide = canAccess({ permission: PERMISSIONS.REQUESTS_DECIDE });
+  // Who decides is per safe and level, so every user has a queue (often empty); role
+  // approvers start on it.
+  const startOnQueue = canAccess({ permission: PERMISSIONS.REQUESTS_DECIDE });
   const navigate = useNavigate();
-  const [scope, setScope] = useState<RequestScope>(canDecide ? RequestScope.QUEUE : RequestScope.MINE);
+  const [scope, setScope] = useState<RequestScope>(startOnQueue ? RequestScope.QUEUE : RequestScope.MINE);
   const [deciding, setDeciding] = useState<PendingDecision | null>(null);
   const [checkingOutId, setCheckingOutId] = useState<string | null>(null);
   const { page, page_size, setPage, paginationFor } = usePagination();
@@ -25,7 +26,7 @@ export default function Requests() {
     page,
     page_size,
     mine: scope === RequestScope.MINE,
-    status: scope === RequestScope.QUEUE ? RequestStatus.PENDING : undefined,
+    queue: scope === RequestScope.QUEUE,
   });
   const { mutateAsync: cancelRequest } = useCancelRequest();
   const { mutateAsync: createCheckout } = useCreateCheckout();
@@ -52,9 +53,9 @@ export default function Requests() {
   };
 
   const scopes = [
-    ...(canDecide ? [{ value: RequestScope.QUEUE, label: 'Awaiting decision' }] : []),
+    { value: RequestScope.QUEUE, label: 'Awaiting my decision' },
     { value: RequestScope.MINE, label: 'My requests' },
-    ...(canDecide ? [{ value: RequestScope.ALL, label: 'All' }] : []),
+    { value: RequestScope.ALL, label: 'All I can see' },
   ];
 
   return (
@@ -75,7 +76,7 @@ export default function Requests() {
         query={requests}
         pagination={paginationFor(requests.data?.total)}
         currentUserId={user?.id}
-        canDecide={canDecide}
+        canDecide={scope === RequestScope.QUEUE}
         checkingOutId={checkingOutId}
         onDecide={(request, approve) => setDeciding({ request, approve })}
         onCheckout={(r) => void onCheckout(r)}

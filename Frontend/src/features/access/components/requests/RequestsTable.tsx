@@ -6,11 +6,13 @@ import { tableStateProps } from '@/lib/tableStateProps';
 import type { AccessRequest } from '@/services/access-services';
 import { fmtTime, fromNow } from '@/utils/format';
 import type { useRequests } from '@/features/access/hooks';
+import { RequestHistory, RequestLevels } from './RequestProgress';
 
 interface RequestsTableProps {
   query: ReturnType<typeof useRequests>;
   pagination: TablePaginationConfig;
   currentUserId?: string;
+  /** The list is the user's decision queue: every row is decidable by them now. */
   canDecide: boolean;
   checkingOutId: string | null;
   onDecide: (request: AccessRequest, approve: boolean) => void;
@@ -56,6 +58,12 @@ export function RequestsTable({
       key: 'created_at',
       render: (v: string) => <span title={fmtTime(v)}>{fromNow(v)}</span>,
     },
+    { title: 'Safe', key: 'safe', render: (_, r) => r?.account?.safe_name ?? '—' },
+    {
+      title: 'Approval',
+      key: 'levels',
+      render: (_, r) => <RequestLevels request={r} />,
+    },
     {
       title: 'Status',
       key: 'status',
@@ -64,7 +72,7 @@ export function RequestsTable({
           <StatusTag label={r?.status} />
           {r?.decided_by && (
             <Typography.Text type="secondary" className="text-xs">
-              by {r.decided_by.username}
+              last by {r.decided_by.username}
               {r?.decision_note ? `: ${r.decision_note}` : ''}
             </Typography.Text>
           )}
@@ -112,6 +120,7 @@ export function RequestsTable({
       dataSource={query?.data?.data}
       pagination={pagination}
       columns={columns}
+      expandable={{ expandedRowRender: (r) => <RequestHistory request={r} /> }}
     />
   );
 }

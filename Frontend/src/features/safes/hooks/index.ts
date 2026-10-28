@@ -7,4 +7,7 @@ export {
   useAddSafeMember,
   useUpdateSafeMember,
   useRemoveSafeMember,
+  useSafePolicy,
+  useSaveSafePolicy,
+  useSafeAudit,
 } from './useSafes';

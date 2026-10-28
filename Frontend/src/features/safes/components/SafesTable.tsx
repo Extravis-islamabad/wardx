@@ -59,11 +59,9 @@ export function SafesTable({ query, pagination, canManage, onEdit, onMembers }: 
       width: 170,
       render: (_, s) => (
         <Space>
-          {(canManage || s?.my_permissions?.includes(SafePermission.MANAGE_MEMBERS)) && (
-            <Button variant="admin" size="small" onClick={() => onMembers(s)}>
-              Members
-            </Button>
-          )}
+          <Button variant="admin" size="small" onClick={() => onMembers(s)}>
+            {canManage || s?.my_permissions?.includes(SafePermission.MANAGE_MEMBERS) ? 'Members' : 'Open'}
+          </Button>
           {canManage && (
             <Button variant="admin" size="small" onClick={() => onEdit(s)}>
               Edit
