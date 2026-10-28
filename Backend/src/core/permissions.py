@@ -13,7 +13,9 @@ INVENTORY_VIEW = "inventory.view"
 INVENTORY_MANAGE = "inventory.manage"
 ACCESS_USE = "access.use"
 ACCESS_APPROVE = "access.approve"
-# See every check-out, not only your own (approvers see every request via ACCESS_APPROVE).
+# Approvers by role. Deciding a request is decided per safe (approve) and level; this
+# codename stays for role bundles and the console.
+# See every check-out (and every request), not only your own.
 ACCESS_VIEW_ALL = "access.view_all"
 ACCESS_REVOKE = "access.revoke"
 SESSIONS_VIEW_ALL = "sessions.view_all"

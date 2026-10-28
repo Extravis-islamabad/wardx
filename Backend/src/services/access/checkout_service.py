@@ -4,9 +4,9 @@ Rules:
 - Check-out and reveal need ``retrieve`` on the account's safe; a check-out the
   gateway takes for a session needs ``use`` or ``retrieve``. An account in a
   safe the caller cannot list reads as 404.
-- An account that requires approval is checked out only against an approved
-  request of the same person (the approver is never the requester, see
-  AccessRequestService); using the request marks it used.
+- An account whose safe requires approval is checked out only against an approved
+  request of the same person, within its window (see AccessRequestService). A
+  single-use approval becomes ``used``; a multi-use one counts uses until it expires.
 - An exclusive account has at most one active check-out at a time. The account
   row lock serialises competing check-outs, so two people cannot both win.
 - Only the holder reveals the secret, and only while the check-out is active.
@@ -28,6 +28,7 @@ from src.contracts.dto.access.checkout_dto import (
     CheckoutFilterDTO,
     RevealedSecretDTO,
 )
+from src.contracts.dto.safes.approval_policy_dto import RequestPolicyDTO
 from src.core.context import SYSTEM_ACTOR, Actor
 from src.core.enums import CheckoutStatus, RequestStatus, SafePermission
 from src.core.permissions import ACCESS_REVOKE, ACCESS_VIEW_ALL
@@ -37,6 +38,7 @@ from src.repositories.access.access_request_repository import AccessRequestRepos
 from src.repositories.access.checkout_repository import CheckoutRepository
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET, AccountService
+from src.services.notify.notification_service import NotificationService
 from src.services.vault.vault_service import VaultService
 
 EXPIRY_LOCK_KEY = 0x5741_5244_00E1
@@ -50,12 +52,14 @@ class CheckoutService:
         accounts: AccountService,
         vault: VaultService,
         audit: AuditService,
+        notifications: NotificationService,
     ) -> None:
         self._checkouts = checkouts
         self._requests = requests
         self._accounts = accounts
         self._vault = vault
         self._audit = audit
+        self._notify = notifications
 
     async def list(
         self,
@@ -117,6 +121,16 @@ class CheckoutService:
                 raise ConflictError(f"Request is {request.status}, not approved")
             if request.expires_at <= now:
                 await self._requests.update(request.id, {"status": RequestStatus.EXPIRED})
+                await self._audit.record(
+                    SYSTEM_ACTOR, "request.expire", object_type="request", object_id=request.id
+                )
+                await self._notify.notify(
+                    [request.requester_id],
+                    kind="request.expired",
+                    title="Your access request expired",
+                    object_type="request",
+                    object_id=request.id,
+                )
                 await self._requests.commit()
                 raise ConflictError("The approval has expired; submit a new request")
             duration = request.duration_minutes
@@ -156,7 +170,11 @@ class CheckoutService:
             }
         )
         if request is not None:
-            await self._requests.update(request.id, {"status": RequestStatus.USED})
+            multi_use = RequestPolicyDTO.from_snapshot(request.policy).approval_multi_use
+            consumed: dict = {"uses": request.uses + 1}
+            if not multi_use:
+                consumed["status"] = RequestStatus.USED
+            await self._requests.update(request.id, consumed)
         await self._audit.record(
             actor,
             "checkout.create",
@@ -243,9 +261,16 @@ class CheckoutService:
         """Close check-outs and requests whose time has passed. Safe to run concurrently."""
         checkouts = await self._expire_checkouts()
         expired_requests = await self._requests.expire_open(utcnow())
-        for req_id in expired_requests:
+        for req_id, requester_id in expired_requests:
             await self._audit.record(
                 SYSTEM_ACTOR, "request.expire", object_type="request", object_id=req_id
+            )
+            await self._notify.notify(
+                [requester_id],
+                kind="request.expired",
+                title="Your access request expired",
+                object_type="request",
+                object_id=req_id,
             )
         await self._checkouts.commit()
         return {"checkouts": checkouts, "requests": len(expired_requests)}

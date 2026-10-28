@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import text
 
 from src.core.db import session_factory
+from src.core.enums import DEFAULT_APPROVAL_SAFE_ID
 from src.dependencies.access import build_checkout_service
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -78,7 +79,10 @@ async def test_approval_flow_and_dual_control(client, admin, make_user):
     carol = await make_user("carol1")
     approver = await make_user("approver1", role="approver")
     tid = await _target(client, admin, "core-sw-1")
-    aid = await _account(client, admin, tid, "root", "Core-Secret-1", requires_approval=True)
+    # Approval is the safe's policy: the migrated "Default (approval required)" safe.
+    aid = await _account(
+        client, admin, tid, "root", "Core-Secret-1", safe_id=str(DEFAULT_APPROVAL_SAFE_ID)
+    )
 
     # No request: refused. Requesting without approval need: tested below.
     resp = await client.post("/checkouts", headers=carol, json={"account_id": aid, "reason": "x"})

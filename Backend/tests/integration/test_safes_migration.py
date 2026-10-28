@@ -47,8 +47,13 @@ async def test_existing_accounts_move_into_the_default_safe(database_url, tmp_pa
                 )
             )
 
-        applied = await run_migrations(engine)
-        assert "012_safes.sql" in applied
+        upto_012 = tmp_path / "upto012"
+        upto_012.mkdir()
+        for path in MIGRATIONS_DIR.glob("*.sql"):
+            if int(path.name.split("_")[0]) <= 12:
+                shutil.copy(path, upto_012 / path.name)
+        applied = await run_migrations(engine, upto_012)
+        assert applied == ["012_safes.sql"]
         # Idempotent: running the file again changes nothing.
         async with engine.connect() as conn:
             raw = (await conn.get_raw_connection()).driver_connection

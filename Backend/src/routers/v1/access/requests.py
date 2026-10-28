@@ -1,8 +1,10 @@
 """Access requests router — asking for, approving and cancelling access.
 
-GET  /requests                         — page through requests (approvers see all)
-POST /requests                         — ask to use an account that needs approval
-POST /requests/{request_id}/decision   — approve or deny (never your own)
+GET  /requests                         — page through requests: yours (mine), the ones you
+                                         can decide now (queue), or those in safes you can list
+POST /requests                         — ask to use an account whose safe requires approval
+POST /requests/{request_id}/decision   — approve or deny at the current level (eligibility
+                                         is checked per safe and level, never your own)
 POST /requests/{request_id}/cancel     — the requester withdraws an open request
 """
 
@@ -13,7 +15,6 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
 
-from src.contracts.dto.access.access_request_dto import AccessRequestDTO
 from src.contracts.schemas.requests.access.access_request_requests import (
     RequestCreate,
     RequestDecision,
@@ -33,29 +34,12 @@ from src.contracts.schemas.responses.common import (
     ok,
 )
 from src.core.enums import RequestStatus
-from src.core.permissions import ACCESS_APPROVE, ACCESS_USE
+from src.core.permissions import ACCESS_USE
 from src.dependencies.access import AccessRequestServiceDep
 from src.dependencies.auth import ActorDep, require_permission
-from src.routers.v1.access.briefs import account_brief_response, user_brief_response
+from src.routers.v1.access.request_mappers import request_response
 
 router = APIRouter(prefix="/requests", tags=["access"])
-
-
-def _to_response(dto: AccessRequestDTO) -> AccessRequestResponse:
-    return AccessRequestResponse(
-        id=dto.id,
-        account=account_brief_response(dto.account),
-        requester=user_brief_response(dto.requester),
-        reason=dto.reason,
-        ticket_ref=dto.ticket_ref,
-        duration_minutes=dto.duration_minutes,
-        status=RequestStatus(dto.status),
-        decided_by=user_brief_response(dto.decided_by) if dto.decided_by else None,
-        decided_at=dto.decided_at,
-        decision_note=dto.decision_note,
-        expires_at=dto.expires_at,
-        created_at=dto.created_at,
-    )
 
 
 @router.get(
@@ -71,12 +55,18 @@ async def list_requests(
     paging: Annotated[PageParams, Depends()],
     status: RequestStatus | None = None,
     mine: bool = False,
+    queue: bool = False,
 ) -> PaginatedAPIResponse[AccessRequestResponse]:
     rows, total = await service.list(
-        actor, page=paging.page, page_size=paging.page_size, status=status, mine=mine
+        actor,
+        page=paging.page,
+        page_size=paging.page_size,
+        status=status,
+        mine=mine,
+        queue=queue,
     )
     return PaginatedAPIResponse[AccessRequestResponse](
-        data=[_to_response(r) for r in rows],
+        data=[request_response(r) for r in rows],
         total=total,
         page=paging.page,
         page_size=paging.page_size,
@@ -107,14 +97,16 @@ async def create_request(
         ticket_ref=request.ticket_ref,
         duration_minutes=request.duration_minutes,
     )
-    return ok(_to_response(created))
+    return ok(request_response(created))
 
 
 @router.post(
     "/{request_id}/decision",
     response_model=APIResponse[AccessRequestResponse],
-    dependencies=[Depends(require_permission(ACCESS_APPROVE))],
-    summary="Approve or deny an access request",
+    # Who may decide is the safe's policy ('approve' + the level's approvers), checked in
+    # the service; the route only needs a signed-in console user.
+    dependencies=[Depends(require_permission(ACCESS_USE))],
+    summary="Approve or deny an access request at its current level",
     responses={
         **UNAUTHORIZED_RESPONSE,
         **FORBIDDEN_RESPONSE,
@@ -130,7 +122,7 @@ async def decide_request(
     actor: ActorDep,
 ) -> APIResponse[AccessRequestResponse]:
     decided = await service.decide(actor, request_id, approve=request.approve, note=request.note)
-    return ok(_to_response(decided))
+    return ok(request_response(decided))
 
 
 @router.post(
@@ -148,4 +140,4 @@ async def decide_request(
 async def cancel_request(
     request_id: uuid.UUID, service: AccessRequestServiceDep, actor: ActorDep
 ) -> APIResponse[AccessRequestResponse]:
-    return ok(_to_response(await service.cancel(actor, request_id)))
+    return ok(request_response(await service.cancel(actor, request_id)))

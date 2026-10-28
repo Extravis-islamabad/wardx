@@ -17,4 +17,6 @@ def account_brief(account: Account) -> AccountBriefDTO:
         target_id=account.target_id,
         target_name=account.target.name,
         target_address=account.target.address,
+        safe_id=account.safe_id,
+        safe_name=account.safe.name,
     )

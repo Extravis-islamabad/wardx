@@ -253,3 +253,52 @@ data: migrations only add, backfill and move.
   **"Default (approval required)"**. It has the same members and policy
   `approval_required = on`, with one level of 1 approval from safe members with `approve`.
 - Existing open requests continue at level 1 of their safe's policy.
+
+### Build decisions for (b) (more restrictive choice where the spec was silent)
+
+- **One approver kind per level:** safe members holding `approve`, one named user, or one
+  named directory group. Limits:
+  - at most 5 levels;
+  - `required_approvals` from 1 to 10;
+  - window from 1 to 10080 minutes;
+  - level timeout from 1 to 720 hours.
+  When the policy is saved, a named user must be active and hold `approve` on the safe,
+  and a named group must be a group member of the safe with `approve`.
+- **Policy snapshot:** a request keeps the safe's levels, window, multi-use setting and
+  timeout from the moment it was made (`access.requests.policy`). Later policy edits never
+  change a request in flight.
+- **Who decides:** the decision route is gated by `access.use`. The service then requires
+  `approve` on the account's safe, plus a match with the current level. A group level uses
+  the group cache, so it fails closed while the directory is down. `access.approve` stays
+  in the role bundles, but no route checks it any more.
+- **Request lists:**
+  - `mine` lists your own requests.
+  - `queue` lists the pending requests you can decide now.
+  - Otherwise, the list shows requests on accounts in safes you can list, plus your own.
+    `access.view_all` holders see every request.
+- **Deadlines:** `expires_at` holds the current deadline. That is the level's deadline
+  while a request is pending, and `valid_until` once it is approved. A check-out started
+  inside the window runs for the requested duration.
+- **Tickets:**
+  - Mode `off` stores a given ticket without validating it.
+  - Patterns must fully match the ticket.
+  - A pattern is refused when it is over 200 characters, doesn't compile, uses nested
+    quantifiers or uses backreferences.
+  - Tickets are capped at 100 characters.
+  - SupportX seam: `TicketValidator` in `services/access/ticket_validator.py`, wired in
+    `build_ticket_validator()`.
+- **Notifications:**
+  - Approver recipients come from current memberships and the group cache. A directory
+    group's members are notified only if their groups are cached.
+  - The requester and anyone who already decided are never notified as approvers.
+  - Partial approvals at a level don't notify anyone.
+- **Account API:** `requires_approval` is now a read-only reflection of the safe's
+  `approval_required`. Create and update no longer accept it, and ignore it if sent.
+- **Migration 015:**
+  - The "Default (approval required)" safe (fixed id `…5aa1`) is created even when no
+    account needs it. If an administrator already used that name, the new safe is named
+    "Default (approval required) (migrated)".
+  - A `requires_approval` account that an administrator had already moved out of Default
+    makes its safe require approval, with the same default level.
+  - Open requests keep their `expires_at` and start level 1 at `created_at`. Earlier
+    decisions are recorded as level-1 decisions.

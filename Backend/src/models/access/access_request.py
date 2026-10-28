@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import TZ, Base, utcnow
@@ -34,6 +35,12 @@ class AccessRequest(Base):
     decision_note: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime] = mapped_column(TZ)
     created_at: Mapped[datetime] = mapped_column(TZ, default=utcnow)
+    current_level: Mapped[int] = mapped_column(Integer, default=1)
+    level_started_at: Mapped[datetime | None] = mapped_column(TZ)
+    # The safe's policy when the request was made (levels, window, multi-use, timeout).
+    policy: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    approved_at: Mapped[datetime | None] = mapped_column(TZ)
+    uses: Mapped[int] = mapped_column(Integer, default=0)
 
     account: Mapped[Account] = relationship(lazy="joined", innerjoin=True)
     requester: Mapped[User] = relationship(

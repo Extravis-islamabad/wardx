@@ -20,4 +20,6 @@ def account_brief_response(dto: AccountBriefDTO) -> AccountBriefResponse:
         target_id=dto.target_id,
         target_name=dto.target_name,
         target_address=dto.target_address,
+        safe_id=dto.safe_id,
+        safe_name=dto.safe_name,
     )

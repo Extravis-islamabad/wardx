@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import text
 
 from src.core.db import session_factory
+from src.core.enums import DEFAULT_APPROVAL_SAFE_ID, DEFAULT_SAFE_ID
 from tests.conftest import DEVICE_PASSWORD, DEVICE_USER
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -138,8 +139,11 @@ async def test_wrong_password_and_unknown_target(gateway, lab):
 
 
 async def test_approval_required_account_refused_without_approval(gateway, lab, client, admin):
+    # Approval is the safe's policy: move the account into the approval-required safe.
     await client.patch(
-        f"/accounts/{lab['account']['id']}", headers=admin, json={"requires_approval": True}
+        f"/accounts/{lab['account']['id']}",
+        headers=admin,
+        json={"safe_id": str(DEFAULT_APPROVAL_SAFE_ID)},
     )
     try:
         conn = await _connect(gateway, f"netops1%{DEVICE_USER}%fake-rtr", "User-Passw0rd-netops1")
@@ -148,7 +152,9 @@ async def test_approval_required_account_refused_without_approval(gateway, lab, 
         conn.close()
     finally:
         await client.patch(
-            f"/accounts/{lab['account']['id']}", headers=admin, json={"requires_approval": False}
+            f"/accounts/{lab['account']['id']}",
+            headers=admin,
+            json={"safe_id": str(DEFAULT_SAFE_ID)},
         )
 
 

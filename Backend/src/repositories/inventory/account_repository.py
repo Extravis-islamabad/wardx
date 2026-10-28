@@ -39,7 +39,8 @@ def _to_dto(row: Account, active_checkouts: int = 0) -> AccountDTO:
         description=row.description,
         secret_version=row.secret_version,
         secret_updated_at=row.secret_updated_at,
-        requires_approval=row.requires_approval,
+        # The retired per-account flag is no longer read: approval is the safe's policy.
+        requires_approval=row.safe.approval_required,
         exclusive_checkout=row.exclusive_checkout,
         max_checkout_minutes=row.max_checkout_minutes,
         rotation_interval_days=row.rotation_interval_days,

@@ -33,6 +33,7 @@ class AccountDTO:
     description: str | None
     secret_version: int
     secret_updated_at: datetime | None
+    # From the safe's policy (approval_required); the account column is retired.
     requires_approval: bool
     exclusive_checkout: bool
     max_checkout_minutes: int

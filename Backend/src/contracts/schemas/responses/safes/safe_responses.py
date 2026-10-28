@@ -75,3 +75,21 @@ class AttentionResponse(BaseModel):
     break_glass: BreakGlassCoverageResponse
     # Active safes that are not healthy, with severity.
     safes_needing_attention: list[SafeHealthResponse]
+
+
+class ApprovalLevelResponse(BaseModel):
+    position: int
+    required_approvals: int
+    approver_type: str
+    approver_key: str | None
+
+
+class ApprovalPolicyResponse(BaseModel):
+    safe_id: uuid.UUID
+    approval_required: bool
+    levels: list[ApprovalLevelResponse]
+    ticket_mode: str
+    ticket_pattern: str | None
+    approval_window_minutes: int
+    approval_multi_use: bool
+    level_timeout_hours: int

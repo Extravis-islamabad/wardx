@@ -103,3 +103,20 @@ class PrincipalType(StrEnum):
 
 # The safe every pre-safes account was moved into (migrations/012_safes.sql).
 DEFAULT_SAFE_ID = uuid.UUID("00000000-0000-0000-0000-000000005afe")
+# Where the migration put accounts that had the retired requires_approval flag
+# (migrations/015_approval_workflow.sql).
+DEFAULT_APPROVAL_SAFE_ID = uuid.UUID("00000000-0000-0000-0000-000000005aa1")
+
+
+class TicketMode(StrEnum):
+    OFF = "off"
+    OPTIONAL = "optional"
+    REQUIRED = "required"
+
+
+class ApproverType(StrEnum):
+    # Every safe member holding 'approve'.
+    SAFE_APPROVERS = "safe_approvers"
+    # A named user or directory group, which must also hold 'approve' on the safe.
+    USER = "user"
+    GROUP = "group"

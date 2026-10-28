@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,17 @@ class AccountBriefDTO:
     target_id: uuid.UUID
     target_name: str
     target_address: str
+    safe_id: uuid.UUID | None = None
+    safe_name: str | None = None
+
+
+@dataclass(frozen=True)
+class RequestDecisionDTO:
+    level: int
+    approver: UserBriefDTO
+    approve: bool
+    note: str | None
+    decided_at: datetime
 
 
 @dataclass(frozen=True)
@@ -37,6 +49,12 @@ class AccessRequestDTO:
     decision_note: str | None
     expires_at: datetime
     created_at: datetime
+    current_level: int = 1
+    level_started_at: datetime | None = None
+    policy: dict[str, Any] | None = None
+    approved_at: datetime | None = None
+    uses: int = 0
+    decisions: tuple[RequestDecisionDTO, ...] = field(default_factory=tuple)
 
     @property
     def account_id(self) -> uuid.UUID:
@@ -52,3 +70,6 @@ class AccessRequestFilterDTO:
     # Only this requester's requests; None means every request.
     requester_id: uuid.UUID | None = None
     status: str | None = None
+    # Requests on accounts in these safes, or the requester's own; None = no restriction.
+    safe_ids: frozenset[uuid.UUID] | None = None
+    include_requester_id: uuid.UUID | None = None

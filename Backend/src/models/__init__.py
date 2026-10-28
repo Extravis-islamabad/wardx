@@ -2,6 +2,7 @@
 
 from src.models.access.access_request import AccessRequest
 from src.models.access.checkout import Checkout
+from src.models.access.request_decision import RequestDecision
 from src.models.access.rotation_job import RotationJob
 from src.models.audit.audit_event import AuditEvent
 from src.models.base import TZ, Base, utcnow
@@ -13,7 +14,9 @@ from src.models.identity.user_permission import UserPermission
 from src.models.inventory.account import Account
 from src.models.inventory.target import Target
 from src.models.keys.tenant_key import TenantKey
+from src.models.notify.notification import Notification
 from src.models.safes.safe import Safe
+from src.models.safes.safe_approval_level import SafeApprovalLevel
 from src.models.safes.safe_member import SafeMember
 from src.models.security.alert import Alert
 from src.models.sessions.command_rule import CommandRule
@@ -32,8 +35,11 @@ __all__ = [
     "DirectoryConfig",
     "GatewaySession",
     "MfaRecoveryCode",
+    "Notification",
+    "RequestDecision",
     "RotationJob",
     "Safe",
+    "SafeApprovalLevel",
     "SafeMember",
     "Secret",
     "SessionCommand",

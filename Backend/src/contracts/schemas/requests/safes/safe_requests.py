@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from src.core.enums import PrincipalType, SafePermission
+from src.core.enums import ApproverType, PrincipalType, SafePermission, TicketMode
 
 
 class SafeCreate(BaseModel):
@@ -29,3 +29,22 @@ class SafeMemberCreate(BaseModel):
 
 class SafeMemberUpdate(BaseModel):
     permissions: list[SafePermission] = Field(min_length=1, max_length=7)
+
+
+class ApprovalLevelIn(BaseModel):
+    required_approvals: int = Field(1, ge=1, le=10)
+    approver_type: ApproverType = ApproverType.SAFE_APPROVERS
+    # user: the user's id; group: the directory group's DN; omitted for safe_approvers.
+    approver_key: str | None = Field(None, max_length=1000)
+
+
+class ApprovalPolicyIn(BaseModel):
+    approval_required: bool = False
+    # Ordered: the first is level 1.
+    levels: list[ApprovalLevelIn] = Field(default_factory=list, max_length=5)
+    ticket_mode: TicketMode = TicketMode.OFF
+    # Full-match regex for ticket numbers; checked for safety when saved.
+    ticket_pattern: str | None = Field(None, max_length=200)
+    approval_window_minutes: int = Field(120, ge=1, le=10080)
+    approval_multi_use: bool = False
+    level_timeout_hours: int = Field(24, ge=1, le=720)
