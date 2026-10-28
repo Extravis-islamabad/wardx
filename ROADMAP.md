@@ -88,6 +88,19 @@ every holder (normal and emergency) has released the account.
 - **High availability:** active/passive vault, a DR replica, distributed vaults for
   multi-site, HSM/KMS behind `Keyring`.
 
+## Hardening backlog (required before the first customer deployment)
+
+Agreed on 2026-10-29. Not needed before the next module; all of it must ship before WardX is
+deployed for a customer.
+
+| Item | What | Notes |
+|---|---|---|
+| Certificate expiry | Alert 30 days and 7 days before any pinned certificate (API-SSL or LDAP) expires, high severity on expiry; a re-pin path through the same read-and-accept flow | Document certificate renewal in `ONBOARDING_MIKROTIK.md` |
+| Empty-password attempt budget | Confirm the wrong-password check still runs on every successful verify; document the "stored password refused, then empty tried" budget (two failed logins at most) | `ROTATION.md` |
+| LDAP CA trust | Replace `verify_tls` off with "trust this CA certificate": the admin uploads a PEM, shown with its fingerprint, audited. Turning verification off only in development builds, never production, with a red banner whenever it is off; existing dev settings keep working | |
+| Rotation docs split | Turn `ROTATION.md` into `docs/phase1/rotation/`: overview and safety rules, core engine and recovery, one file per platform, decisions and findings. All content kept | |
+| Gateway host keys | No pinning on first use: a target without an accepted key opens no gateway session ("Host key not accepted", with a link to the Host key dialog for users with rights). One shared pin per target for rotation and the gateway. Existing first-use pins kept but flagged "pinned by first use, not reviewed" with a dashboard item until re-confirmed. Bulk "read host keys" for selected targets with per-row accept (fingerprint must still match). Tests: no session without an accepted key; legacy pin flagged; bulk accept refuses a changed row | Applies to the TLS certificate pin too |
+
 ## Phase 2: Privileged Session Manager (MVP)
 
 - **Protocols:** RDP, VNC and web apps through a guacd-based HTML5 gateway (clientless), and
