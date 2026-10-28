@@ -71,6 +71,12 @@ async def test_two_level_chain_and_nobody_approves_twice(client, admin, make_use
     after_l1 = (await decide(client, a1["headers"], req["id"])).json()["data"]
     assert (after_l1["status"], after_l1["current_level"]) == ("pending", 2)
     assert [lv["state"] for lv in after_l1["levels"]] == ["approved", "current"]
+    # Named approvers are shown by name, with the id kept for linking.
+    named = after_l1["levels"][1]
+    assert named["approver_name"] == manager["user"]["username"]
+    assert named["approver_key"] == manager["user"]["id"]
+    policy = (await client.get(f"/safes/{sid}/policy", headers=admin)).json()["data"]
+    assert policy["levels"][1]["approver_name"] == manager["user"]["username"]
 
     # a1 decided level 1, so cannot decide level 2; the bystander is not the named user.
     resp = await decide(client, a1["headers"], req["id"])

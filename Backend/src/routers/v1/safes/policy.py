@@ -41,6 +41,7 @@ def policy_response(dto: ApprovalPolicyDTO) -> ApprovalPolicyResponse:
                 required_approvals=lv.required_approvals,
                 approver_type=lv.approver_type,
                 approver_key=lv.approver_key,
+                approver_name=lv.approver_name,
             )
             for lv in dto.levels
         ],

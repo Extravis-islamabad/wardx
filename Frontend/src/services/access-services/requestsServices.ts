@@ -32,7 +32,10 @@ export interface RequestLevel {
   position: number;
   required_approvals: number;
   approver_type: 'safe_approvers' | 'user' | 'group';
+  /** user levels: the user's id (for linking); group levels: the DN. */
   approver_key: string | null;
+  /** user levels: full name, else username. */
+  approver_name?: string | null;
   state: 'approved' | 'denied' | 'current' | 'waiting';
   approvals: number;
 }

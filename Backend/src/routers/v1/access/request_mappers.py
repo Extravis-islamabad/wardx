@@ -49,6 +49,7 @@ def request_response(dto: AccessRequestDTO) -> AccessRequestResponse:
                 required_approvals=lv.required_approvals,
                 approver_type=lv.approver_type,
                 approver_key=lv.approver_key,
+                approver_name=dto.approver_names.get(lv.approver_key or ""),
                 state=_level_state(dto, lv.position),
                 approvals=sum(d.approve and d.level == lv.position for d in dto.decisions),
             )

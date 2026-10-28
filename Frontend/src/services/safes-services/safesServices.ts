@@ -79,6 +79,8 @@ export interface ApprovalLevel {
   approver_type: ApproverType;
   /** user: the user's id; group: the directory group's DN; null for safe approvers. */
   approver_key: string | null;
+  /** user levels, in responses: full name, else username. */
+  approver_name?: string | null;
 }
 
 export interface ApprovalPolicy {

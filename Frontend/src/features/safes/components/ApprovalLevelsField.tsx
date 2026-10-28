@@ -12,16 +12,22 @@ interface ApprovalLevelsFieldProps {
   /** The safe's members: named approvers are picked from those holding 'approve'. */
   members: SafeMember[];
   readOnly: boolean;
+  /** Display names of named approvers already in the policy, by user id. */
+  knownNames?: Record<string, string>;
 }
 
 /** Ordered approval levels: who approves at each, and how many approvals it needs. */
-export function ApprovalLevelsField({ control, errors, members, readOnly }: ApprovalLevelsFieldProps) {
+export function ApprovalLevelsField({ control, errors, members, readOnly, knownNames = {} }: ApprovalLevelsFieldProps) {
   const { fields, append, remove, move } = useFieldArray({ control, name: 'levels' });
   const levels = useWatch({ control, name: 'levels' });
   const approvers = members.filter((m) => m.permissions.includes(SafePermission.APPROVE));
   const userOptions = approvers
     .filter((m) => m.principal_type === PrincipalType.USER)
-    .map((m) => ({ value: m.principal_key, label: m.display_name ?? m.principal_key }));
+    .map((m) => ({ value: m.principal_key, label: m.display_name ?? knownNames[m.principal_key] ?? 'user' }));
+  // Named approvers already in the policy stay labelled by name, even without the member list.
+  for (const [id, name] of Object.entries(knownNames)) {
+    if (!userOptions.some((o) => o.value === id)) userOptions.push({ value: id, label: name });
+  }
   const groupOptions = approvers
     .filter((m) => m.principal_type === PrincipalType.GROUP)
     .map((m) => ({ value: m.principal_key, label: m.principal_key }));

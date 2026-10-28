@@ -55,6 +55,8 @@ class AccessRequestDTO:
     approved_at: datetime | None = None
     uses: int = 0
     decisions: tuple[RequestDecisionDTO, ...] = field(default_factory=tuple)
+    # Display names of the named-user approvers in the policy snapshot, by user id.
+    approver_names: dict[str, str] = field(default_factory=dict)
 
     @property
     def account_id(self) -> uuid.UUID:

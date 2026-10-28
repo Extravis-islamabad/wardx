@@ -14,6 +14,8 @@ class ApprovalLevelDTO:
     approver_type: str
     # user: the user's id; group: the normalised DN; None for safe_approvers.
     approver_key: str | None = None
+    # For display only (user levels: full name, else username); never in a snapshot.
+    approver_name: str | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {

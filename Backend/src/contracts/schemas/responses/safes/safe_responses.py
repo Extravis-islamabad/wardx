@@ -81,7 +81,10 @@ class ApprovalLevelResponse(BaseModel):
     position: int
     required_approvals: int
     approver_type: str
+    # user levels: the user's id (for linking); group levels: the DN.
     approver_key: str | None
+    # user levels: full name, else username.
+    approver_name: str | None = None
 
 
 class ApprovalPolicyResponse(BaseModel):

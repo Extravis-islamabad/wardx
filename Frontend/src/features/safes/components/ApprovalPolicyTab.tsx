@@ -62,7 +62,17 @@ export function ApprovalPolicyTab({ safe, canEdit }: { safe: Safe; canEdit: bool
       {required && (
         <>
           <FormField label="Approval levels (in order)" htmlFor="policy-levels">
-            <ApprovalLevelsField control={control} errors={errors} members={members.data ?? []} readOnly={readOnly} />
+            <ApprovalLevelsField
+              control={control}
+              errors={errors}
+              members={members.data ?? []}
+              readOnly={readOnly}
+              knownNames={Object.fromEntries(
+                (policy.data?.levels ?? [])
+                  .filter((l) => l.approver_key && l.approver_name)
+                  .map((l) => [l.approver_key as string, l.approver_name as string]),
+              )}
+            />
           </FormField>
           <div className="grid grid-cols-1 gap-x-4 md:grid-cols-3">
             <FormField

@@ -12,6 +12,7 @@ from src.contracts.dto.safes.approval_policy_dto import ApprovalLevelDTO, Approv
 from src.core.enums import PrincipalType, SafePermission
 from src.models import Safe, SafeApprovalLevel, SafeMember, User, UserGroupCache
 from src.repositories.base import BaseRepository
+from src.repositories.identity.user_names import display_names
 
 POLICY_FIELDS = (
     "approval_required",
@@ -28,10 +29,15 @@ class ApprovalPolicyRepository(BaseRepository):
         safe = await self._session.get(Safe, safe_id, populate_existing=True)
         if safe is None:
             return None
-        levels = await self._session.scalars(
-            select(SafeApprovalLevel)
-            .where(SafeApprovalLevel.safe_id == safe_id)
-            .order_by(SafeApprovalLevel.position)
+        levels = list(
+            await self._session.scalars(
+                select(SafeApprovalLevel)
+                .where(SafeApprovalLevel.safe_id == safe_id)
+                .order_by(SafeApprovalLevel.position)
+            )
+        )
+        names = await display_names(
+            self._session, (lv.approver_key for lv in levels if lv.approver_type == "user")
         )
         return ApprovalPolicyDTO(
             safe_id=safe.id,
@@ -42,6 +48,7 @@ class ApprovalPolicyRepository(BaseRepository):
                     required_approvals=lv.required_approvals,
                     approver_type=lv.approver_type,
                     approver_key=lv.approver_key,
+                    approver_name=names.get(lv.approver_key or ""),
                 )
                 for lv in levels
             ),

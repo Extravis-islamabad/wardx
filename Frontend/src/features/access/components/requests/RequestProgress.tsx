@@ -13,7 +13,11 @@ const ICON: Record<RequestLevel['state'], JSX.Element> = {
 };
 
 const approverLabel = (l: RequestLevel) =>
-  l.approver_type === 'safe_approvers' ? 'safe approvers' : l.approver_type === 'user' ? 'named user' : `group ${l.approver_key}`;
+  l.approver_type === 'safe_approvers'
+    ? 'safe approvers'
+    : l.approver_type === 'user'
+      ? (l.approver_name ?? 'a named user')
+      : `group ${l.approver_key}`;
 
 /** One chip per level: state, approvals so far of those needed. */
 export function RequestLevels({ request }: { request: AccessRequest }) {

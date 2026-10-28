@@ -21,6 +21,7 @@ from src.errors.exceptions import ConflictError
 from src.models import AccessRequest, Account, RequestDecision
 from src.repositories.access.briefs import account_brief, user_brief
 from src.repositories.base import BaseRepository
+from src.repositories.identity.user_names import display_names
 
 OPEN_REQUEST = (RequestStatus.PENDING, RequestStatus.APPROVED)
 
@@ -35,7 +36,22 @@ def _decision(row: RequestDecision) -> RequestDecisionDTO:
     )
 
 
-def _to_dto(row: AccessRequest, decisions: Sequence[RequestDecisionDTO] = ()) -> AccessRequestDTO:
+def _user_level_keys(rows: Sequence[AccessRequest]) -> list[str]:
+    """User ids named as approvers in the requests' policy snapshots."""
+    return [
+        lv.get("approver_key")
+        for r in rows
+        for lv in (r.policy or {}).get("levels") or []
+        if lv.get("approver_type") == "user"
+    ]
+
+
+def _to_dto(
+    row: AccessRequest,
+    decisions: Sequence[RequestDecisionDTO] = (),
+    names: dict[str, str] | None = None,
+) -> AccessRequestDTO:
+    own = set(_user_level_keys([row]))
     return AccessRequestDTO(
         id=row.id,
         account=account_brief(row.account),
@@ -55,6 +71,7 @@ def _to_dto(row: AccessRequest, decisions: Sequence[RequestDecisionDTO] = ()) ->
         approved_at=row.approved_at,
         uses=row.uses,
         decisions=tuple(decisions),
+        approver_names={k: v for k, v in (names or {}).items() if k in own},
     )
 
 
@@ -94,7 +111,8 @@ class AccessRequestRepository(BaseRepository):
             .all()
         )
         decisions = await self.decisions_for([r.id for r in rows])
-        return [_to_dto(r, decisions.get(r.id, ())) for r in rows], total
+        names = await display_names(self._session, _user_level_keys(rows))
+        return [_to_dto(r, decisions.get(r.id, ()), names) for r in rows], total
 
     async def decidable(
         self,
@@ -150,7 +168,8 @@ class AccessRequestRepository(BaseRepository):
             .all()
         )
         decisions = await self.decisions_for([r.id for r in rows])
-        return [_to_dto(r, decisions.get(r.id, ())) for r in rows], total or 0
+        names = await display_names(self._session, _user_level_keys(rows))
+        return [_to_dto(r, decisions.get(r.id, ()), names) for r in rows], total or 0
 
     async def decisions_for(
         self, request_ids: Sequence[uuid.UUID]
@@ -186,7 +205,8 @@ class AccessRequestRepository(BaseRepository):
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
-        return _to_dto(row, (await self.decisions_for([row.id])).get(row.id, ()))
+        decisions = (await self.decisions_for([row.id])).get(row.id, ())
+        return _to_dto(row, decisions, await display_names(self._session, _user_level_keys([row])))
 
     async def latest_approved(
         self, account_id: uuid.UUID, requester_id: uuid.UUID, now: datetime
