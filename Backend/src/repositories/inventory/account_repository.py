@@ -104,6 +104,11 @@ class AccountRepository(BaseRepository):
         counts = await self.active_checkout_counts([row.id])
         return _to_dto(row, counts.get(row.id, 0))
 
+    async def list_for_target(self, target_id: uuid.UUID) -> list[AccountDTO]:
+        """Every account on a target (without active check-out counts)."""
+        rows = await self._session.scalars(select(Account).where(Account.target_id == target_id))
+        return [_to_dto(a) for a in rows]
+
     async def ids_for_target(self, target_id: uuid.UUID) -> list[uuid.UUID]:
         return list(
             await self._session.scalars(select(Account.id).where(Account.target_id == target_id))

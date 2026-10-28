@@ -74,6 +74,10 @@ class CheckoutService:
             raise NotFoundError("Check-out not found")
         return co
 
+    async def held_by(self, actor: Actor, account_id: uuid.UUID) -> CheckoutDTO | None:
+        """The actor's own active, unexpired check-out of the account, if any."""
+        return await self._checkouts.active_held(account_id, actor.id, utcnow())
+
     async def checkout(
         self,
         actor: Actor,

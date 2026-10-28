@@ -39,6 +39,10 @@ class TargetService:
             raise NotFoundError("Target not found")
         return target
 
+    async def find_by_name(self, name: str) -> TargetDTO | None:
+        """The target with this name, ignoring case (how gateway logins name targets)."""
+        return await self._targets.find_by_name(name)
+
     async def create(self, actor: Actor, values: dict) -> TargetDTO:
         port = values.pop("port", None)
         values["port"] = port or DEFAULT_PORTS[Protocol(values["protocol"])]

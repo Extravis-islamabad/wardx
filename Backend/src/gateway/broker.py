@@ -13,26 +13,27 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.contracts.dto.access.checkout_dto import CheckoutDTO
+from src.contracts.dto.inventory.account_dto import AccountDTO
+from src.contracts.dto.sessions.command_rule_dto import RuleScopeDTO
 from src.core.config import Settings
-from src.core.context import SYSTEM_ACTOR, Actor
+from src.core.context import Actor
 from src.core.db import session_factory
-from src.core.enums import CheckoutStatus, Protocol, RequestStatus, Role
-from src.dependencies.access import build_checkout_service
+from src.core.enums import CheckoutStatus, Protocol, Role
+from src.dependencies.access import build_access_request_service, build_checkout_service
+from src.dependencies.inventory import build_account_service, build_target_service
+from src.dependencies.sessions import (
+    build_command_rule_service,
+    build_gateway_session_service,
+    build_host_key_service,
+)
+from src.dependencies.vault import build_vault_service
 from src.errors.exceptions import AppError
 from src.gateway.policy import CommandPolicy
-from src.models import (
-    AccessRequest,
-    Account,
-    Checkout,
-    CommandRule,
-    GatewaySession,
-    SessionCommand,
-    Target,
-    utcnow,
-)
-from src.services import audit_service, auth_service, mfa_service, vault_service
+from src.models import utcnow
+from src.services import auth_service, mfa_service
 from src.services.inventory.account_service import ACCOUNT_SECRET
 
 GATEWAY_REASON = "Interactive session via WardX gateway"
@@ -132,11 +133,7 @@ class Broker:
                 raise GatewayDenied(
                     "Your role requires MFA. Set it up in the WardX console, then reconnect."
                 )
-            target = (
-                await session.execute(
-                    select(Target).where(func.lower(Target.name) == target_name.lower())
-                )
-            ).scalar_one_or_none()
+            target = await build_target_service(session).find_by_name(target_name)
             if target is None or not target.is_active:
                 raise GatewayDenied(f"No active target named '{target_name}'")
             if target.protocol not in SUPPORTED_PROTOCOLS:
@@ -144,11 +141,7 @@ class Broker:
                     f"{target.name} uses {target.protocol.upper()}; this gateway proxies SSH"
                 )
 
-            accounts = (
-                (await session.execute(select(Account).where(Account.target_id == target.id)))
-                .scalars()
-                .all()
-            )
+            accounts = await build_account_service(session).list_for_target(target.id)
             if account_username is None:
                 if len(accounts) != 1:
                     names = ", ".join(sorted(a.username for a in accounts)) or "none"
@@ -164,8 +157,7 @@ class Broker:
 
             checkout, owns = await self._obtain_checkout(session, actor, account)
             try:
-                secret = await vault_service.read(
-                    session,
+                secret = await build_vault_service(session).read(
                     owner_type=ACCOUNT_SECRET,
                     owner_id=account.id,
                     version=account.secret_version,
@@ -175,63 +167,20 @@ class Broker:
                     await self._close_checkout(checkout.id, actor)
                 raise GatewayDenied(f"Credential unavailable: {exc.message}") from exc
 
-            rules = (
-                await session.execute(
-                    select(CommandRule.id, CommandRule.pattern, CommandRule.description).where(
-                        CommandRule.is_active,
-                        or_(CommandRule.account_id.is_(None), CommandRule.account_id == account.id),
-                        or_(CommandRule.target_id.is_(None), CommandRule.target_id == target.id),
-                        or_(
-                            CommandRule.platform.is_(None), CommandRule.platform == target.platform
-                        ),
-                    )
-                )
-            ).all()
-
-            row = GatewaySession(
+            policy = await build_command_rule_service(session).policy_for(
+                RuleScopeDTO(account_id=account.id, target_id=target.id, platform=target.platform)
+            )
+            session_id = await build_gateway_session_service(session).start(
+                actor,
                 checkout_id=checkout.id,
-                user_id=actor.id,
-                account_id=account.id,
-                target_id=target.id,
-                account_username=account.username,
-                target_name=target.name,
-                target_address=target.address,
-                protocol=target.protocol,
+                account=account,
+                target=target,
                 mode=mode,
-                exec_command=command,
-                client_ip=actor.source_ip,
-                gateway_node=self.node,
-                status="active",
-                started_at=utcnow(),
+                command=command,
+                node=self.node,
             )
-            session.add(row)
-            await session.flush()
-            await audit_service.record(
-                session,
-                actor,
-                "session.start",
-                object_type="session",
-                object_id=row.id,
-                details={
-                    "account_id": str(account.id),
-                    "target": target.name,
-                    "mode": mode,
-                    "command": command,
-                    "checkout_id": str(checkout.id),
-                    "gateway": self.node,
-                },
-            )
-            await audit_service.record(
-                session,
-                actor,
-                "secret.inject",
-                object_type="session",
-                object_id=row.id,
-                details={"account_id": str(account.id), "version": account.secret_version},
-            )
-            await session.commit()
             return Grant(
-                session_id=row.id,
+                session_id=session_id,
                 actor=actor,
                 account_id=account.id,
                 account_username=account.username,
@@ -248,48 +197,20 @@ class Broker:
                 checkout_id=checkout.id,
                 owns_checkout=owns,
                 expires_at=checkout.expires_at,
-                policy=CommandPolicy.build(rules),
+                policy=policy,
             )
 
     async def _obtain_checkout(
-        self, session, actor: Actor, account: Account
-    ) -> tuple[Checkout, bool]:
-        held = (
-            (
-                await session.execute(
-                    select(Checkout).where(
-                        Checkout.account_id == account.id,
-                        Checkout.user_id == actor.id,
-                        Checkout.status == CheckoutStatus.ACTIVE,
-                        Checkout.expires_at > utcnow(),
-                    )
-                )
-            )
-            .unique()
-            .scalar_one_or_none()
-        )
+        self, session: AsyncSession, actor: Actor, account: AccountDTO
+    ) -> tuple[CheckoutDTO, bool]:
+        checkouts = build_checkout_service(session)
+        held = await checkouts.held_by(actor, account.id)
         if held is not None:
             return held, False
 
         body: dict = {"account_id": account.id, "reason": GATEWAY_REASON}
         if account.requires_approval:
-            request = (
-                (
-                    await session.execute(
-                        select(AccessRequest)
-                        .where(
-                            AccessRequest.account_id == account.id,
-                            AccessRequest.requester_id == actor.id,
-                            AccessRequest.status == RequestStatus.APPROVED,
-                            AccessRequest.expires_at > utcnow(),
-                        )
-                        .order_by(AccessRequest.decided_at.desc())
-                        .limit(1)
-                    )
-                )
-                .unique()
-                .scalar_one_or_none()
-            )
+            request = await build_access_request_service(session).usable_approval(actor, account.id)
             if request is None:
                 raise GatewayDenied(
                     f"{account.username} needs an approved request. Request access in the "
@@ -297,54 +218,31 @@ class Broker:
                 )
             body = {"account_id": account.id, "request_id": request.id}
         try:
-            out = await build_checkout_service(session).checkout(actor, **body)
+            out = await checkouts.checkout(actor, **body)
         except AppError as exc:
             held_by = exc.details.get("held_by")
             suffix = f" (held by {held_by} until {exc.details.get('until')})" if held_by else ""
             raise GatewayDenied(exc.message + suffix) from exc
-        checkout = await session.get(Checkout, out.id)
-        return checkout, True
+        return out, True
 
     # ── During a session ──
 
     async def pin_host_key(self, grant: Grant, key: str, fingerprint: str) -> bool:
         """Store a target's first-seen host key. False if another key got pinned first."""
         async with session_factory()() as session:
-            result = await session.execute(
-                update(Target)
-                .where(Target.id == grant.target.id, Target.ssh_host_key.is_(None))
-                .values(
-                    ssh_host_key=key,
-                    ssh_host_key_fingerprint=fingerprint,
-                    ssh_host_key_learned_at=utcnow(),
-                )
-            )
-            if result.rowcount == 0:
-                await session.rollback()
-                return False
-            await audit_service.record(
-                session,
+            return await build_host_key_service(session).pin(
                 grant.actor,
-                "target.host_key_learned",
-                object_type="target",
-                object_id=grant.target.id,
-                details={"fingerprint": fingerprint, "session_id": str(grant.session_id)},
+                grant.target.id,
+                key=key,
+                fingerprint=fingerprint,
+                session_id=grant.session_id,
             )
-            await session.commit()
-            return True
 
     async def host_key_mismatch(self, grant: Grant, presented: str | None) -> None:
         async with session_factory()() as session:
-            await audit_service.record(
-                session,
-                grant.actor,
-                "target.host_key_mismatch",
-                object_type="target",
-                object_id=grant.target.id,
-                outcome="failure",
-                details={"presented_fingerprint": presented, "session_id": str(grant.session_id)},
+            await build_host_key_service(session).record_mismatch(
+                grant.actor, grant.target.id, presented=presented, session_id=grant.session_id
             )
-            await session.commit()
 
     async def record_command(
         self,
@@ -357,34 +255,15 @@ class Broker:
         edited: bool,
     ) -> None:
         async with session_factory()() as session:
-            session.add(
-                SessionCommand(
-                    session_id=grant.session_id,
-                    occurred_at=utcnow(),
-                    offset_seconds=offset,
-                    command=command + (" ⟨edited⟩" if edited else ""),
-                    verdict="blocked" if blocked else "allowed",
-                    rule_id=blocked_rule,
-                )
+            await build_gateway_session_service(session).record_command(
+                grant.actor,
+                grant.session_id,
+                offset=offset,
+                command=command,
+                blocked_rule=blocked_rule,
+                blocked=blocked,
+                edited=edited,
             )
-            counters = {"commands_count": GatewaySession.commands_count + 1}
-            if blocked:
-                counters["blocked_count"] = GatewaySession.blocked_count + 1
-                await audit_service.record(
-                    session,
-                    grant.actor,
-                    "session.command_blocked",
-                    object_type="session",
-                    object_id=grant.session_id,
-                    outcome="failure",
-                    details={"command": command, "rule_id": str(blocked_rule)},
-                )
-            await session.execute(
-                update(GatewaySession)
-                .where(GatewaySession.id == grant.session_id)
-                .values(**counters)
-            )
-            await session.commit()
 
     async def close_orders(self, grants: list[Grant]) -> dict[uuid.UUID, CloseOrder]:
         """Sessions that must end now: kill requested, or their check-out is over."""
@@ -392,19 +271,7 @@ class Broker:
             return {}
         by_session = {g.session_id: g for g in grants}
         async with session_factory()() as session:
-            rows = (
-                await session.execute(
-                    select(
-                        GatewaySession.id,
-                        GatewaySession.terminate_requested_at,
-                        GatewaySession.close_reason,
-                        Checkout.status,
-                        Checkout.expires_at,
-                    )
-                    .join(Checkout, Checkout.id == GatewaySession.checkout_id, isouter=True)
-                    .where(GatewaySession.id.in_(by_session))
-                )
-            ).all()
+            rows = await build_gateway_session_service(session).close_state(list(by_session))
         now = utcnow()
         orders: dict[uuid.UUID, CloseOrder] = {}
         for sid, kill_at, kill_reason, co_status, co_expires in rows:
@@ -434,35 +301,17 @@ class Broker:
         bytes_from_user: int,
     ) -> None:
         async with session_factory()() as session:
-            await session.execute(
-                update(GatewaySession)
-                .where(GatewaySession.id == grant.session_id, GatewaySession.status == "active")
-                .values(
-                    status=status,
-                    ended_at=utcnow(),
-                    close_reason=reason,
-                    recording_path=recording_path,
-                    recording_sha256=recording_sha256,
-                    recording_bytes=recording_bytes,
-                    bytes_from_target=bytes_from_target,
-                    bytes_from_user=bytes_from_user,
-                )
-            )
-            await audit_service.record(
-                session,
+            await build_gateway_session_service(session).finish(
                 grant.actor,
-                "session.end",
-                object_type="session",
-                object_id=grant.session_id,
-                outcome="success" if status in ("closed", "terminated") else "failure",
-                details={
-                    "status": status,
-                    "reason": reason,
-                    "recording_sha256": recording_sha256,
-                    "bytes_from_target": bytes_from_target,
-                },
+                grant.session_id,
+                status=status,
+                reason=reason,
+                recording_path=recording_path,
+                recording_sha256=recording_sha256,
+                recording_bytes=recording_bytes,
+                bytes_from_target=bytes_from_target,
+                bytes_from_user=bytes_from_user,
             )
-            await session.commit()
         if grant.owns_checkout:
             await self._close_checkout(grant.checkout_id, grant.actor)
 
@@ -477,28 +326,5 @@ class Broker:
     async def recover_orphans(self) -> int:
         """Sessions left 'active' by a previous run of this gateway node."""
         async with session_factory()() as session:
-            ids = (
-                await session.execute(
-                    update(GatewaySession)
-                    .where(
-                        GatewaySession.status == "active", GatewaySession.gateway_node == self.node
-                    )
-                    .values(status="failed", ended_at=utcnow(), close_reason="Gateway restarted")
-                    .returning(
-                        GatewaySession.id, GatewaySession.checkout_id, GatewaySession.user_id
-                    )
-                )
-            ).all()
-            for sid, _checkout_id, _user_id in ids:
-                await audit_service.record(
-                    session,
-                    SYSTEM_ACTOR,
-                    "session.end",
-                    object_type="session",
-                    object_id=sid,
-                    outcome="failure",
-                    details={"status": "failed", "reason": "Gateway restarted"},
-                )
-            await session.commit()
             # Their check-outs keep their own expiry; the sweeper closes them.
-            return len(ids)
+            return await build_gateway_session_service(session).recover_orphans(self.node)

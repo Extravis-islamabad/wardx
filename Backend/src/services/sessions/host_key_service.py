@@ -12,6 +12,7 @@ import uuid
 from src.contracts.dto.inventory.target_dto import TargetDTO
 from src.core.context import Actor
 from src.errors.exceptions import NotFoundError
+from src.models import utcnow
 from src.repositories.inventory.target_repository import TargetRepository
 from src.services.audit.audit_service import AuditService
 
@@ -42,3 +43,43 @@ class HostKeyService:
         )
         await self._targets.commit()
         return updated
+
+    async def pin(
+        self,
+        actor: Actor,
+        target_id: uuid.UUID,
+        *,
+        key: str,
+        fingerprint: str,
+        session_id: uuid.UUID,
+    ) -> bool:
+        """Pin a target's first-seen host key. False if another key got pinned first."""
+        pinned = await self._targets.pin_host_key(
+            target_id, key=key, fingerprint=fingerprint, learned_at=utcnow()
+        )
+        if not pinned:
+            await self._targets.rollback()
+            return False
+        await self._audit.record(
+            actor,
+            "target.host_key_learned",
+            object_type="target",
+            object_id=target_id,
+            details={"fingerprint": fingerprint, "session_id": str(session_id)},
+        )
+        await self._targets.commit()
+        return True
+
+    async def record_mismatch(
+        self, actor: Actor, target_id: uuid.UUID, *, presented: str | None, session_id: uuid.UUID
+    ) -> None:
+        """Audit a device presenting a host key other than the pinned one."""
+        await self._audit.record(
+            actor,
+            "target.host_key_mismatch",
+            object_type="target",
+            object_id=target_id,
+            outcome="failure",
+            details={"presented_fingerprint": presented, "session_id": str(session_id)},
+        )
+        await self._targets.commit()

@@ -65,6 +65,10 @@ class AccessRequestService:
             raise NotFoundError("Request not found")
         return req
 
+    async def usable_approval(self, actor: Actor, account_id: uuid.UUID) -> AccessRequestDTO | None:
+        """The actor's latest approved, unexpired request for the account, if any."""
+        return await self._requests.latest_approved(account_id, actor.id, utcnow())
+
     async def create(
         self,
         actor: Actor,

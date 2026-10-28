@@ -49,6 +49,9 @@ class AccountService:
             raise NotFoundError("Account not found")
         return account
 
+    async def list_for_target(self, target_id: uuid.UUID) -> list[AccountDTO]:
+        return await self._accounts.list_for_target(target_id)
+
     async def create(self, actor: Actor, values: dict, secret: str | None) -> AccountDTO:
         if await self._targets.get(values["target_id"]) is None:
             raise NotFoundError("Target not found")

@@ -78,6 +78,29 @@ class AccessRequestRepository(BaseRepository):
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_dto(row) if row else None
 
+    async def latest_approved(
+        self, account_id: uuid.UUID, requester_id: uuid.UUID, now: datetime
+    ) -> AccessRequestDTO | None:
+        """The requester's most recently approved, unexpired request for the account."""
+        row = (
+            (
+                await self._session.execute(
+                    select(AccessRequest)
+                    .where(
+                        AccessRequest.account_id == account_id,
+                        AccessRequest.requester_id == requester_id,
+                        AccessRequest.status == RequestStatus.APPROVED,
+                        AccessRequest.expires_at > now,
+                    )
+                    .order_by(AccessRequest.decided_at.desc())
+                    .limit(1)
+                )
+            )
+            .unique()
+            .scalar_one_or_none()
+        )
+        return _to_dto(row) if row else None
+
     async def create(self, values: dict[str, Any]) -> uuid.UUID:
         row = AccessRequest(**values)
         self._session.add(row)

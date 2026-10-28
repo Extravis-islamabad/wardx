@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from src.contracts.dto.inventory.target_dto import TargetDTO, TargetFilterDTO
@@ -61,6 +62,30 @@ class TargetRepository(BaseRepository):
     async def get(self, target_id: uuid.UUID, *, lock: bool = False) -> TargetDTO | None:
         row = await self._session.get(Target, target_id, with_for_update=lock or None)
         return _to_dto(row) if row else None
+
+    async def find_by_name(self, name: str) -> TargetDTO | None:
+        """The target with this name, ignoring case."""
+        row = (
+            await self._session.execute(
+                select(Target).where(func.lower(Target.name) == name.lower())
+            )
+        ).scalar_one_or_none()
+        return _to_dto(row) if row else None
+
+    async def pin_host_key(
+        self, target_id: uuid.UUID, *, key: str, fingerprint: str, learned_at: datetime
+    ) -> bool:
+        """Store a first-seen host key; False if the target already has one pinned."""
+        result = await self._session.execute(
+            update(Target)
+            .where(Target.id == target_id, Target.ssh_host_key.is_(None))
+            .values(
+                ssh_host_key=key,
+                ssh_host_key_fingerprint=fingerprint,
+                ssh_host_key_learned_at=learned_at,
+            )
+        )
+        return result.rowcount > 0
 
     async def create(self, values: dict[str, Any]) -> TargetDTO:
         row = Target(**values)

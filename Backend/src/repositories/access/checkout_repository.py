@@ -88,6 +88,26 @@ class CheckoutRepository(BaseRepository):
         )
         return [_to_dto(c) for c in rows]
 
+    async def active_held(
+        self, account_id: uuid.UUID, user_id: uuid.UUID, now: datetime
+    ) -> CheckoutDTO | None:
+        """The user's active, unexpired check-out of the account, if any."""
+        row = (
+            (
+                await self._session.execute(
+                    select(Checkout).where(
+                        Checkout.account_id == account_id,
+                        Checkout.user_id == user_id,
+                        Checkout.status == CheckoutStatus.ACTIVE,
+                        Checkout.expires_at > now,
+                    )
+                )
+            )
+            .unique()
+            .scalar_one_or_none()
+        )
+        return _to_dto(row) if row else None
+
     async def create(self, values: dict[str, Any]) -> uuid.UUID:
         row = Checkout(**values)
         self._session.add(row)

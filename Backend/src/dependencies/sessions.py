@@ -20,6 +20,7 @@ from src.repositories.inventory.target_repository import TargetRepository
 from src.repositories.sessions.command_rule_repository import CommandRuleRepository
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.sessions.command_rule_service import CommandRuleService
+from src.services.sessions.gateway_session_service import GatewaySessionService
 from src.services.sessions.host_key_service import HostKeyService
 from src.services.sessions.session_service import SessionService
 
@@ -39,6 +40,10 @@ def build_command_rule_service(session: AsyncSession) -> CommandRuleService:
         TargetRepository(session),
         build_audit_service(session),
     )
+
+
+def build_gateway_session_service(session: AsyncSession) -> GatewaySessionService:
+    return GatewaySessionService(GatewaySessionRepository(session), build_audit_service(session))
 
 
 def build_host_key_service(session: AsyncSession) -> HostKeyService:
