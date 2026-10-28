@@ -50,4 +50,5 @@ def test_weak_passwords_rejected(pw):
 
 
 def test_strong_password_accepted():
-    assert UserCreate(username="bob", password="Str0ng-enough-pw").username == "bob"
+    pw = "Str0ng-enough-pw"  # gitleaks:allow (test literal for the strength check)
+    assert UserCreate(username="bob", password=pw).username == "bob"

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Blocks a commit that stages a secret. Enable once per clone:
+#   git config core.hooksPath .githooks
+# Needs gitleaks on PATH (https://github.com/gitleaks/gitleaks/releases).
+# A deliberate test literal is allowed with an inline "gitleaks:allow" comment.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks not found on PATH; install it to commit (secret scanning is required)." >&2
+  exit 1
+fi
+exec gitleaks git --pre-commit --staged --redact --no-banner

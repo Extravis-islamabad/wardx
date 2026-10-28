@@ -54,6 +54,18 @@ Same stack as MonetX so engineers move between them freely.
   hint), check-outs, approval queue, live sessions with replay and command log, command policy with
   a rule tester, targets with host-key status, audit with integrity check, users; dark and light themes.
 
+## First-time setup (every clone)
+
+```bash
+sh scripts/dev-setup.sh
+```
+
+Installs the pinned, checksum-verified `gitleaks` into `~/.local/bin` and runs
+`git config core.hooksPath .githooks`, so every commit is scanned for secrets before
+it is made. The same scan runs over the full history on every push and pull request
+(`.github/workflows/gitleaks.yml`). A deliberate test literal that trips the scanner
+gets an inline `# gitleaks:allow` comment on that line only, never a file or rule ignore.
+
 ## Run it locally
 
 ```bash

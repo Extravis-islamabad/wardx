@@ -1,0 +1,3 @@
+# Exact-fingerprint exceptions only (commit:file:rule:line). Never ignore a whole file or rule.
+# Test literal for the password-strength check, in the first commit; reviewed 2026-10-28, not a credential.
+258b8a867473f8e80fbdb5484ed036a2bd761f8a:Backend/tests/unit/test_security.py:generic-api-key:53
