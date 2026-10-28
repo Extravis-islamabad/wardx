@@ -28,6 +28,7 @@ from src.models import Account, RotationJob, RotationJobStep, Target
 from src.repositories.base import BaseRepository
 
 _TARGET_LOCK_BASE = 0x5741_5244_0700_0000
+_ACCOUNT_LOCK_BASE = 0x5741_5244_0800_0000
 
 
 def _step_dto(row: RotationJobStep) -> RotationStepDTO:
@@ -84,6 +85,10 @@ def target_lock_key(target_id: uuid.UUID) -> int:
     return _TARGET_LOCK_BASE + zlib.crc32(target_id.bytes)
 
 
+def account_lock_key(account_id: uuid.UUID) -> int:
+    return _ACCOUNT_LOCK_BASE + zlib.crc32(account_id.bytes)
+
+
 class RotationJobRepository(BaseRepository):
     async def create(self, values: dict[str, Any]) -> uuid.UUID:
         row = RotationJob(**values)
@@ -94,6 +99,22 @@ class RotationJobRepository(BaseRepository):
         except IntegrityError as exc:
             raise ConflictError("This account already has an open rotation job") from exc
         return row.id
+
+    async def try_account_lock(self, account_id: uuid.UUID) -> bool:
+        """Take the account's rotation lock for this transaction; False if held elsewhere."""
+        return bool(
+            (
+                await self._session.execute(
+                    text("SELECT pg_try_advisory_xact_lock(:k)"),
+                    {"k": account_lock_key(account_id)},
+                )
+            ).scalar_one()
+        )
+
+    async def account_of(self, job_id: uuid.UUID) -> uuid.UUID | None:
+        return await self._session.scalar(
+            select(RotationJob.account_id).where(RotationJob.id == job_id)
+        )
 
     async def get(
         self, job_id: uuid.UUID, *, lock: bool = False, with_steps: bool = False

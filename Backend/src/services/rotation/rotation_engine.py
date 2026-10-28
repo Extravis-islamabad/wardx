@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.contracts.dto.rotation.rotation_dto import (
     CANDIDATE_STORED,
+    CLAIMABLE_STATES,
     DEVICE_CHANGED,
     PERSISTED,
     RECONCILE,
@@ -38,6 +39,7 @@ from src.contracts.dto.rotation.rotation_dto import (
     RotationContextDTO,
 )
 from src.core.enums import Protocol
+from src.repositories.rotation.rotation_job_repository import RotationJobRepository
 from src.rotation.drivers.base import (
     AccountRef,
     Capability,
@@ -138,12 +140,37 @@ class RotationEngine:
             command_timeout=self.command_timeout,
         )
 
-    async def run(self, job_id: Any) -> None:
-        """Drive one claimed job as far as it can go now."""
+    async def run(self, job_id: Any) -> bool:
+        """Drive one claimed job as far as it can go now, holding the account's lock.
+
+        A transaction-scoped advisory lock keyed on the account id is held on a dedicated
+        connection for the whole run (rotation, verify or reconcile), so two workers or
+        scheduler processes never work on one account at once, even if a lease expired
+        while a slow job was still running. It is released when the run ends, and by
+        PostgreSQL if the process dies (the connection drops). False: another run holds
+        the account; nothing was touched and the job's lease simply runs out.
+        """
+        async with self.store() as st:
+            account_id = await st.account_of_job(job_id)
+        if account_id is None:
+            return False
+        async with self._sessions() as lock_session:
+            locks = RotationJobRepository(lock_session)
+            if not await locks.try_account_lock(account_id):
+                logger.info("rotation_account_busy", job_id=str(job_id))
+                await lock_session.rollback()
+                return False
+            try:
+                await self._run_locked(job_id)
+            finally:
+                await lock_session.rollback()  # ends the transaction: releases the lock
+        return True
+
+    async def _run_locked(self, job_id: Any) -> None:
         async with self.store() as st:
             ctx = await st.context(job_id)
-        if ctx is None:
-            return
+        if ctx is None or ctx.job.status not in CLAIMABLE_STATES:
+            return  # finished (or released) by an earlier run
         driver = self.registry.get(ctx.target.platform)
         why = refusal(ctx, driver, enabled=self.enabled)
         if why is not None:

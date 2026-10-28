@@ -75,6 +75,12 @@ class RotationStore(RotationOutcomesMixin):
         await self._jobs.rollback()
         return RotationContextDTO(job, account, target, policy, reconcile)
 
+    async def account_of_job(self, job_id: uuid.UUID) -> uuid.UUID | None:
+        try:
+            return await self._jobs.account_of(job_id)
+        finally:
+            await self._jobs.rollback()
+
     async def read_secret(self, account_id: uuid.UUID, version: int) -> str:
         try:
             return await self._vault.read(
