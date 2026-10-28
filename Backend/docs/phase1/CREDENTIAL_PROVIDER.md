@@ -220,4 +220,76 @@ MonetX shows any `credential_unavailable.*` as "credential unavailable", never "
 
 ## 11. Build log (smaller choices, logged rather than asked)
 
-Filled in during the build.
+Choices made during the build (the more restrictive option where the spec was silent).
+
+**Data (migration 021, additive).**
+- Tables `iam.apps`, `iam.app_secrets`, `iam.rate_counters`. App names are unique
+  case-insensitively and limited to letters, digits and `. _ -`.
+- `client_id` is `wxa_` + 24 hex characters; a client secret is `wxs_` + 43 URL-safe
+  characters (256 bits). The stored prefix is the first 12 characters.
+- Two active secrets are enforced by slots (1, 2) under a partial unique index. **An expired
+  secret keeps its slot until it is revoked** (it no longer authenticates).
+- `fetch` only for `app` members and apps only `fetch` is a CHECK constraint as well as a
+  service rule. App members are not counted by safe health (they are nobody's way in).
+- No app deletion: disable instead (history stays attributable).
+
+**Authentication.**
+- App tokens are signed with a key derived from the JWT secret (HMAC "wardx-app-token-v1"), so
+  they can never verify as user tokens (and vice versa) even before the `typ`/`aud` checks.
+- The token carries `sid` (the secret it was issued for): revoking or expiry of that secret
+  kills the token at once. Disabling bumps `token_version`; re-enabling does not revive old
+  tokens. The 5-minute lifetime is a constant, not a setting.
+- The allowlist is checked on **every** provider request, not only at token issue.
+- Token route order: failure rate limit → app exists and enabled (`invalid_client`) → IP
+  (`ip_not_allowed`) → secret. `ip_not_allowed` counts as a failed attempt. Both secret slots
+  are always verified (dummy hashes for missing ones) so timing does not reveal the count.
+- Failure limit: `WARDX_PROVIDER_TOKEN_FAILURES_PER_MINUTE` (default 10) per client_id
+  (hashed into the bucket name) and per source IP; refusals while limited are audited.
+  The pre-check and the increment are separate, so concurrent guesses can overshoot by the
+  number in flight.
+- The token response uses the house envelope (`data.access_token`, `token_type`,
+  `expires_in`); JSON body wins over HTTP Basic when both are sent.
+- `X-Forwarded-For` is read only when the peer is in `WARDX_TRUSTED_PROXIES`; the source is
+  the right-most hop that is not a trusted proxy; a malformed hop makes the source unknown
+  (refused).
+- A missing or non-app token on a provider route answers `invalid_token`; the route-coverage
+  guard expects that code there. Refusals of an authentic token (disabled app, revoked
+  secret, IP) are audited as `secret.app_fetch` failures; a token that is not authentic is
+  refused without an audit event (it identifies no app).
+
+**Fetch.**
+- Rate limit: one fixed one-minute window per app in `iam.rate_counters` (database clock),
+  incremented in its own committed transaction so every worker sees it; every authenticated
+  fetch counts, served or refused. Old windows are pruned opportunistically (1 hit in 200).
+- Matching: `external_ref` exact; `address` and `name` case-insensitive; `username` exact.
+  Inactive safes and inactive targets read as `credential_not_found`.
+- Kind to secret type: `ssh` = password or ssh_key, `enable` = enable_secret, `api` = api_key,
+  `snmp` = snmp_v2c or snmp_v3. By account id the kind follows the account's type.
+- Refusal order: approval → rotation needs attention (open needs_attention job or account
+  `rotation_status`) → `verify_untrustworthy` → no secret / empty flag / blank plaintext.
+  `confirmed_untrustworthy` (an admin accepted the risk) is served, as for people.
+- `version_id` = `cv_` + the first 32 hex of SHA-256(account id : secret version).
+- `ssh_key` accounts return `{private_key}` only: WardX stores no passphrase.
+- Audit details: app id and name, kind, purpose, match key and value, username, account,
+  target, safe, `version_id`, `error_code`. Refusals before an account is matched
+  (not found, ambiguous, rate limited) are recorded with object type `app`.
+- `credential_ambiguous` returns `details.matches` (a count, never usernames).
+
+**Safes, SNMP, console.**
+- Safe settings live at `GET/PUT /safes/{id}/app-fetch` (manage_members on the safe or
+  safes.manage), audited as `safe.app_fetch_update`.
+- SNMP secrets are submitted in a structured `snmp` field (not `secret`), validated per
+  security level (fields a level does not use are refused, auth/priv passwords at least 8
+  characters) and sealed as canonical JSON through the vault service. MD5 and DES are
+  accepted because devices still use them. The SSH transport refuses SNMP accounts outright
+  so a document is never sent as a password; rotation refuses them with a clear reason.
+- Console: Identity → Application identities; the secret-once modal masks the secret until
+  revealed and needs "I have stored it" to close. Safe drawer: app members and an
+  "Application access" tab. Accounts: SNMP v2c/v3 forms.
+
+**Tests and demo.** The cross-worker rate-limit test starts a second real `uvicorn` worker on
+the same database. The suite is run without `test_mikrotik_lab.py` and `test_mikrotik_e2e.py`
+for this module (they drive the CHR, which this module must leave untouched). The demo tools
+are `tools/demo/monetx_fetch_demo.py` and `tools/demo/seed_demo.py`; the seed puts the demo
+account in the Default safe, because an administrator cannot grant their own role on a new
+safe.
