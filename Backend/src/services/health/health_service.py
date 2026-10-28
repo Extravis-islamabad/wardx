@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from src.keys.runtime import key_provider
 from src.repositories.health.health_repository import HealthRepository
-from src.services.vault.vault_service import keyring
 
 
 class HealthService:
@@ -13,5 +13,5 @@ class HealthService:
     async def readiness(self) -> dict[str, str]:
         """Raises when the database is unreachable or the vault is sealed."""
         await self._repo.ping()
-        keyring()  # raises when the vault is sealed
+        await key_provider().health()  # raises when the vault is sealed
         return {"database": "ok", "vault": "unsealed"}

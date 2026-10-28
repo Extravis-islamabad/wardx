@@ -1,8 +1,8 @@
-"""Seals and opens secret versions with the process keyring.
+"""Seals and opens secret versions through the key provider.
 
-The keyring is loaded once at startup (``set_keyring``); until then the vault
-is sealed and every read or write fails. Callers hold the owner row lock while
-storing, so version numbers cannot race.
+The provider is loaded once at startup (src/keys/runtime.py); until then the
+vault is sealed and every read or write fails. Callers hold the owner row lock
+while storing, so version numbers cannot race.
 """
 
 from __future__ import annotations
@@ -11,33 +11,15 @@ import uuid
 from collections.abc import Sequence
 
 from src.errors.exceptions import NotFoundError, VaultError
+from src.keys.provider import KeyProvider
 from src.repositories.vault.secret_repository import SecretRepository
-from src.vault.envelope import (
-    Keyring,
-    VaultIntegrityError,
-    VaultKeyError,
-    open_sealed,
-    seal,
-    secret_aad,
-)
-
-_keyring: Keyring | None = None
-
-
-def set_keyring(keyring: Keyring) -> None:
-    global _keyring
-    _keyring = keyring
-
-
-def keyring() -> Keyring:
-    if _keyring is None:
-        raise VaultError("Vault is sealed: no key loaded")
-    return _keyring
+from src.vault.envelope import VaultIntegrityError, VaultKeyError, open_sealed, seal, secret_aad
 
 
 class VaultService:
-    def __init__(self, repo: SecretRepository) -> None:
+    def __init__(self, repo: SecretRepository, provider: KeyProvider) -> None:
         self._repo = repo
+        self._provider = provider
 
     async def store(
         self,
@@ -48,7 +30,9 @@ class VaultService:
         plaintext: str,
         created_by: uuid.UUID | None,
     ) -> None:
-        sealed = seal(keyring(), plaintext.encode(), secret_aad(owner_type, owner_id, version))
+        sealed = await seal(
+            self._provider, plaintext.encode(), secret_aad(owner_type, owner_id, version)
+        )
         await self._repo.add(
             owner_type=owner_type,
             owner_id=owner_id,
@@ -62,9 +46,10 @@ class VaultService:
         if sealed is None:
             raise NotFoundError("Secret version not found")
         try:
-            return open_sealed(
-                keyring(), sealed, secret_aad(owner_type, owner_id, version)
-            ).decode()
+            plaintext = await open_sealed(
+                self._provider, sealed, secret_aad(owner_type, owner_id, version)
+            )
+            return plaintext.decode()
         except (VaultKeyError, VaultIntegrityError) as exc:
             raise VaultError("Secret could not be decrypted", {"reason": str(exc)}) from exc
 

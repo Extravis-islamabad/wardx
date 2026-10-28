@@ -9,15 +9,20 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.core.config import Settings, get_settings, resolve_jwt_secret, resolve_vault_kek
+from src.core.config import (
+    Settings,
+    get_settings,
+    resolve_jwt_secret,
+    resolve_vault_kek,
+)
 from src.core.db import dispose_engine, init_engine, session_factory
 from src.core.migration_runner import run_migrations
 from src.dependencies.identity import build_user_service
 from src.errors.handlers import register_exception_handlers
+from src.keys.file_provider import FileKeyProvider
+from src.keys.runtime import set_key_provider
 from src.routers.v1 import api_router
 from src.scheduler.jobs import build_scheduler
-from src.services.vault.vault_service import set_keyring
-from src.vault.envelope import Keyring
 
 logger = structlog.get_logger(__name__)
 
@@ -25,7 +30,9 @@ logger = structlog.get_logger(__name__)
 async def startup(settings: Settings) -> None:
     # Fail fast on missing keys before touching the database.
     resolve_jwt_secret(settings)
-    set_keyring(Keyring.from_base64(resolve_vault_kek(settings), settings.vault_kek_retired))
+    set_key_provider(
+        FileKeyProvider.from_base64(resolve_vault_kek(settings), settings.vault_kek_retired)
+    )
     engine = init_engine(settings.database_url, settings.db_pool_size)
     await run_migrations(engine)
     async with session_factory()() as session:

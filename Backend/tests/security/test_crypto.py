@@ -14,8 +14,8 @@ import pytest
 from sqlalchemy import text
 
 from src.core.db import session_factory
+from src.keys.file_provider import FileKeyProvider
 from src.vault.envelope import (
-    Keyring,
     SealedSecret,
     VaultIntegrityError,
     VaultKeyError,
@@ -27,9 +27,9 @@ from src.vault.envelope import (
 AAD = secret_aad("account", uuid.UUID(int=1), 1)
 
 
-def _sealed(plaintext: bytes = b"S3cret-value") -> tuple[Keyring, SealedSecret]:
-    ring = Keyring(os.urandom(32))
-    return ring, seal(ring, plaintext, AAD)
+async def _sealed(plaintext: bytes = b"S3cret-value") -> tuple[FileKeyProvider, SealedSecret]:
+    ring = FileKeyProvider(os.urandom(32))
+    return ring, await seal(ring, plaintext, AAD)
 
 
 def _flip(data: bytes, index: int = 0) -> bytes:
@@ -37,60 +37,60 @@ def _flip(data: bytes, index: int = 0) -> bytes:
 
 
 @pytest.mark.parametrize("plaintext", [b"", b"x", b"p@ss w0rd \xe2\x9c\x93", os.urandom(4096)])
-def test_round_trip(plaintext):
-    ring, sealed = _sealed(plaintext)
-    assert open_sealed(ring, sealed, AAD) == plaintext
+async def test_round_trip(plaintext):
+    ring, sealed = await _sealed(plaintext)
+    assert await open_sealed(ring, sealed, AAD) == plaintext
 
 
-def test_authenticated_mode_shape():
+async def test_authenticated_mode_shape():
     # AES-GCM: 96-bit nonces and a 128-bit tag on both layers; the plaintext is not in the output.
-    ring, sealed = _sealed(b"S3cret-value")
+    ring, sealed = await _sealed(b"S3cret-value")
     assert len(sealed.nonce) == 12 and len(sealed.dek_nonce) == 12
     assert len(sealed.ciphertext) == len(b"S3cret-value") + 16
     assert len(sealed.wrapped_dek) == 32 + 16
     assert b"S3cret-value" not in sealed.ciphertext
 
 
-def test_unknown_key_is_refused():
-    _, sealed = _sealed()
+async def test_unknown_key_is_refused():
+    _, sealed = await _sealed()
     with pytest.raises(VaultKeyError):
-        open_sealed(Keyring(os.urandom(32)), sealed, AAD)
+        await open_sealed(FileKeyProvider(os.urandom(32)), sealed, AAD)
 
 
-def test_wrong_key_under_the_right_id_fails_authentication():
+async def test_wrong_key_under_the_right_id_fails_authentication():
     # Even if a different key were loaded under the expected id, GCM's tag rejects it.
-    _, sealed = _sealed()
-    impostor = Keyring(os.urandom(32))
+    _, sealed = await _sealed()
+    impostor = FileKeyProvider(os.urandom(32))
     impostor._keys[sealed.kek_id] = os.urandom(32)
     with pytest.raises(VaultIntegrityError):
-        open_sealed(impostor, sealed, AAD)
+        await open_sealed(impostor, sealed, AAD)
 
 
 @pytest.mark.parametrize("field", ["ciphertext", "nonce", "wrapped_dek", "dek_nonce"])
 @pytest.mark.parametrize("where", ["first", "last"])
-def test_any_tampered_byte_is_detected(field, where):
-    ring, sealed = _sealed()
+async def test_any_tampered_byte_is_detected(field, where):
+    ring, sealed = await _sealed()
     value = getattr(sealed, field)
     tampered = dataclasses.replace(sealed, **{field: _flip(value, 0 if where == "first" else -1)})
     with pytest.raises(VaultIntegrityError):
-        open_sealed(ring, tampered, AAD)
+        await open_sealed(ring, tampered, AAD)
 
 
 @pytest.mark.parametrize("field", ["ciphertext", "wrapped_dek"])
-def test_truncated_data_is_detected(field):
-    ring, sealed = _sealed()
+async def test_truncated_data_is_detected(field):
+    ring, sealed = await _sealed()
     tampered = dataclasses.replace(sealed, **{field: getattr(sealed, field)[:-1]})
     with pytest.raises(VaultIntegrityError):
-        open_sealed(ring, tampered, AAD)
+        await open_sealed(ring, tampered, AAD)
 
 
-def test_swapped_data_key_is_detected():
+async def test_swapped_data_key_is_detected():
     # A data key lifted from another secret cannot open this one.
-    ring, sealed = _sealed()
-    other = seal(ring, b"other", secret_aad("account", uuid.UUID(int=2), 1))
+    ring, sealed = await _sealed()
+    other = await seal(ring, b"other", secret_aad("account", uuid.UUID(int=2), 1))
     swapped = dataclasses.replace(sealed, wrapped_dek=other.wrapped_dek, dek_nonce=other.dek_nonce)
     with pytest.raises(VaultIntegrityError):
-        open_sealed(ring, swapped, AAD)
+        await open_sealed(ring, swapped, AAD)
 
 
 async def test_tampered_row_in_database_is_refused_not_revealed(client, admin, make_user):
