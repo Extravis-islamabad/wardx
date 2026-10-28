@@ -27,9 +27,20 @@ export function useUpdateUser() {
   });
 }
 
-/** For a lost phone: their sessions end and they re-enrol at next sign-in. */
+/** For a lost phone: their sessions end and they re-enrol at next sign-in (break-glass is revoked). */
 export function useResetUserMfa() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => usersService.resetMfa(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: identityKeys.usersAll() }),
+  });
+}
+
+export function useSetEmergencyAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, grant }: { id: string; grant: boolean }) =>
+      grant ? usersService.grantEmergency(id) : usersService.revokeEmergency(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: identityKeys.usersAll() }),
   });
 }

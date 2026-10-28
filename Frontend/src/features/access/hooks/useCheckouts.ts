@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { checkoutsService, type CheckoutCreatePayload } from '@/services/access-services';
+import { checkoutsService, emergencyService, type CheckoutCreatePayload } from '@/services/access-services';
 import type { PageQuery } from '@/types/api';
 import { dashboardKeys } from '@/features/dashboard/hooks/dashboardKeys';
 import { inventoryKeys } from '@/features/inventory/hooks/inventoryKeys';
@@ -45,5 +45,27 @@ export function useCheckin() {
 export function useRevealCheckout() {
   return useMutation({
     mutationFn: async (id: string) => (await checkoutsService.reveal(id)).data,
+  });
+}
+
+/** Break-glass reveal: audited, alerted, and recorded as an emergency check-out. */
+export function useEmergencyReveal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ accountId, reason }: { accountId: string; reason: string }) =>
+      (await emergencyService.reveal(accountId, reason)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: accessKeys.checkoutsAll() });
+      void qc.invalidateQueries({ queryKey: dashboardKeys.all });
+    },
+  });
+}
+
+/** Accounts in any safe, for a break-glass holder to pick from (no secrets). */
+export function useEmergencyAccounts(params: PageQuery, enabled: boolean) {
+  return useQuery({
+    queryKey: accessKeys.emergencyAccounts(params),
+    queryFn: () => emergencyService.accounts(params),
+    enabled,
   });
 }

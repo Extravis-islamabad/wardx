@@ -17,6 +17,8 @@ interface AccountsTableProps {
   onSetSecret: (account: Account) => void;
   onEdit: (account: Account) => void;
   onDelete: (account: Account) => void;
+  /** Shown only to holders of access.emergency (break-glass). */
+  onEmergency?: (account: Account) => void;
   /** The caller's permissions per safe id (from GET /safes); unknown safes stay enabled. */
   safePermissions?: Record<string, string[]>;
 }
@@ -31,6 +33,7 @@ export function AccountsTable({
   onEdit,
   onDelete,
   safePermissions,
+  onEmergency,
 }: AccountsTableProps) {
   const holds = (a: Account, ...perms: SafePermission[]) => {
     const held = safePermissions?.[a?.safe?.id];
@@ -89,7 +92,7 @@ export function AccountsTable({
     {
       title: '',
       key: 'actions',
-      width: 360,
+      width: 460,
       render: (_, a) => (
         <Space>
           <Button
@@ -109,6 +112,13 @@ export function AccountsTable({
                 onClick={() => onConnect(a)}
               >
                 Connect
+              </Button>
+            </Tooltip>
+          )}
+          {onEmergency && (
+            <Tooltip title="Break glass: reveal regardless of safe membership (audited and alerted)">
+              <Button variant="danger" size="small" disabled={!a?.has_secret} onClick={() => onEmergency(a)}>
+                Break glass
               </Button>
             </Tooltip>
           )}

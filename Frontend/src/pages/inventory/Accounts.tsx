@@ -5,7 +5,7 @@ import { Button, ConfirmModal, PageShell } from '@/components';
 import { PERMISSIONS } from '@/constants/enums/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { usePagination } from '@/hooks';
-import { RequestAccessModal, RevealModal } from '@/features/access/components';
+import { EmergencyRevealModal, RequestAccessModal, RevealModal } from '@/features/access/components';
 import { AccountFormModal, AccountsTable, SetSecretModal } from '@/features/inventory/components';
 import { useAccounts, useDeleteAccount } from '@/features/inventory/hooks';
 import { useSafes } from '@/features/safes/hooks';
@@ -18,6 +18,9 @@ import { notify } from '@/utils/notify';
 export default function Accounts() {
   const { canAccess } = useAuth();
   const canManage = canAccess({ permission: PERMISSIONS.ACCOUNTS_MANAGE });
+  const canBreakGlass = canAccess({ permission: PERMISSIONS.ACCESS_EMERGENCY });
+  const [breakingGlass, setBreakingGlass] = useState<Account | null>(null);
+  const [breakGlassOpen, setBreakGlassOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [safeId, setSafeId] = useState<string | undefined>();
   const safes = useSafes(PICKER_PAGE);
@@ -60,6 +63,17 @@ export default function Accounts() {
               setPage(1);
             }}
           />
+          {canBreakGlass && (
+            <Button
+              variant="danger"
+              onClick={() => {
+                setBreakingGlass(null);
+                setBreakGlassOpen(true);
+              }}
+            >
+              Break glass
+            </Button>
+          )}
           {canManage && (
             <Button
               variant="primary"
@@ -80,6 +94,14 @@ export default function Accounts() {
         pagination={paginationFor(accounts.data?.total)}
         canManage={canManage}
         safePermissions={Object.fromEntries(safes.data?.data?.map((s) => [s.id, s.my_permissions]) ?? [])}
+        onEmergency={
+          canBreakGlass
+            ? (a) => {
+                setBreakingGlass(a);
+                setBreakGlassOpen(true);
+              }
+            : undefined
+        }
         onAccess={setAccessing}
         onConnect={setConnecting}
         onSetSecret={setSettingSecret}
@@ -102,6 +124,16 @@ export default function Accounts() {
       <SetSecretModal account={settingSecret} onClose={() => setSettingSecret(null)} />
       <RequestAccessModal account={accessing} onClose={() => setAccessing(null)} onCheckedOut={setRevealing} />
       <RevealModal checkout={revealing} onClose={() => setRevealing(null)} />
+      {canBreakGlass && (
+        <EmergencyRevealModal
+          open={breakGlassOpen}
+          account={breakingGlass}
+          onClose={() => {
+            setBreakGlassOpen(false);
+            setBreakingGlass(null);
+          }}
+        />
+      )}
       {connecting && <ConnectModal account={connecting} onClose={() => setConnecting(null)} />}
       <ConfirmModal
         open={deleteTarget !== null}

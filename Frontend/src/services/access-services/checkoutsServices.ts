@@ -14,6 +14,8 @@ export interface Checkout {
   checked_out_at: string;
   expires_at: string;
   checked_in_at: string | null;
+  /** A break-glass reveal. */
+  emergency?: boolean;
 }
 
 export interface RevealedSecret {

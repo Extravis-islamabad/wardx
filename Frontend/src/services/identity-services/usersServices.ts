@@ -36,6 +36,17 @@ export const usersService = {
     return data;
   },
 
+  /** Break-glass: only to a local, MFA-enrolled user, and never to yourself. */
+  async grantEmergency(id: string): Promise<ApiResponse<null>> {
+    const { data } = await apiClient.put<ApiResponse<null>>(`${BASE}/${id}/permissions/access.emergency`);
+    return data;
+  },
+
+  async revokeEmergency(id: string): Promise<ApiResponse<null>> {
+    const { data } = await apiClient.delete<ApiResponse<null>>(`${BASE}/${id}/permissions/access.emergency`);
+    return data;
+  },
+
   async resetMfa(id: string): Promise<ApiResponse<null>> {
     const { data } = await apiClient.post<ApiResponse<null>>(`${BASE}/${id}/mfa/reset`);
     return data;

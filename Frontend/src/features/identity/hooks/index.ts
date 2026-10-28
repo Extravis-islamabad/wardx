@@ -1,5 +1,5 @@
 export { identityKeys } from './identityKeys';
-export { useUsers, useCreateUser, useUpdateUser, useResetUserMfa } from './useUsers';
+export { useUsers, useCreateUser, useUpdateUser, useResetUserMfa, useSetEmergencyAccess } from './useUsers';
 export {
   useDirectoryConfig,
   useSaveDirectoryConfig,

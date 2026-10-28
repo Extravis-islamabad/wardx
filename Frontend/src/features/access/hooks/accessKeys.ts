@@ -7,4 +7,5 @@ export const accessKeys = {
   requests: (params: PageQuery) => ['access', 'requests', params] as const,
   checkoutsAll: () => ['access', 'checkouts'] as const,
   checkouts: (params: PageQuery) => ['access', 'checkouts', params] as const,
+  emergencyAccounts: (params: PageQuery) => ['access', 'emergency-accounts', params] as const,
 };
