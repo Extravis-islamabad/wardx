@@ -93,6 +93,7 @@ async def emergency_reveal(
             secret_type=secret.secret_type,
             value=secret.value,
             expires_at=secret.expires_at,
+            notice=secret.notice,
         ),
         "Emergency reveal recorded and alerted",
     )

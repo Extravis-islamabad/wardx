@@ -4,6 +4,8 @@ Rules:
 - Needs ``access.emergency`` (a direct grant; no role holds it). At the moment of
   use the holder must still be a local, active, MFA-enrolled user, so break-glass
   never depends on the directory.
+- Rotation never blocks it: it reveals the account's current version, with a notice
+  when a rotation needs attention or the last verify was untrustworthy.
 - A reason of at least 20 characters. The reveal records an emergency check-out
   (exclusivity does not block it: that is the point of break-glass), is audited as
   ``secret.emergency_reveal`` and raises a high-severity alert, all in one
@@ -26,6 +28,7 @@ from src.repositories.identity.mfa_repository import MfaRepository
 from src.repositories.identity.user_repository import UserRepository
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import ACCOUNT_SECRET, AccountService
+from src.services.rotation.rotation_guard import RotationGuard
 from src.services.security.alert_service import AlertService
 from src.services.vault.vault_service import VaultService
 
@@ -43,7 +46,9 @@ class EmergencyAccessService:
         vault: VaultService,
         alerts: AlertService,
         audit: AuditService,
+        rotation: RotationGuard,
     ) -> None:
+        self._rotation = rotation
         self._accounts = accounts
         self._checkouts = checkouts
         self._users = users
@@ -107,9 +112,12 @@ class EmergencyAccessService:
                 "emergency": True,
             }
         )
+        # Always the current version (accounts.secret_version), whatever a rotation is
+        # doing: an unpromoted candidate is never revealed (ROTATION.md §14).
         value = await self._vault.read(
             owner_type=ACCOUNT_SECRET, owner_id=account.id, version=account.secret_version
         )
+        notice = await self._rotation.break_glass_notice(account.id)
         details = {
             "account_id": str(account.id),
             "safe_id": str(account.safe_id),
@@ -144,4 +152,5 @@ class EmergencyAccessService:
             secret_type=account.secret_type,
             value=value,
             expires_at=now + timedelta(minutes=minutes),
+            notice=notice,
         )

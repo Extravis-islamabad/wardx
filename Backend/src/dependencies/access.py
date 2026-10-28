@@ -89,6 +89,7 @@ def build_emergency_access_service(session: AsyncSession) -> EmergencyAccessServ
         build_vault_service(session),
         build_alert_service(session),
         build_audit_service(session),
+        build_rotation_guard(session),
     )
 
 

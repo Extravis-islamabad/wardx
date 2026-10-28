@@ -71,6 +71,28 @@ class RotationGuard:
             message = "This account's password is being rotated right now; try again shortly"
         raise RotationPending(message, {"job_id": str(job.id), "rotation_status": job.status})
 
+    async def break_glass_notice(self, account_id: uuid.UUID) -> str | None:
+        """What a break-glass holder must know about the version revealed (always the
+        account's current version: the vault's source of truth, never an unpromoted
+        candidate)."""
+        account = await self._accounts.get(account_id)
+        job = await self._jobs.open_for_account(account_id)
+        if job is not None and job.status == NEEDS_ATTENTION:
+            return (
+                f"A rotation of this account needs attention. This is the current version "
+                f"(v{account.secret_version}); the device may instead hold the unpromoted "
+                f"candidate v{job.candidate_version}. If it is refused, an administrator "
+                "resolves the rotation job (both versions are kept)."
+            )
+        if account is not None and account.sync_status == VERIFY_UNTRUSTWORTHY:
+            return (
+                "The last verify was untrustworthy (the device accepted a wrong password); "
+                "this is the current version, stored but not verified."
+            )
+        if job is not None and job.status in BLOCKING_STATES:
+            return f"A rotation of this account is {job.status.replace('_', ' ')}."
+        return None
+
     async def after_use(self, account_ids: Iterable[uuid.UUID]) -> list[uuid.UUID]:
         """Queue rotate-after-use jobs (waiting for release) in the caller's transaction."""
         created: list[uuid.UUID] = []

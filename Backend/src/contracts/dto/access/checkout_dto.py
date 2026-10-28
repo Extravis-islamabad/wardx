@@ -46,3 +46,5 @@ class RevealedSecretDTO:
     secret_type: str
     value: str
     expires_at: datetime
+    # Break-glass: why the revealed (current) version may not be what the device uses.
+    notice: str | None = None

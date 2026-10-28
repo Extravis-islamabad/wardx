@@ -33,3 +33,4 @@ class RevealedSecretResponse(BaseModel):
     secret_type: str
     value: str
     expires_at: datetime
+    notice: str | None = None
