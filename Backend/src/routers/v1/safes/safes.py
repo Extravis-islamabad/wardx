@@ -1,6 +1,7 @@
 """Safes router.
 
 GET   /safes              — safes the caller can list (every safe with safes.manage)
+GET   /safes/health       — each active safe's health and break-glass coverage (safes.manage)
 GET   /safes/{safe_id}    — one safe
 POST  /safes              — create a safe (safes.manage)
 PATCH /safes/{safe_id}    — rename, describe, activate or deactivate (safes.manage)
@@ -26,15 +27,21 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
-from src.contracts.schemas.responses.safes.safe_responses import SafeResponse
+from src.contracts.schemas.responses.safes.safe_responses import (
+    SafeHealthReportResponse,
+    SafeResponse,
+)
 from src.core.permissions import INVENTORY_VIEW, SAFES_MANAGE
 from src.dependencies.auth import ActorDep, require_permission
-from src.dependencies.safes import SafeServiceDep
+from src.dependencies.safes import SafeHealthServiceDep, SafeServiceDep
+from src.routers.v1.safes.health_mappers import coverage_response, health_response
 
 router = APIRouter(prefix="/safes", tags=["safes"])
 
 
-def _to_response(dto: SafeDTO, perms: frozenset[str] = frozenset()) -> SafeResponse:
+def _to_response(
+    dto: SafeDTO, perms: frozenset[str] = frozenset(), health: str | None = None
+) -> SafeResponse:
     return SafeResponse(
         id=dto.id,
         name=dto.name,
@@ -43,6 +50,7 @@ def _to_response(dto: SafeDTO, perms: frozenset[str] = frozenset()) -> SafeRespo
         account_count=dto.account_count,
         member_count=dto.member_count,
         my_permissions=sorted(perms),
+        health=health,
         created_at=dto.created_at,
         updated_at=dto.updated_at,
     )
@@ -57,6 +65,7 @@ def _to_response(dto: SafeDTO, perms: frozenset[str] = frozenset()) -> SafeRespo
 )
 async def list_safes(
     service: SafeServiceDep,
+    health: SafeHealthServiceDep,
     actor: ActorDep,
     paging: Annotated[PageParams, Depends()],
     search: Annotated[str | None, Query(max_length=100)] = None,
@@ -65,11 +74,29 @@ async def list_safes(
         actor, search=search, page=paging.page, page_size=paging.page_size
     )
     perms = await service.my_permissions(actor)
+    states = {h.safe_id: h.state for h in await health.safes()} if actor.can(SAFES_MANAGE) else {}
     return PaginatedAPIResponse[SafeResponse](
-        data=[_to_response(s, perms.get(s.id, frozenset())) for s in rows],
+        data=[_to_response(s, perms.get(s.id, frozenset()), states.get(s.id)) for s in rows],
         total=total,
         page=paging.page,
         page_size=paging.page_size,
+    )
+
+
+@router.get(
+    "/health",
+    response_model=APIResponse[SafeHealthReportResponse],
+    dependencies=[Depends(require_permission(SAFES_MANAGE))],
+    summary="Health of every active safe, and break-glass coverage",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def safe_health(service: SafeHealthServiceDep) -> APIResponse[SafeHealthReportResponse]:
+    coverage = await service.break_glass()
+    return ok(
+        SafeHealthReportResponse(
+            break_glass=coverage_response(coverage),
+            safes=[health_response(s) for s in await service.safes(coverage)],
+        )
     )
 
 

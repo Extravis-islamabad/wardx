@@ -88,6 +88,39 @@ data: migrations only add, backfill and move.
     once, without a connect timeout on every request. Any successful contact ends the wait:
     a sign-in, a sync, or the admin's test lookup.
 
+### Directory outage, safe health and break-glass coverage
+
+- **Directory reachability:** WardX records the outcome of its latest directory contact:
+  a sign-in, a service-account lookup or group refresh, the admin's test lookup, or a
+  sync. Group access still fails closed while the directory is unreachable.
+- **Dashboard outage warning:** while the directory is enabled and unreachable, the
+  dashboard shows a banner listing the safes that have no usable members.
+  - A safe has no usable members when it has no active local direct user member and no
+    role member that an active local user holds, once group memberships count as none.
+  - This is stricter than the health check below: directory users can't sign in during
+    the outage, so only local users count.
+- **Safe health check:** every active safe has one of three states. Break-glass never makes
+  a safe healthy.
+  - `healthy`: at least one direct user member (an active user) or role member (a role at
+    least one active user holds).
+  - `break_glass_only` (warning): all members are directory groups (or there are none),
+    but an eligible break-glass holder exists.
+  - `unreachable` (critical): all members are directory groups (or there are none), and no
+    eligible break-glass holder exists.
+  - Members with no permissions don't count.
+  - The Safes list shows the state as a warning or critical tag, for `safes.manage`
+    holders only. The dashboard shows a "safes needing attention" item with the severity.
+- **Break-glass coverage:** the dashboard warns while fewer than **two** eligible holders
+  exist, with the count stated, including 0. One holder is a single point of failure: if
+  their MFA is reset, the grant is revoked automatically.
+- **API:**
+  - `GET /safes/health` needs `safes.manage`. It returns the state of every active safe,
+    plus break-glass coverage.
+  - `GET /dashboard/attention` needs `audit.view` or `safes.manage`. It returns the
+    directory status with the affected safes, break-glass coverage (count, warning and
+    message), and the safes needing attention with their severity.
+  - Inactive safes are left out of both.
+
 ### Break-glass (`access.emergency`)
 
 - **Break-glass must not depend on the directory.** Only **local** users (`auth_source`

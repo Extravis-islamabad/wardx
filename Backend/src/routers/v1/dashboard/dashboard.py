@@ -1,6 +1,8 @@
 """Dashboard router.
 
-GET /dashboard/summary   — headline counts, and the signed-in user's own
+GET /dashboard/summary     — headline counts, and the signed-in user's own
+GET /dashboard/attention   — directory outage, break-glass coverage and safes needing
+                             attention (audit.view or safes.manage)
 """
 
 from __future__ import annotations
@@ -11,9 +13,12 @@ from src.contracts.schemas.responses.common import UNAUTHORIZED_RESPONSE, APIRes
 from src.contracts.schemas.responses.dashboard.dashboard_responses import (
     DashboardSummaryResponse,
 )
-from src.core.permissions import DASHBOARD_VIEW
+from src.contracts.schemas.responses.safes.safe_responses import AttentionResponse
+from src.core.permissions import AUDIT_VIEW, DASHBOARD_VIEW, SAFES_MANAGE
 from src.dependencies.auth import ActorDep, require_permission
 from src.dependencies.dashboard import DashboardServiceDep
+from src.dependencies.safes import SafeHealthServiceDep
+from src.routers.v1.safes.health_mappers import attention_response
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -40,3 +45,14 @@ async def summary(
             my_open_requests=s.my_open_requests,
         )
     )
+
+
+@router.get(
+    "/attention",
+    response_model=APIResponse[AttentionResponse],
+    dependencies=[Depends(require_permission(AUDIT_VIEW, SAFES_MANAGE))],
+    summary="What needs an administrator's attention: outage, break-glass, safe health",
+    responses={**UNAUTHORIZED_RESPONSE},
+)
+async def attention(service: SafeHealthServiceDep) -> APIResponse[AttentionResponse]:
+    return ok(attention_response(await service.attention()))
