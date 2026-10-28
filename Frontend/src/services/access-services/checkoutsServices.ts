@@ -24,6 +24,8 @@ export interface RevealedSecret {
   secret_type: string;
   value: string;
   expires_at: string;
+  /** Break-glass only: why the revealed (current) version may not be what the device uses. */
+  notice?: string | null;
 }
 
 export interface CheckoutCreatePayload {

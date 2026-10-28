@@ -154,6 +154,9 @@ export function EmergencyRevealModal({ open, account: preselected, onClose }: Em
               showIcon
               title={`Emergency reveal recorded and alerted. Hides in ${left}s.`}
             />
+            {secret.notice && (
+              <Alert className="!mt-3" type="error" showIcon title="Rotation status" description={secret.notice} />
+            )}
           </>
         )}
         <ModalFooter>
