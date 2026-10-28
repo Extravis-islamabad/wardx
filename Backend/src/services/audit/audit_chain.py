@@ -43,6 +43,8 @@ class ChainedEvent(Protocol):
     prev_hash: str
     hash: str
     key_version: int | None
+    # Optional on purpose: events written before migration 016 have none.
+    safe_id: Any
 
 
 def _opt_str(value: Any) -> str | None:
@@ -62,6 +64,7 @@ def canonical(
     source_ip: str | None,
     details: dict[str, Any],
     key_version: int | None = None,
+    safe_id: Any = None,
 ) -> bytes:
     payload = {
         "id": str(event_id),
@@ -78,6 +81,9 @@ def canonical(
     if key_version is not None:
         # Only keyed events carry it, so legacy hashes stay exactly as they were.
         payload["key_version"] = key_version
+    if safe_id is not None:
+        # Only events that carry a safe include it, so every earlier hash is unchanged.
+        payload["safe_id"] = str(safe_id)
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
@@ -104,6 +110,7 @@ def event_hash(event: ChainedEvent, prev_hash: str, key: bytes | None = None) ->
             source_ip=event.source_ip,
             details=event.details,
             key_version=event.key_version,
+            safe_id=getattr(event, "safe_id", None),
         ),
         key,
     )

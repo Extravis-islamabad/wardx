@@ -115,6 +115,15 @@ class AccountRepository(BaseRepository):
         counts = await self.active_checkout_counts([row.id])
         return _to_dto(row, counts.get(row.id, 0))
 
+    async def safe_ids_for(self, account_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+        """account id -> its safe id (for audit attribution in bulk jobs)."""
+        if not account_ids:
+            return {}
+        rows = await self._session.execute(
+            select(Account.id, Account.safe_id).where(Account.id.in_(list(account_ids)))
+        )
+        return dict(rows.all())
+
     async def list_for_target(self, target_id: uuid.UUID) -> list[AccountDTO]:
         """Every account on a target (without active check-out counts)."""
         rows = await self._session.scalars(select(Account).where(Account.target_id == target_id))

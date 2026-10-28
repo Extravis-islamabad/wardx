@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import Row, func, literal, select, text, union
+from sqlalchemy import Row, and_, func, literal, or_, select, text, union
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
 from src.models import AccessRequest, Account, AuditEvent, Checkout
@@ -29,11 +29,13 @@ def _to_dto(row: AuditEvent) -> AuditEventDTO:
         prev_hash=row.prev_hash,
         hash=row.hash,
         key_version=row.key_version,
+        safe_id=row.safe_id,
     )
 
 
 def _safe_objects(safe_id):
-    """The safe, the accounts in it now, and those accounts' requests and check-outs."""
+    """The safe, the accounts in it now, and those accounts' requests and check-outs
+    (the fallback for events written before they carried a safe_id)."""
     accounts = select(Account.id).where(Account.safe_id == safe_id)
     return union(
         select(literal(safe_id).label("id")),
@@ -94,7 +96,16 @@ class AuditEventRepository(BaseRepository):
         if filters.until:
             conditions.append(AuditEvent.occurred_at < filters.until)
         if filters.safe_id:
-            conditions.append(AuditEvent.object_id.in_(_safe_objects(filters.safe_id)))
+            conditions.append(
+                or_(
+                    AuditEvent.safe_id == filters.safe_id,
+                    # Events before migration 016 carry no safe: the current mapping.
+                    and_(
+                        AuditEvent.safe_id.is_(None),
+                        AuditEvent.object_id.in_(_safe_objects(filters.safe_id)),
+                    ),
+                )
+            )
         total = await self._session.scalar(
             select(func.count()).select_from(AuditEvent).where(*conditions)
         )

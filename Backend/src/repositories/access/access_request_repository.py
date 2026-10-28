@@ -186,17 +186,19 @@ class AccessRequestRepository(BaseRepository):
             setattr(row, field, value)
         await self._session.flush()
 
-    async def expire_open(self, now: datetime) -> list[tuple[uuid.UUID, uuid.UUID]]:
+    async def expire_open(self, now: datetime) -> list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]]:
         """Expire pending requests whose level timed out and approved ones past their
-        window: ``(request id, requester id)`` of each."""
+        window: ``(request id, requester id, account id)`` of each."""
         return [
-            (rid, requester)
-            for rid, requester in (
+            (rid, requester, account)
+            for rid, requester, account in (
                 await self._session.execute(
                     update(AccessRequest)
                     .where(AccessRequest.status.in_(OPEN_REQUEST), AccessRequest.expires_at <= now)
                     .values(status=RequestStatus.EXPIRED)
-                    .returning(AccessRequest.id, AccessRequest.requester_id)
+                    .returning(
+                        AccessRequest.id, AccessRequest.requester_id, AccessRequest.account_id
+                    )
                 )
             ).all()
         ]

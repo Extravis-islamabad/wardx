@@ -28,6 +28,7 @@ class Ev:
     prev_hash: str = ""
     hash: str = ""
     key_version: int | None = 1
+    safe_id: uuid.UUID | None = None
 
 
 KEY = os.urandom(32)
@@ -149,3 +150,43 @@ def test_keyed_seen_carries_across_batches():
         [late], first.last_hash, keys=KEYS, legacy_max_seq=99, keyed_seen=first.keyed_seen
     )
     assert not result.ok
+
+
+# ── safe_id (migration 016): in the keyed body when present, absent otherwise ──
+
+
+def test_safe_id_is_hashed_only_when_present():
+    base = {
+        "event_id": uuid.uuid4(),
+        "occurred_at": datetime(2026, 10, 1, tzinfo=UTC),
+        "actor_id": None,
+        "actor_name": "alice",
+        "action": "account.update",
+        "object_type": "account",
+        "object_id": None,
+        "outcome": "success",
+        "source_ip": None,
+        "details": {},
+        "key_version": 1,
+    }
+    # Events without a safe hash exactly as before the column existed.
+    assert canonical(**base) == canonical(**base, safe_id=None)
+    assert b"safe_id" not in canonical(**base)
+    assert b"safe_id" in canonical(**base, safe_id=uuid.uuid4())
+
+
+def test_changing_a_recorded_safe_id_breaks_the_chain():
+    safe = uuid.uuid4()
+    prev, rebuilt = GENESIS_HASH, []
+    for ev in _chain(3):
+        ev = replace(ev, prev_hash=prev, safe_id=safe)
+        ev = replace(ev, hash=event_hash(ev, prev, KEY))
+        rebuilt.append(ev)
+        prev = ev.hash
+    assert verify_events(rebuilt, keys=KEYS).ok
+    rebuilt[1] = replace(rebuilt[1], safe_id=uuid.uuid4())
+    assert not verify_events(rebuilt, keys=KEYS).ok
+    # An event written without a safe cannot be given one afterwards.
+    plain = _chain(2)
+    plain[0] = replace(plain[0], safe_id=safe)
+    assert not verify_events(plain, keys=KEYS).ok

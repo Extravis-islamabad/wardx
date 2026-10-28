@@ -24,6 +24,7 @@ class AuditEventDTO:
     prev_hash: str
     hash: str
     key_version: int | None = None
+    safe_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)

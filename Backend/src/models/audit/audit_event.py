@@ -32,3 +32,5 @@ class AuditEvent(Base):
     hash: Mapped[str] = mapped_column(String(64))
     # None: legacy SHA-256 event; otherwise the audit key version that HMAC'd it.
     key_version: Mapped[int | None] = mapped_column(Integer)
+    # The safe the event belongs to (migration 016); part of the hash when present.
+    safe_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))

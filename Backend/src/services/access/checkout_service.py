@@ -122,7 +122,11 @@ class CheckoutService:
             if request.expires_at <= now:
                 await self._requests.update(request.id, {"status": RequestStatus.EXPIRED})
                 await self._audit.record(
-                    SYSTEM_ACTOR, "request.expire", object_type="request", object_id=request.id
+                    SYSTEM_ACTOR,
+                    "request.expire",
+                    object_type="request",
+                    object_id=request.id,
+                    safe_id=account.safe_id,
                 )
                 await self._notify.notify(
                     [request.requester_id],
@@ -180,6 +184,7 @@ class CheckoutService:
             "checkout.create",
             object_type="checkout",
             object_id=checkout_id,
+            safe_id=account.safe_id,
             details={
                 "account_id": str(account.id),
                 "request_id": str(request.id) if request else None,
@@ -209,6 +214,7 @@ class CheckoutService:
             "secret.reveal",
             object_type="checkout",
             object_id=co.id,
+            safe_id=account.safe_id,
             details={"account_id": str(account.id), "version": account.secret_version},
         )
         await self._checkouts.commit()
@@ -240,6 +246,7 @@ class CheckoutService:
             "checkout.return" if is_holder else "checkout.revoke",
             object_type="checkout",
             object_id=co.id,
+            safe_id=co.account.safe_id,
             details={"account_id": str(co.account_id)},
         )
         await self._checkouts.commit()
@@ -261,9 +268,14 @@ class CheckoutService:
         """Close check-outs and requests whose time has passed. Safe to run concurrently."""
         checkouts = await self._expire_checkouts()
         expired_requests = await self._requests.expire_open(utcnow())
-        for req_id, requester_id in expired_requests:
+        safes = await self._accounts.safe_ids_for([acc for _, _, acc in expired_requests])
+        for req_id, requester_id, account_id in expired_requests:
             await self._audit.record(
-                SYSTEM_ACTOR, "request.expire", object_type="request", object_id=req_id
+                SYSTEM_ACTOR,
+                "request.expire",
+                object_type="request",
+                object_id=req_id,
+                safe_id=safes.get(account_id),
             )
             await self._notify.notify(
                 [requester_id],
@@ -277,12 +289,14 @@ class CheckoutService:
 
     async def _expire_checkouts(self, *, account_id: uuid.UUID | None = None) -> int:
         expired = await self._checkouts.expire_overdue(utcnow(), account_id=account_id)
+        safes = await self._accounts.safe_ids_for([acc for _, acc in expired])
         for co_id, acc_id in expired:
             await self._audit.record(
                 SYSTEM_ACTOR,
                 "checkout.expire",
                 object_type="checkout",
                 object_id=co_id,
+                safe_id=safes.get(acc_id),
                 details={"account_id": str(acc_id)},
             )
         return len(expired)

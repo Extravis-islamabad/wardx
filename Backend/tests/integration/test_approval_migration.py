@@ -71,7 +71,7 @@ async def test_requires_approval_accounts_and_open_requests_migrate(database_url
                 )
             )
 
-        assert await run_migrations(engine) == ["015_approval_workflow.sql"]
+        assert "015_approval_workflow.sql" in await run_migrations(engine)
         # Idempotent.
         async with engine.connect() as conn:
             raw = (await conn.get_raw_connection()).driver_connection

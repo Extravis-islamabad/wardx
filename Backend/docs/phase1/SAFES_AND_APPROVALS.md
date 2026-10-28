@@ -104,8 +104,19 @@ data: migrations only add, backfill and move.
   accounts, and those accounts' requests and check-outs.
   - It needs `view_audit` on the safe, or the global `audit.view`.
   - A member without `view_audit` gets 403; someone who can't list the safe gets 404.
-  - Limitation: events of accounts deleted from or moved out of the safe aren't included.
-    The global audit trail still has them.
+  - Each event records its `safe_id` when it is written (migration 016), set from the safe,
+    or from the account behind an account, request or check-out event. The tab filters by
+    it, so events stay with the safe they happened in even after the account moves or is
+    deleted.
+  - A move is recorded in the safe the account left, and its details name the
+    destination.
+  - The value is part of the HMAC'd canonical body when present. Events without it hash
+    exactly as before, so existing chains still verify.
+  - **No backfill:** `audit.events` is append-only, so existing rows are not rewritten.
+    Events before migration 016 use the current mapping. Older events of moved or deleted
+    accounts can't be attributed. The global audit trail still has them.
+  - Not attributed yet: gateway-session events, and check-outs revoked by directory sync.
+    Both fall back to the current mapping.
 
 ### Directory outage, safe health and break-glass coverage
 

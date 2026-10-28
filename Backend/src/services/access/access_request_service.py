@@ -155,6 +155,7 @@ class AccessRequestService:
             "request.create",
             object_type="request",
             object_id=request_id,
+            safe_id=account.safe_id,
             details={
                 "account_id": str(account.id),
                 "safe_id": str(account.safe_id),
@@ -182,6 +183,7 @@ class AccessRequestService:
             "request.expire",
             object_type="request",
             object_id=req.id,
+            safe_id=req.account.safe_id,
             details={"level": req.current_level},
         )
         await self._notify.notify(
@@ -258,6 +260,7 @@ class AccessRequestService:
             "request.approve" if approve else "request.deny",
             object_type="request",
             object_id=req.id,
+            safe_id=req.account.safe_id,
             details=details,
         )
         updated = await self.get(req.id)
@@ -289,6 +292,12 @@ class AccessRequestService:
         if req.status not in OPEN_REQUEST:
             raise ConflictError(f"Request is already {req.status}")
         await self._requests.update(req.id, {"status": RequestStatus.CANCELLED})
-        await self._audit.record(actor, "request.cancel", object_type="request", object_id=req.id)
+        await self._audit.record(
+            actor,
+            "request.cancel",
+            object_type="request",
+            object_id=req.id,
+            safe_id=req.account.safe_id,
+        )
         await self._requests.commit()
         return await self.get(req.id)

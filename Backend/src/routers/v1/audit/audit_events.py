@@ -46,6 +46,7 @@ def audit_event_response(dto: AuditEventDTO) -> AuditEventResponse:
         source_ip=dto.source_ip,
         details=dto.details,
         hash=dto.hash,
+        safe_id=dto.safe_id,
     )
 
 

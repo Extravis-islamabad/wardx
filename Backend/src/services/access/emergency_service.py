@@ -123,6 +123,7 @@ class EmergencyAccessService:
             "secret.emergency_reveal",
             object_type="checkout",
             object_id=checkout_id,
+            safe_id=account.safe_id,
             details=details,
         )
         await self._alerts.raise_alert(

@@ -89,6 +89,7 @@ class SafeService:
             "safe.create",
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             details={"after": _safe_view(safe)},
         )
         await self._safes.commit()
@@ -105,6 +106,7 @@ class SafeService:
             "safe.update",
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             details={"before": _safe_view(before), "after": _safe_view(after)},
         )
         await self._safes.commit()
@@ -170,6 +172,7 @@ class SafeService:
             action,
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             outcome="failure",
             details={
                 "reason": "self_grant_forbidden",
@@ -209,6 +212,7 @@ class SafeService:
             "safe_member.add",
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             details={"member_id": str(member_id), "before": None, "after": member.audit_view()},
         )
         await self._members.commit()
@@ -242,6 +246,7 @@ class SafeService:
             "safe_member.update",
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             details={
                 "member_id": str(member_id),
                 "before": before.audit_view(),
@@ -261,6 +266,7 @@ class SafeService:
             "safe_member.remove",
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             details={"member_id": str(member_id), "before": before.audit_view(), "after": None},
         )
         await self._members.commit()

@@ -123,6 +123,7 @@ class ApprovalPolicyService:
             "safe.policy_update",
             object_type="safe",
             object_id=safe_id,
+            safe_id=safe_id,
             details={"before": before.audit_view(), "after": after.audit_view()},
         )
         await self._policies.commit()

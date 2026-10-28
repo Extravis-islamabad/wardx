@@ -22,6 +22,8 @@ class AuditEventResponse(BaseModel):
     source_ip: str | None
     details: dict[str, Any]
     hash: str
+    # The safe the event belongs to (None for events before migration 016 and non-safe events).
+    safe_id: uuid.UUID | None = None
 
 
 class ChainVerificationResponse(BaseModel):

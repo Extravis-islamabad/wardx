@@ -89,6 +89,9 @@ class AccountService:
         await self._accounts.commit()
         return rows, total
 
+    async def safe_ids_for(self, account_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+        return await self._accounts.safe_ids_for(account_ids)
+
     async def get_visible(self, actor: Actor, account_id: uuid.UUID) -> AccountDTO:
         """The account, if the actor may list its safe; otherwise 404."""
         account = await self.get(account_id)
@@ -132,6 +135,7 @@ class AccountService:
             "account.create",
             object_type="account",
             object_id=account_id,
+            safe_id=values["safe_id"],
             details={
                 "target_id": str(values["target_id"]),
                 "safe_id": str(values["safe_id"]),
@@ -162,6 +166,8 @@ class AccountService:
             "account.update",
             object_type="account",
             object_id=account_id,
+            # A move is recorded in the safe the account left (details name the target).
+            safe_id=account.safe_id,
             details=details,
         )
         await self._accounts.commit()
@@ -175,6 +181,7 @@ class AccountService:
             "secret.set",
             object_type="account",
             object_id=account_id,
+            safe_id=account.safe_id,
             details={"version": version},
         )
         await self._accounts.commit()
@@ -190,6 +197,7 @@ class AccountService:
             "account.delete",
             object_type="account",
             object_id=account_id,
+            safe_id=account.safe_id,
             details={
                 "username": account.username,
                 "target_id": str(account.target_id),

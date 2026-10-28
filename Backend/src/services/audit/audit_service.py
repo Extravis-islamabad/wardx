@@ -45,6 +45,7 @@ class AuditService:
         object_id: uuid.UUID | None = None,
         outcome: str = "success",
         details: dict[str, Any] | None = None,
+        safe_id: uuid.UUID | None = None,
     ) -> AuditEventDTO:
         key_version, key = await self._tenant_keys.active(KeyPurpose.AUDIT)
         await self._repo.lock_chain()
@@ -64,6 +65,7 @@ class AuditService:
             source_ip=actor.source_ip,
             details=details,
             key_version=key_version,
+            safe_id=safe_id,
         )
         return await self._repo.add(
             AuditEvent(
@@ -80,6 +82,7 @@ class AuditService:
                 prev_hash=prev,
                 hash=chain_hash(prev, body, key),
                 key_version=key_version,
+                safe_id=safe_id,
             )
         )
 
