@@ -22,6 +22,12 @@ class Actor:
     def has_role(self, *roles: Role) -> bool:
         return self.role in roles
 
+    def can(self, codename: str) -> bool:
+        """Whether the actor holds a permission codename (see src/core/permissions.py)."""
+        from src.core.permissions import role_has
+
+        return role_has(self.role, codename)
+
 
 # Background jobs act as the system: no user id, audited under this name.
 SYSTEM_ACTOR = Actor(id=None, username="system", role=Role.ADMIN)

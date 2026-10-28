@@ -13,7 +13,9 @@ from src.core.config import Settings, get_settings, resolve_jwt_secret, resolve_
 from src.core.db import dispose_engine, init_engine, session_factory
 from src.core.migration_runner import run_migrations
 from src.errors.handlers import register_exception_handlers
-from src.routers.v1 import access, audit, auth, directory, health, inventory, sessions, users
+from src.routers.v1 import access, auth, dashboard, directory, health, sessions, users
+from src.routers.v1.audit import audit_events
+from src.routers.v1.inventory import accounts, targets
 from src.scheduler.jobs import build_scheduler
 from src.services import user_service, vault_service
 from src.vault.envelope import Keyring
@@ -83,6 +85,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def liveness() -> dict:
         return {"status": "ok"}
 
-    for module in (health, auth, users, inventory, access, audit, sessions, directory):
+    for module in (
+        health,
+        auth,
+        users,
+        targets,
+        accounts,
+        access,
+        audit_events,
+        dashboard,
+        sessions,
+        directory,
+    ):
         app.include_router(module.router, prefix="/api/v1")
     return app

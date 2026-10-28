@@ -2,7 +2,13 @@ import uuid
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
-from src.services.audit_chain import GENESIS_HASH, canonical, chain_hash, event_hash, verify_events
+from src.services.audit.audit_chain import (
+    GENESIS_HASH,
+    canonical,
+    chain_hash,
+    event_hash,
+    verify_events,
+)
 
 
 @dataclass

@@ -1,32 +1,6 @@
-"""Response envelopes and paging parameters."""
+"""Transitional re-exports: import from requests/common and responses/common instead."""
 
-from __future__ import annotations
+from src.contracts.schemas.requests.common import PageParams
+from src.contracts.schemas.responses.common import APIResponse, PaginatedAPIResponse, ok
 
-from typing import Generic, TypeVar
-
-from pydantic import BaseModel, Field
-
-T = TypeVar("T")
-
-
-class APIResponse(BaseModel, Generic[T]):
-    success: bool = True
-    data: T
-    message: str | None = None
-
-
-class PaginatedAPIResponse(BaseModel, Generic[T]):
-    success: bool = True
-    data: list[T]
-    total: int
-    page: int
-    page_size: int
-
-
-class PageParams(BaseModel):
-    page: int = Field(1, ge=1)
-    page_size: int = Field(25, ge=1, le=200)
-
-
-def ok(data: T, message: str | None = None) -> APIResponse[T]:
-    return APIResponse[T](data=data, message=message)
+__all__ = ["APIResponse", "PageParams", "PaginatedAPIResponse", "ok"]

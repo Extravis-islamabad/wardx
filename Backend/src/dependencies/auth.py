@@ -7,18 +7,18 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import get_settings, resolve_jwt_secret
 from src.core.context import Actor
-from src.core.db import get_session
 from src.core.enums import Role
 from src.core.security import decode_token
+from src.dependencies.database import SQLSessionDep
 from src.errors.exceptions import ForbiddenError, MfaEnrollmentRequired, UnauthorizedError
 from src.models import User
 from src.services import mfa_service
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+# Transitional alias; new code uses SQLSessionDep.
+SessionDep = SQLSessionDep
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -58,7 +58,8 @@ async def get_current_user(
     return user
 
 
-CurrentUser = Annotated[User, Depends(get_current_user)]
+CurrentUserDep = Annotated[User, Depends(get_current_user)]
+CurrentUser = CurrentUserDep
 
 
 async def get_actor(user: CurrentUser, request: Request) -> Actor:
@@ -68,6 +69,22 @@ async def get_actor(user: CurrentUser, request: Request) -> Actor:
 
 
 ActorDep = Annotated[Actor, Depends(get_actor)]
+
+
+def require_permission(*codenames: str):
+    """Dependency factory: the actor, if their role holds ANY of the codenames.
+
+    Use as ``dependencies=[Depends(require_permission("inventory.manage"))]`` and
+    take ``ActorDep`` in the handler when it needs the actor; FastAPI resolves
+    ``get_actor`` once per request.
+    """
+
+    async def _check(actor: ActorDep) -> Actor:
+        if not any(actor.can(c) for c in codenames):
+            raise ForbiddenError(f"Missing required permission: {', '.join(codenames)}")
+        return actor
+
+    return _check
 
 
 def require_roles(*roles: Role):
