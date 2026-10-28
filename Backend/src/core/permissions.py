@@ -40,6 +40,11 @@ ALERTS_ACKNOWLEDGE = "alerts.acknowledge"
 ACCESS_EMERGENCY = "access.emergency"
 # Your own profile: who am I, sign out, change password, your own MFA.
 PROFILE_SELF = "profile.self"
+# Create and manage application identities (the credential provider's clients).
+APPS_MANAGE = "apps.manage"
+# Fetch a credential through the provider API. Held only by application identities
+# (through a token from /provider/token), never by a user, role or grant.
+PROVIDER_FETCH = "provider.fetch"
 
 _EVERYONE = frozenset({INVENTORY_VIEW, ACCESS_USE, DASHBOARD_VIEW, PROFILE_SELF})
 
@@ -63,6 +68,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             ALERTS_ACKNOWLEDGE,
             DASHBOARD_VIEW,
             PROFILE_SELF,
+            APPS_MANAGE,
         }
     ),
     Role.APPROVER: _EVERYONE | {ACCESS_APPROVE},
@@ -77,10 +83,14 @@ def role_has(role: Role | str, codename: str) -> bool:
 
 # Codenames only ever held through a direct user grant, never through a role.
 DIRECT_GRANT_ONLY = frozenset({ACCESS_EMERGENCY})
+# Codenames only application identities hold: no role or user grant ever includes them.
+APP_ONLY = frozenset({PROVIDER_FETCH})
 # Every codename that exists (routes may only gate on these).
-ALL_PERMISSIONS: frozenset[str] = ROLE_PERMISSIONS[Role.ADMIN] | DIRECT_GRANT_ONLY
+ALL_PERMISSIONS: frozenset[str] = ROLE_PERMISSIONS[Role.ADMIN] | DIRECT_GRANT_ONLY | APP_ONLY
+# What a user can hold at all (a role bundle or a direct grant).
+USER_PERMISSIONS: frozenset[str] = ALL_PERMISSIONS - APP_ONLY
 
 
 def effective_permissions(role: Role | str, grants: frozenset[str] = frozenset()) -> frozenset[str]:
-    """The role's bundle plus the user's direct grants."""
-    return ROLE_PERMISSIONS.get(Role(role), frozenset()) | (grants & ALL_PERMISSIONS)
+    """The role's bundle plus the user's direct grants (never an app-only codename)."""
+    return ROLE_PERMISSIONS.get(Role(role), frozenset()) | (grants & USER_PERMISSIONS)

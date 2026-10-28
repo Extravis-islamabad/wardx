@@ -59,6 +59,10 @@ logger = structlog.get_logger(__name__)
 TELNET_REFUSAL = "non-rotatable (Telnet)"
 CLEARTEXT_API_REFUSAL = "non-rotatable (cleartext API)"
 LEARN_IDENTITY = "learn the device identity first"
+SNMP_NOT_ROTATABLE = (
+    "SNMP credentials are stored and served to applications but not rotated yet; "
+    "change them on the device and store the new value by hand"
+)
 
 
 class SimulatedCrash(BaseException):  # noqa: N818 - tests only: a process dying mid-job
@@ -125,6 +129,8 @@ def refusal(ctx: RotationContextDTO, driver: PlatformDriver | None, *, enabled: 
         return f"No rotation driver for platform {target.platform}"
     if target.protocol not in getattr(driver, "protocols", {Protocol.SSH}):
         return f"The {target.platform} driver does not rotate over {target.protocol}"
+    if account.secret_type.startswith("snmp"):
+        return SNMP_NOT_ROTATABLE
     if account.secret_type != "password":
         return "Only passwords are rotated (SSH keys come later)"
     why = identity_refusal(target, driver)

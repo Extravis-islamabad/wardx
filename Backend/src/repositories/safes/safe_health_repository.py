@@ -46,8 +46,9 @@ class SafeHealthRepository(BaseRepository):
             elif ptype == PrincipalType.ROLE:
                 c["role"] += key in roles
                 c["local_role"] += key in local_roles
-            else:
+            elif ptype == PrincipalType.GROUP:
                 c["group"] += 1
+            # App members (fetch only) are no one's way into a safe: not counted.
         return [
             SafeMembershipSummaryDTO(
                 safe_id=s.id,

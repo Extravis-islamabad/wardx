@@ -2,9 +2,10 @@
 safe it happened in (audit.events.safe_id). Runs a representative flow through the API,
 the gateway, directory sync and break-glass, then checks the events it wrote.
 
-New event types that are about one of these objects (rotation jobs included, Phase 1 c)
-must set or resolve a safe, or this test fails. Lives under tests/security so it runs after the
-integration suite: it disables a directory user via sync.
+New event types that are about one of these objects (rotation jobs included, Phase 1 c;
+credential provider fetches, Phase 1 d) must set or resolve a safe, or this test fails.
+Lives under tests/security so it runs after the integration suite: it disables a
+directory user via sync.
 """
 
 from __future__ import annotations
@@ -166,7 +167,32 @@ async def _rotation_flow(client, admin) -> None:
         settings.rotation_enabled = False
 
 
-async def test_every_account_related_event_records_its_safe(client, admin, make_user, gateway, lab):
+async def _provider_fetches(app, client, admin) -> None:
+    """An app fetch that is served and one that is refused for the account's state."""
+    from tests.integration.provider.provider_support import (
+        caller,
+        create_app,
+        fetch,
+        fetchable,
+        token,
+    )
+    from tests.integration.rotation.rotation_support import sql
+
+    created = await create_app(client, admin)
+    _, target, account = await fetchable(client, admin, created)
+    async with caller(app, created.ip) as c:
+        headers = await token(c, created)
+        assert (await fetch(c, headers, external_ref=target["external_ref"])).status_code == 200
+        await sql(
+            "UPDATE inventory.accounts SET sync_status = 'verify_untrustworthy' WHERE id = :a",
+            a=account["id"],
+        )
+        assert (await fetch(c, headers, external_ref=target["external_ref"])).status_code == 409
+
+
+async def test_every_account_related_event_records_its_safe(
+    app, client, admin, make_user, gateway, lab
+):
     start = await _scalar("SELECT COALESCE(MAX(seq), 0) FROM audit.events")
 
     # Check-out, reveal, check-in.
@@ -203,6 +229,9 @@ async def test_every_account_related_event_records_its_safe(client, admin, make_
     # Rotation: request, run, verify, needs attention and its resolution.
     await _rotation_flow(client, admin)
 
+    # Credential provider: a served and a refused app fetch.
+    await _provider_fetches(app, client, admin)
+
     async with session_factory()() as s:
         rows = (
             await s.execute(
@@ -230,6 +259,7 @@ async def test_every_account_related_event_records_its_safe(client, admin, make_
         "rotation.verify_untrustworthy",
         "rotation.needs_attention",
         "rotation.resolve",
+        "secret.app_fetch",
     ):
         assert expected in actions, f"the flow did not produce {expected}"
 

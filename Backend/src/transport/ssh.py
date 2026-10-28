@@ -66,6 +66,9 @@ async def open_ssh(
     timeout: float,  # noqa: ASYNC109 - applied per step below
 ) -> asyncssh.SSHClientConnection:
     host, port = target.address, target.port
+    if secret_type.startswith("snmp"):
+        # Never send an SNMP document to a device as an SSH password.
+        raise TargetError("SNMP credentials cannot open an SSH session")
     try:
         if target.pinned_key is None:
             key = await asyncio.wait_for(asyncssh.get_server_host_key(host, port), timeout)

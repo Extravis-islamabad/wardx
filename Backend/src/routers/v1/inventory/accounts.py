@@ -140,7 +140,12 @@ async def get_account(
 async def create_account(
     request: AccountCreate, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
-    account = await service.create(actor, request.model_dump(exclude={"secret"}), request.secret)
+    account = await service.create(
+        actor,
+        request.model_dump(exclude={"secret", "snmp"}),
+        request.secret,
+        request.snmp.model_dump(exclude_none=True) if request.snmp else None,
+    )
     return ok(account_response(account))
 
 
@@ -178,7 +183,8 @@ async def update_account(
 async def set_secret(
     account_id: uuid.UUID, request: SecretSet, service: AccountServiceDep, actor: ActorDep
 ) -> APIResponse[AccountResponse]:
-    account = await service.set_secret(actor, account_id, request.value)
+    snmp = request.snmp.model_dump(exclude_none=True) if request.snmp else None
+    account = await service.set_secret(actor, account_id, request.value, snmp)
     return ok(account_response(account), "Secret stored")
 
 

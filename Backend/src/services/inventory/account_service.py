@@ -27,6 +27,7 @@ from src.models import utcnow
 from src.repositories.inventory.account_repository import AccountRepository
 from src.repositories.inventory.target_repository import TargetRepository
 from src.services.audit.audit_service import AuditService
+from src.services.inventory.snmp_secrets import InvalidSnmpSecret, is_snmp, snmp_document
 from src.services.safes.safe_access_service import SafeAccessService
 from src.services.vault.vault_service import VaultService
 
@@ -45,6 +46,18 @@ async def ensure_no_active_checkouts(
 ) -> None:
     if any((await accounts.active_checkout_counts(account_ids)).values()):
         raise ConflictError("Check in or revoke the active check-outs first")
+
+
+def secret_text(secret_type: str, value: str | None, snmp: dict | None) -> str | None:
+    """What is sealed for an account: the value as given, or the canonical SNMP document.
+    SNMP accounts take only the structured form, every other type only a plain value."""
+    if is_snmp(secret_type):
+        if value is not None:
+            raise InvalidSnmpSecret("SNMP accounts take a structured 'snmp' secret")
+        return snmp_document(secret_type, snmp) if snmp is not None else None
+    if snmp is not None:
+        raise InvalidSnmpSecret("Only snmp_v2c and snmp_v3 accounts take an 'snmp' secret")
+    return value
 
 
 class AccountService:
@@ -133,8 +146,11 @@ class AccountService:
     async def list_for_target(self, target_id: uuid.UUID) -> list[AccountDTO]:
         return await self._accounts.list_for_target(target_id)
 
-    async def create(self, actor: Actor, values: dict, secret: str | None) -> AccountDTO:
+    async def create(
+        self, actor: Actor, values: dict, secret: str | None, snmp: dict | None = None
+    ) -> AccountDTO:
         values = {**values, "safe_id": values.get("safe_id") or DEFAULT_SAFE_ID}
+        secret = secret_text(str(values.get("secret_type") or "password"), secret, snmp)
         await self._access.require(
             actor, values["safe_id"], SafePermission.MANAGE_ACCOUNTS, what="Safe"
         )
@@ -188,9 +204,14 @@ class AccountService:
         await self._accounts.commit()
         return await self.get(account_id)
 
-    async def set_secret(self, actor: Actor, account_id: uuid.UUID, value: str) -> AccountDTO:
+    async def set_secret(
+        self, actor: Actor, account_id: uuid.UUID, value: str | None, snmp: dict | None = None
+    ) -> AccountDTO:
         account = await self._manageable(actor, account_id)
-        version = await self._store_secret(actor, account, value)
+        text = secret_text(account.secret_type, value, snmp)
+        if text is None:
+            raise InvalidSnmpSecret("Give the secret: 'value', or 'snmp' for SNMP accounts")
+        version = await self._store_secret(actor, account, text)
         await self._audit.record(
             actor,
             "secret.set",

@@ -15,7 +15,13 @@ from fastapi.routing import APIRoute
 
 from src.core.app_factory import create_app
 from src.core.enums import Role
-from src.core.permissions import ALL_PERMISSIONS, DIRECT_GRANT_ONLY, ROLE_PERMISSIONS
+from src.core.permissions import (
+    ALL_PERMISSIONS,
+    APP_ONLY,
+    DIRECT_GRANT_ONLY,
+    PROVIDER_FETCH,
+    ROLE_PERMISSIONS,
+)
 
 # Reachable without a codename. Changing this list is a security review item.
 PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
@@ -25,8 +31,14 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/api/v1/auth/login"),
         ("POST", "/api/v1/auth/refresh"),  # proves possession of a refresh token instead
         ("POST", "/api/v1/auth/mfa/verify"),  # proves possession of an mfa token instead
+        # Credential provider: authenticates by client credentials (client_id + secret),
+        # IP allowlist and failed-attempt rate limits (docs/phase1/CREDENTIAL_PROVIDER.md §2).
+        ("POST", "/api/v1/provider/token"),
     }
 )
+
+# Gated by an application token (get_current_app), never by a user's permissions.
+APP_ROUTES_PREFIX = "/api/v1/provider/"
 
 
 def _codenames(dependant) -> set[str]:
@@ -84,11 +96,31 @@ def test_every_codename_is_a_known_permission():
     assert unknown == []
 
 
-def test_admin_holds_everything_but_direct_grant_only_codenames():
-    # Break-glass (access.emergency) is a per-user grant only: no role holds it.
-    assert ALL_PERMISSIONS - ROLE_PERMISSIONS[Role.ADMIN] == DIRECT_GRANT_ONLY
+def test_admin_holds_everything_but_direct_grant_and_app_only_codenames():
+    # Break-glass (access.emergency) is a per-user grant only: no role holds it. App-only
+    # codenames (provider.fetch) are held by application identities only.
+    assert ALL_PERMISSIONS - ROLE_PERMISSIONS[Role.ADMIN] == DIRECT_GRANT_ONLY | APP_ONLY
     for role in Role:
-        assert not ROLE_PERMISSIONS[role] & DIRECT_GRANT_ONLY
+        assert not ROLE_PERMISSIONS[role] & (DIRECT_GRANT_ONLY | APP_ONLY)
+
+
+def test_app_routes_and_only_app_routes_use_the_app_gate():
+    """Provider routes are gated by provider.fetch alone (an app token); no user route
+    accepts it, and no provider route accepts a user codename."""
+    for method, path, codes in ROUTES:
+        if (method, path) in PUBLIC_ROUTES:
+            continue
+        if path.startswith(APP_ROUTES_PREFIX):
+            assert codes == {PROVIDER_FETCH}, (method, path, codes)
+        else:
+            assert PROVIDER_FETCH not in codes, (method, path, codes)
+
+
+def test_users_never_hold_app_only_codenames():
+    from src.core.context import Actor
+
+    actor = Actor(id=None, username="x", role=Role.ADMIN, grants=frozenset(APP_ONLY))
+    assert not any(actor.can(c) for c in APP_ONLY)
 
 
 def _fill(path: str) -> str:
@@ -108,4 +140,6 @@ GATED = sorted((m, p) for m, p, codes in ROUTES if codes and p.startswith("/api/
 async def test_gated_route_refuses_anonymous_callers(client, method, path):
     resp = await client.request(method, _fill(path).removeprefix("/api/v1"), json={})
     assert resp.status_code == 401, resp.text
-    assert resp.json()["error"]["code"] == "unauthorized"
+    # Provider routes answer with the provider's own code (CREDENTIAL_PROVIDER.md §5).
+    expected = "invalid_token" if path.startswith(APP_ROUTES_PREFIX) else "unauthorized"
+    assert resp.json()["error"]["code"] == expected

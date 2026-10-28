@@ -40,7 +40,7 @@ from src.rotation.drivers.base import Identity
 from src.rotation.drivers.registry import default_registry, identities_of
 from src.services.audit.audit_service import AuditService
 from src.services.inventory.account_service import AccountService
-from src.services.rotation.rotation_engine import identity_refusal
+from src.services.rotation.rotation_engine import SNMP_NOT_ROTATABLE, identity_refusal
 
 OPERATIONS = {"rotate": MANUAL, "verify": VERIFY, "reconcile": RECONCILE}
 TELNET = "non-rotatable (Telnet)"
@@ -159,6 +159,8 @@ class RotationService:
             return why
         if target.protocol == Protocol.SSH and not target.ssh_host_key:
             return f"{target.name} has no pinned SSH host key; learn or pin it first"
+        if account.secret_type.startswith("snmp"):
+            return SNMP_NOT_ROTATABLE
         if account.secret_type != "password":
             return "Only passwords are rotated (SSH keys come later)"
         if reason == RECONCILE:

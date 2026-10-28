@@ -19,9 +19,17 @@ class SafeUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class SafeAppFetchIn(BaseModel):
+    # Let apps fetch from this safe although it requires approval for people.
+    allow_app_fetch: bool = False
+    # max_cache_seconds served to apps.
+    app_cache_seconds: int = Field(300, ge=0, le=3600)
+
+
 class SafeMemberCreate(BaseModel):
     # user: the user's id; group: the directory group's DN; role: a WardX role
-    # (kept for the Default safe's migrated members; the console offers users and groups).
+    # (kept for the Default safe's migrated members; the console offers users and groups);
+    # app: an application identity's id (holds only 'fetch').
     principal_type: PrincipalType
     principal_key: str = Field(min_length=1, max_length=1000)
     permissions: list[SafePermission] = Field(min_length=1, max_length=7)

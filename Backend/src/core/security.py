@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import uuid
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
@@ -86,4 +88,59 @@ def decode_token(token: str, *, secret: str, expected_type: TokenType) -> dict:
         raise UnauthorizedError("Invalid token") from exc
     if claims.get("typ") != expected_type:
         raise UnauthorizedError("Invalid token type")
+    return claims
+
+
+# ── Application identity tokens (docs/phase1/CREDENTIAL_PROVIDER.md §2) ──
+
+APP_TOKEN_TYPE = "app"
+APP_TOKEN_AUDIENCE = "wardx-credential-provider"
+
+
+def _app_token_key(secret: str) -> bytes:
+    """A key of its own, derived from the JWT secret, so an app token can never verify as a
+    user token or the other way round, even before the type and audience checks."""
+    return hmac.new(secret.encode(), b"wardx-app-token-v1", hashlib.sha256).digest()
+
+
+def create_app_token(
+    *,
+    secret: str,
+    app_id: uuid.UUID,
+    token_version: int,
+    secret_id: uuid.UUID,
+    ttl: timedelta,
+) -> str:
+    now = datetime.now(UTC)
+    payload = {
+        "iss": _ISSUER,
+        "aud": APP_TOKEN_AUDIENCE,
+        "sub": str(app_id),
+        "tv": token_version,
+        "typ": APP_TOKEN_TYPE,
+        # The client secret it was issued for: revoking that secret kills the token.
+        "sid": str(secret_id),
+        "iat": now,
+        "exp": now + ttl,
+        "jti": uuid.uuid4().hex,
+    }
+    return jwt.encode(payload, _app_token_key(secret), algorithm=_ALGORITHM)
+
+
+def decode_app_token(token: str, *, secret: str) -> dict:
+    """The claims of a valid app token; ``ValueError`` for anything else (never says why
+    to the caller: the provider answers ``invalid_token`` whatever the reason)."""
+    try:
+        claims = jwt.decode(
+            token,
+            _app_token_key(secret),
+            algorithms=[_ALGORITHM],
+            issuer=_ISSUER,
+            audience=APP_TOKEN_AUDIENCE,
+            options={"require": ["exp", "iat", "sub", "typ", "tv", "sid", "jti", "aud"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise ValueError("invalid app token") from exc
+    if claims.get("typ") != APP_TOKEN_TYPE:
+        raise ValueError("invalid app token type")
     return claims

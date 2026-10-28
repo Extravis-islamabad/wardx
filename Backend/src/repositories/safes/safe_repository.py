@@ -26,6 +26,9 @@ def _to_dto(row: Safe, accounts: int = 0, members: int = 0) -> SafeDTO:
         updated_at=row.updated_at,
         account_count=accounts,
         member_count=members,
+        allow_app_fetch=row.allow_app_fetch,
+        app_cache_seconds=row.app_cache_seconds,
+        approval_required=row.approval_required,
     )
 
 

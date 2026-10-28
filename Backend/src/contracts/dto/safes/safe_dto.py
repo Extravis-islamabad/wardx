@@ -17,6 +17,16 @@ class SafeDTO:
     updated_at: datetime
     account_count: int = 0
     member_count: int = 0
+    # Credential provider settings (docs/phase1/CREDENTIAL_PROVIDER.md §3, §4).
+    allow_app_fetch: bool = False
+    app_cache_seconds: int = 300
+    approval_required: bool = False
+
+    def app_fetch_view(self) -> dict:
+        return {
+            "allow_app_fetch": self.allow_app_fetch,
+            "app_cache_seconds": self.app_cache_seconds,
+        }
 
 
 @dataclass(frozen=True)

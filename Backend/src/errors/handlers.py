@@ -16,9 +16,16 @@ from src.errors.exceptions import AppError
 logger = structlog.get_logger(__name__)
 
 
-def _envelope(status: int, code: str, message: str, details: Any = None) -> JSONResponse:
+def _envelope(
+    status: int,
+    code: str,
+    message: str,
+    details: Any = None,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status,
+        headers=headers,
         content={
             "success": False,
             "status_code": status,
@@ -30,7 +37,9 @@ def _envelope(status: int, code: str, message: str, details: Any = None) -> JSON
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
-        return _envelope(exc.status_code, exc.code, exc.message, exc.details)
+        return _envelope(
+            exc.status_code, exc.code, exc.message, exc.details, getattr(exc, "headers", None)
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:

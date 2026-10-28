@@ -11,6 +11,8 @@ Rules:
   When the actor's directory groups cannot be verified, group memberships are
   refused the same way (the group might be theirs).
 - Every safe and membership change is audited with before and after values.
+- Application identities (principal type ``app``) hold exactly ``fetch``, and only they
+  may hold it (docs/phase1/CREDENTIAL_PROVIDER.md §3; also a database constraint).
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from src.errors.exceptions import (
     SelfGrantForbidden,
 )
 from src.repositories.identity.user_repository import UserRepository
+from src.repositories.provider.app_repository import AppRepository
 from src.repositories.safes.safe_member_repository import SafeMemberRepository
 from src.repositories.safes.safe_repository import SafeRepository
 from src.services.audit.audit_service import AuditService
@@ -52,12 +55,14 @@ class SafeService:
         users: UserRepository,
         access: SafeAccessService,
         audit: AuditService,
+        apps: AppRepository | None = None,
     ) -> None:
         self._safes = safes
         self._members = members
         self._users = users
         self._access = access
         self._audit = audit
+        self._apps = apps
 
     # ── Safes ──
 
@@ -142,6 +147,14 @@ class SafeService:
             if await self._users.get(user_id) is None:
                 raise NotFoundError("User not found")
             return str(user_id)
+        if principal_type == PrincipalType.APP:
+            try:
+                app_id = uuid.UUID(key)
+            except ValueError as exc:
+                raise InvalidPrincipal("An app member is named by the app's id") from exc
+            if self._apps is None or await self._apps.get(app_id) is None:
+                raise NotFoundError("Application identity not found")
+            return str(app_id)
         if principal_type == PrincipalType.GROUP:
             if "=" not in key:
                 raise InvalidPrincipal("A group member is named by its distinguished name (DN)")
@@ -150,6 +163,15 @@ class SafeService:
             return Role(key.lower()).value
         except ValueError as exc:
             raise InvalidPrincipal(f"Unknown role '{key}'") from exc
+
+    @staticmethod
+    def _check_permissions(principal_type: str, permissions: list[SafePermission]) -> None:
+        """Apps hold exactly 'fetch'; nobody else may hold it."""
+        perms = {SafePermission(p) for p in permissions}
+        if principal_type == PrincipalType.APP and perms != {SafePermission.FETCH}:
+            raise InvalidPrincipal("An application identity holds only the 'fetch' permission")
+        if principal_type != PrincipalType.APP and SafePermission.FETCH in perms:
+            raise InvalidPrincipal("Only application identities can hold 'fetch'")
 
     async def _refuse_self_grant(
         self, actor: Actor, action: str, safe_id: uuid.UUID, principal_type: str, key: str
@@ -195,6 +217,7 @@ class SafeService:
         permissions: list[SafePermission],
     ) -> SafeMemberDTO:
         await self._authorise_members(actor, safe_id)
+        self._check_permissions(principal_type, permissions)
         key = await self._principal_key(principal_type, principal_key)
         await self._refuse_self_grant(actor, "safe_member.add", safe_id, principal_type, key)
         member_id = await self._members.create(
@@ -234,6 +257,7 @@ class SafeService:
     ) -> SafeMemberDTO:
         await self._authorise_members(actor, safe_id)
         before = await self._member(safe_id, member_id)
+        self._check_permissions(before.principal_type, permissions)
         await self._refuse_self_grant(
             actor, "safe_member.update", safe_id, before.principal_type, before.principal_key
         )

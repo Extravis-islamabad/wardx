@@ -20,8 +20,19 @@ class SafeResponse(BaseModel):
     # For safes.manage holders: healthy | break_glass_only | unreachable (None otherwise,
     # and for inactive safes).
     health: str | None = None
+    # Credential provider: apps may fetch from an approval-required safe only when on;
+    # how long apps may cache what they fetch.
+    allow_app_fetch: bool = False
+    app_cache_seconds: int = 300
     created_at: datetime
     updated_at: datetime
+
+
+class SafeAppFetchResponse(BaseModel):
+    safe_id: uuid.UUID
+    approval_required: bool
+    allow_app_fetch: bool
+    app_cache_seconds: int
 
 
 class SafeMemberResponse(BaseModel):

@@ -51,6 +51,8 @@ def _to_response(
         member_count=dto.member_count,
         my_permissions=sorted(perms),
         health=health,
+        allow_app_fetch=dto.allow_app_fetch,
+        app_cache_seconds=dto.app_cache_seconds,
         created_at=dto.created_at,
         updated_at=dto.updated_at,
     )

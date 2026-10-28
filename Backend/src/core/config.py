@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     rotation_connect_timeout_seconds: float = 15
     rotation_command_timeout_seconds: float = 20
 
+    # ── Credential provider (docs/phase1/CREDENTIAL_PROVIDER.md) ──
+    # Reverse proxies whose X-Forwarded-For is believed (CIDRs). Empty: the connection's
+    # own address is always the source IP.
+    trusted_proxies: list[str] = []
+    # Failed token attempts allowed per minute, per client_id and per source IP.
+    provider_token_failures_per_minute: int = 10
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

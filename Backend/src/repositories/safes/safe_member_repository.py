@@ -6,13 +6,13 @@ import uuid
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import String, and_, cast, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from src.contracts.dto.safes.safe_dto import PrincipalsDTO, SafeMemberDTO
 from src.core.enums import PrincipalType
 from src.errors.exceptions import ConflictError
-from src.models import SafeMember, User
+from src.models import App, SafeMember, User
 from src.repositories.base import BaseRepository
 
 
@@ -52,12 +52,20 @@ def principal_condition(p: PrincipalsDTO):
 
 
 def _with_user_name():
-    """Members with the username of user members (for display)."""
+    """Members with the username of user members, or the name of app members (display)."""
     user_join = and_(
         SafeMember.principal_type == PrincipalType.USER,
         cast(User.id, String) == SafeMember.principal_key,
     )
-    return select(SafeMember, User.username).outerjoin(User, user_join)
+    app_join = and_(
+        SafeMember.principal_type == PrincipalType.APP,
+        cast(App.id, String) == SafeMember.principal_key,
+    )
+    return (
+        select(SafeMember, func.coalesce(User.username, App.name))
+        .outerjoin(User, user_join)
+        .outerjoin(App, app_join)
+    )
 
 
 class SafeMemberRepository(BaseRepository):

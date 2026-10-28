@@ -20,8 +20,10 @@ class Actor:
     def can(self, codename: str) -> bool:
         """Whether the actor holds a permission codename (see src/core/permissions.py):
         through their role, or a direct grant."""
-        from src.core.permissions import role_has
+        from src.core.permissions import APP_ONLY, role_has
 
+        if codename in APP_ONLY:
+            return False  # held only by application identities, never by a user
         return role_has(self.role, codename) or codename in self.grants
 
 
