@@ -14,6 +14,7 @@ const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'));
 // Inventory
 const Targets = lazy(() => import('@/pages/inventory/Targets'));
 const Accounts = lazy(() => import('@/pages/inventory/Accounts'));
+const Safes = lazy(() => import('@/pages/safes/Safes'));
 
 // Access
 const Requests = lazy(() => import('@/pages/access/Requests'));
@@ -56,6 +57,7 @@ const routes = createBrowserRouter([
     children: [
       { path: ROUTES.HOME, element: guard(ROUTES.HOME, <Dashboard />) },
       { path: ROUTES.ACCOUNTS, element: guard(ROUTES.ACCOUNTS, <Accounts />) },
+      { path: ROUTES.SAFES, element: guard(ROUTES.SAFES, <Safes />) },
       { path: ROUTES.CHECKOUTS, element: guard(ROUTES.CHECKOUTS, <Checkouts />) },
       { path: ROUTES.REQUESTS, element: guard(ROUTES.REQUESTS, <Requests />) },
       { path: ROUTES.TARGETS, element: guard(ROUTES.TARGETS, <Targets />) },

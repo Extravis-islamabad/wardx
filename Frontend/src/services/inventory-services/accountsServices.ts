@@ -6,6 +6,8 @@ import type { Target } from './targetsServices';
 export interface Account {
   id: string;
   target: Pick<Target, 'id' | 'name' | 'address' | 'platform' | 'protocol'>;
+  /** Every account belongs to exactly one safe. */
+  safe: { id: string; name: string };
   username: string;
   secret_type: string;
   description: string | null;
@@ -30,6 +32,8 @@ export interface AccountBrief {
 
 export interface AccountInput {
   target_id: string;
+  /** Omitted: the Default safe. Changing it moves the account (manage_accounts on both safes). */
+  safe_id?: string;
   username: string;
   secret_type: string;
   description?: string;

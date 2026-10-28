@@ -8,3 +8,4 @@ export * from './theme';
 export * from './access';
 export * from './identity';
 export * from './sessions';
+export * from './safes';

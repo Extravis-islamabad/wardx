@@ -3,10 +3,11 @@ import { usersService, type UserCreatePayload, type UserUpdatePayload } from '@/
 import type { PageQuery } from '@/types/api';
 import { identityKeys } from './identityKeys';
 
-export function useUsers(params: PageQuery) {
+export function useUsers(params: PageQuery, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: identityKeys.users(params),
     queryFn: () => usersService.list(params),
+    enabled: options.enabled ?? true,
   });
 }
 

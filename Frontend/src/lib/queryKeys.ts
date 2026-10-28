@@ -5,8 +5,9 @@ import { accessKeys } from '@/features/access/hooks/accessKeys';
 import { sessionsKeys } from '@/features/sessions/hooks/sessionsKeys';
 import { auditKeys } from '@/features/audit/hooks/auditKeys';
 import { identityKeys } from '@/features/identity/hooks/identityKeys';
+import { safesKeys } from '@/features/safes/hooks/safesKeys';
 
-export { authKeys, dashboardKeys, inventoryKeys, accessKeys, sessionsKeys, auditKeys, identityKeys };
+export { authKeys, dashboardKeys, inventoryKeys, accessKeys, sessionsKeys, auditKeys, identityKeys, safesKeys };
 
 /**
  * Namespaced facade for ergonomic call sites:
@@ -21,4 +22,5 @@ export const queryKeys = {
   sessions: sessionsKeys,
   audit: auditKeys,
   identity: identityKeys,
+  safes: safesKeys,
 };

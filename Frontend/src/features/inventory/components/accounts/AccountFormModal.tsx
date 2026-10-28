@@ -4,8 +4,10 @@ import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
 import { SECRET_TYPES } from '@/constants/enums/inventory';
+import { SafePermission } from '@/constants/enums/safes';
 import { PICKER_PAGE } from '@/constants/globals';
 import { useCreateAccount, useTargets, useUpdateAccount } from '@/features/inventory/hooks';
+import { useSafes } from '@/features/safes/hooks';
 import {
   accountFormSchema,
   accountFormValuesFrom,
@@ -24,6 +26,11 @@ interface AccountFormModalProps {
 export function AccountFormModal({ open, account, onClose }: AccountFormModalProps) {
   const editing = !!account;
   const targets = useTargets(PICKER_PAGE, { enabled: open });
+  const safes = useSafes(PICKER_PAGE, { enabled: open });
+  // Only safes the user may manage accounts in (both ends of a move need it).
+  const manageable = safes.data?.data?.filter(
+    (s) => s.is_active && s.my_permissions?.includes(SafePermission.MANAGE_ACCOUNTS),
+  );
   const { mutateAsync: createAccount, isPending: creating } = useCreateAccount();
   const { mutateAsync: updateAccount, isPending: updating } = useUpdateAccount();
   const {
@@ -44,10 +51,10 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
     try {
       if (account) {
         // Target, username and secret type are fixed once the account exists.
-        const { description, requires_approval, exclusive_checkout, max_checkout_minutes } = values;
+        const { safe_id, description, requires_approval, exclusive_checkout, max_checkout_minutes } = values;
         await updateAccount({
           id: account.id,
-          payload: { description, requires_approval, exclusive_checkout, max_checkout_minutes },
+          payload: { safe_id, description, requires_approval, exclusive_checkout, max_checkout_minutes },
         });
       } else {
         await createAccount({ ...values, secret: values.secret || undefined });
@@ -86,6 +93,37 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
                 loading={targets.isLoading}
                 status={errors.target_id ? 'error' : undefined}
                 options={targets.data?.data?.map((t) => ({ value: t.id, label: `${t.name} (${t.address})` }))}
+              />
+            )}
+          />
+        </FormField>
+        <FormField
+          label="Safe"
+          htmlFor="account-safe"
+          required
+          error={errors.safe_id?.message}
+          hint={editing ? 'Moving needs manage_accounts on both safes.' : undefined}
+        >
+          <Controller
+            control={control}
+            name="safe_id"
+            render={({ field }) => (
+              <Select
+                {...field}
+                id="account-safe"
+                className="w-full"
+                value={field.value || undefined}
+                showSearch
+                optionFilterProp="label"
+                loading={safes.isLoading}
+                status={errors.safe_id ? 'error' : undefined}
+                options={[
+                  ...(manageable?.map((s) => ({ value: s.id, label: s.name })) ?? []),
+                  // Keep the current safe selectable even if it is not in the manageable list.
+                  ...(account && !manageable?.some((s) => s.id === account.safe?.id)
+                    ? [{ value: account.safe.id, label: account.safe.name }]
+                    : []),
+                ]}
               />
             )}
           />

@@ -4,6 +4,7 @@ import type { Account } from '@/services/inventory-services';
 
 export const accountFormSchema = z.object({
   target_id: z.string().min(1, 'Choose a target'),
+  safe_id: z.string().min(1, 'Choose a safe'),
   username: z.string().trim().min(1, 'Required').max(255),
   secret_type: z.string(),
   description: z.string().max(2000).optional(),
@@ -17,6 +18,7 @@ export type AccountFormValues = z.infer<typeof accountFormSchema>;
 
 export const accountFormDefaults: AccountFormValues = {
   target_id: '',
+  safe_id: '',
   username: '',
   secret_type: DEFAULT_SECRET_TYPE,
   description: '',
@@ -30,6 +32,7 @@ export const accountFormValuesFrom = (account: Account | null | undefined): Acco
   account
     ? {
         target_id: account.target.id,
+        safe_id: account.safe?.id ?? '',
         username: account.username,
         secret_type: account.secret_type,
         description: account.description ?? '',

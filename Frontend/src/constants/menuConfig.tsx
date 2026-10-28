@@ -5,6 +5,7 @@ import {
   CodeOutlined,
   DashboardOutlined,
   DesktopOutlined,
+  InboxOutlined,
   KeyOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
@@ -29,6 +30,13 @@ type MenuItem = {
 export const menuItems: MenuItem[] = [
   { key: ROUTES.HOME, label: 'Dashboard', icon: <DashboardOutlined />, requiredModule: MODULES.DASHBOARD },
   { key: ROUTES.ACCOUNTS, label: 'Accounts', icon: <KeyOutlined />, requiredModule: MODULES.INVENTORY },
+  {
+    key: ROUTES.SAFES,
+    label: 'Safes',
+    icon: <InboxOutlined />,
+    requiredModule: MODULES.INVENTORY,
+    requiredPermission: PERMISSIONS.INVENTORY_VIEW,
+  },
   { key: ROUTES.CHECKOUTS, label: 'Check-outs', icon: <UnlockOutlined />, requiredModule: MODULES.ACCESS },
   { key: ROUTES.REQUESTS, label: 'Requests', icon: <SafetyCertificateOutlined />, requiredModule: MODULES.ACCESS },
   { key: ROUTES.SESSIONS, label: 'Sessions', icon: <DesktopOutlined />, requiredModule: MODULES.SESSIONS },

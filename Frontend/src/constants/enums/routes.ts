@@ -6,6 +6,7 @@ export enum ROUTES {
   // Inventory
   TARGETS = '/targets',
   ACCOUNTS = '/accounts',
+  SAFES = '/safes',
 
   // Access
   REQUESTS = '/requests',

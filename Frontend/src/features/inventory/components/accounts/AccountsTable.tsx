@@ -1,6 +1,7 @@
 import { Space, Tooltip, Typography, type TablePaginationConfig, type TableProps } from 'antd';
 import { Button, DataTable, StatusTag } from '@/components';
 import { Protocol, platformLabel } from '@/constants/enums/inventory';
+import { SafePermission } from '@/constants/enums/safes';
 import { StatusVariant } from '@/constants/enums/status';
 import { tableStateProps } from '@/lib/tableStateProps';
 import type { Account } from '@/services/inventory-services';
@@ -16,6 +17,8 @@ interface AccountsTableProps {
   onSetSecret: (account: Account) => void;
   onEdit: (account: Account) => void;
   onDelete: (account: Account) => void;
+  /** The caller's permissions per safe id (from GET /safes); unknown safes stay enabled. */
+  safePermissions?: Record<string, string[]>;
 }
 
 export function AccountsTable({
@@ -27,7 +30,12 @@ export function AccountsTable({
   onSetSecret,
   onEdit,
   onDelete,
+  safePermissions,
 }: AccountsTableProps) {
+  const holds = (a: Account, ...perms: SafePermission[]) => {
+    const held = safePermissions?.[a?.safe?.id];
+    return !held || perms.some((p) => held.includes(p));
+  };
   const columns: TableProps<Account>['columns'] = [
     {
       title: 'Account',
@@ -47,6 +55,7 @@ export function AccountsTable({
         </>
       ),
     },
+    { title: 'Safe', key: 'safe', render: (_, a) => <StatusTag label={a?.safe?.name ?? '—'} variant={StatusVariant.OUTLINE} /> },
     { title: 'Platform', key: 'platform', render: (_, a) => platformLabel(a?.target?.platform) },
     {
       title: 'Policy',
@@ -83,17 +92,27 @@ export function AccountsTable({
       width: 360,
       render: (_, a) => (
         <Space>
-          <Button variant="primary" size="small" disabled={!a?.has_secret} onClick={() => onAccess(a)}>
+          <Button
+            variant="primary"
+            size="small"
+            disabled={!a?.has_secret || !holds(a, SafePermission.RETRIEVE)}
+            onClick={() => onAccess(a)}
+          >
             {a?.requires_approval ? 'Request' : 'Check out'}
           </Button>
           {a?.target?.protocol === Protocol.SSH && (
             <Tooltip title="Connect through the session gateway">
-              <Button variant="admin" size="small" disabled={!a?.has_secret} onClick={() => onConnect(a)}>
+              <Button
+                variant="admin"
+                size="small"
+                disabled={!a?.has_secret || !holds(a, SafePermission.USE, SafePermission.RETRIEVE)}
+                onClick={() => onConnect(a)}
+              >
                 Connect
               </Button>
             </Tooltip>
           )}
-          {canManage && (
+          {canManage && holds(a, SafePermission.MANAGE_ACCOUNTS) && (
             <>
               <Button variant="admin" size="small" onClick={() => onSetSecret(a)}>
                 Set secret
