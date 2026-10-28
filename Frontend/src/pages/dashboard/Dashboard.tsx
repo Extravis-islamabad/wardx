@@ -3,6 +3,7 @@ import { PERMISSIONS } from '@/constants/enums/permissions';
 import { useAuth } from '@/context/AuthContext';
 import { AttentionPanel, HighAlertsBanner, SummaryTiles } from '@/features/dashboard/components';
 import { useDashboardSummary } from '@/features/dashboard/hooks';
+import { RotationAttentionPanel } from '@/features/rotation/components';
 
 export default function Dashboard() {
   const { user, canAccess } = useAuth();
@@ -15,6 +16,7 @@ export default function Dashboard() {
         <HighAlertsBanner canAcknowledge={canAccess({ permission: PERMISSIONS.ALERTS_ACKNOWLEDGE })} />
       )}
       {canSeeAttention && <AttentionPanel />}
+      {canAccess({ permission: PERMISSIONS.INVENTORY_VIEW }) && <RotationAttentionPanel />}
       {summary.isError ? <ErrorState error={summary.error} onRetry={() => void summary.refetch()} /> : null}
       <SummaryTiles data={summary.data} loading={summary.isLoading} />
     </PageShell>

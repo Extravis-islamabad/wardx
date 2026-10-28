@@ -20,6 +20,18 @@ export interface Account {
   max_checkout_minutes: number;
   active_checkouts: number;
   created_at: string;
+  // Rotation (Backend/docs/phase1/ROTATION.md); overrides can only make the safe's policy stricter.
+  rotation_interval_days: number | null;
+  rotate_after_use: boolean;
+  password_length: number;
+  reconcile_account_id: string | null;
+  sync_status: string;
+  last_verified_at: string | null;
+  last_rotated_at: string | null;
+  last_rotation_status: string | null;
+  rotation_status: string;
+  /** e.g. high_risk_empty_password */
+  risk_flags: string[];
 }
 
 /** The account as embedded in requests and check-outs. */
@@ -43,6 +55,10 @@ export interface AccountInput {
   exclusive_checkout: boolean;
   max_checkout_minutes: number;
   secret?: string;
+  rotate_after_use?: boolean;
+  rotation_interval_days?: number | null;
+  password_length?: number;
+  reconcile_account_id?: string | null;
 }
 
 const BASE = 'accounts';

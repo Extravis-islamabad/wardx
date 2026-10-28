@@ -43,3 +43,11 @@ export function useResetTargetHostKey() {
     onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.targetsAll() }),
   });
 }
+
+export function useLearnTargetHostKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => targetsService.learnHostKey(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: inventoryKeys.targetsAll() }),
+  });
+}

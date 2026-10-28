@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Input, InputNumber, Modal, Select } from 'antd';
+import { Input, InputNumber, Modal, Select, Switch } from 'antd';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
@@ -8,6 +8,7 @@ import { useSaveTarget } from '@/features/inventory/hooks';
 import {
   targetFormSchema,
   targetFormValuesFrom,
+  targetPayloadFrom,
   type TargetFormValues,
 } from '@/features/inventory/schemas/targetSchema';
 import type { Target } from '@/services/inventory-services';
@@ -40,7 +41,7 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
 
   const onSubmit = async (values: TargetFormValues) => {
     try {
-      await saveTarget({ id: target?.id, payload: { ...values, port: values.port ?? undefined } });
+      await saveTarget({ id: target?.id, payload: targetPayloadFrom(values, target) });
       notify.success(target ? 'Target updated' : 'Target added');
       onClose();
     } catch {
@@ -113,6 +114,39 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
             )}
           />
         </FormField>
+        <FormField
+          label="Password rotation allowed"
+          htmlFor="target-rotation"
+          hint={
+            target?.non_rotatable_reason
+              ? `This target is ${target.non_rotatable_reason}.`
+              : 'Off by default. WardX also needs rotation switched on (WARDX_ROTATION_ENABLED).'
+          }
+        >
+          <Controller
+            control={control}
+            name="rotation_allowed"
+            render={({ field }) => (
+              <Switch id="target-rotation" checked={field.value} onChange={field.onChange} />
+            )}
+          />
+        </FormField>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Min password length" htmlFor="target-minlen" hint="Blank: platform default" error={errors.min_length?.message}>
+            <Controller
+              control={control}
+              name="min_length"
+              render={({ field }) => <InputNumber {...field} id="target-minlen" className="!w-full" min={12} max={128} />}
+            />
+          </FormField>
+          <FormField label="Max password length (device cap)" htmlFor="target-maxlen" hint="e.g. older IOS: 25" error={errors.max_length?.message}>
+            <Controller
+              control={control}
+              name="max_length"
+              render={({ field }) => <InputNumber {...field} id="target-maxlen" className="!w-full" min={12} max={128} />}
+            />
+          </FormField>
+        </div>
         <FormField label="Description" htmlFor="target-description" error={errors.description?.message}>
           <Controller
             control={control}

@@ -18,6 +18,7 @@ export const ROUTE_ACCESS: Partial<Record<string, RouteAccessConfig>> = {
   [ROUTES.TARGETS]: { module: MODULES.INVENTORY },
   [ROUTES.ACCOUNTS]: { module: MODULES.INVENTORY },
   [ROUTES.SAFES]: { module: MODULES.INVENTORY, permission: PERMISSIONS.INVENTORY_VIEW },
+  [ROUTES.ROTATION]: { module: MODULES.INVENTORY, permission: PERMISSIONS.INVENTORY_VIEW },
 
   [ROUTES.REQUESTS]: { module: MODULES.ACCESS },
   [ROUTES.CHECKOUTS]: { module: MODULES.ACCESS },

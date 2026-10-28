@@ -15,6 +15,7 @@ const Dashboard = lazy(() => import('@/pages/dashboard/Dashboard'));
 const Targets = lazy(() => import('@/pages/inventory/Targets'));
 const Accounts = lazy(() => import('@/pages/inventory/Accounts'));
 const Safes = lazy(() => import('@/pages/safes/Safes'));
+const RotationJobs = lazy(() => import('@/pages/rotation/RotationJobs'));
 
 // Access
 const Requests = lazy(() => import('@/pages/access/Requests'));
@@ -58,6 +59,7 @@ const routes = createBrowserRouter([
       { path: ROUTES.HOME, element: guard(ROUTES.HOME, <Dashboard />) },
       { path: ROUTES.ACCOUNTS, element: guard(ROUTES.ACCOUNTS, <Accounts />) },
       { path: ROUTES.SAFES, element: guard(ROUTES.SAFES, <Safes />) },
+      { path: ROUTES.ROTATION, element: guard(ROUTES.ROTATION, <RotationJobs />) },
       { path: ROUTES.CHECKOUTS, element: guard(ROUTES.CHECKOUTS, <Checkouts />) },
       { path: ROUTES.REQUESTS, element: guard(ROUTES.REQUESTS, <Requests />) },
       { path: ROUTES.TARGETS, element: guard(ROUTES.TARGETS, <Targets />) },

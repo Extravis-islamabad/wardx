@@ -12,6 +12,8 @@ interface TargetsTableProps {
   canManage: boolean;
   onEdit: (target: Target) => void;
   onResetHostKey: (target: Target) => void;
+  /** Pin the key the target presents now (no credential sent). */
+  onLearnHostKey?: (target: Target) => void;
   onDelete: (target: Target) => void;
 }
 
@@ -33,7 +35,15 @@ const HostKeyCell = ({ target }: { target: Target }) => {
   return <>—</>;
 };
 
-export function TargetsTable({ query, pagination, canManage, onEdit, onResetHostKey, onDelete }: TargetsTableProps) {
+export function TargetsTable({
+  query,
+  pagination,
+  canManage,
+  onEdit,
+  onResetHostKey,
+  onLearnHostKey,
+  onDelete,
+}: TargetsTableProps) {
   const columns: TableProps<Target>['columns'] = [
     { title: 'Name', dataIndex: 'name', key: 'name' },
     { title: 'Address', key: 'address', render: (_, t) => `${t?.address}:${t?.port}` },
@@ -45,6 +55,18 @@ export function TargetsTable({ query, pagination, canManage, onEdit, onResetHost
       render: (p: string) => <StatusTag label={p?.toUpperCase() ?? ''} variant={StatusVariant.OUTLINE} />,
     },
     { title: 'Host key', key: 'host_key', render: (_, t) => <HostKeyCell target={t} /> },
+    {
+      title: 'Rotation',
+      key: 'rotation',
+      render: (_, t) =>
+        t?.non_rotatable_reason ? (
+          <StatusTag label={t.non_rotatable_reason} variant={StatusVariant.NEUTRAL} />
+        ) : t?.rotation_allowed ? (
+          <StatusTag label="allowed" variant={StatusVariant.SUCCESS} />
+        ) : (
+          <StatusTag label="off" variant={StatusVariant.OUTLINE} />
+        ),
+    },
     {
       title: 'Tags',
       dataIndex: 'tags',
@@ -64,6 +86,13 @@ export function TargetsTable({ query, pagination, canManage, onEdit, onResetHost
           <Button variant="admin" size="small" onClick={() => onEdit(t)}>
             Edit
           </Button>
+          {onLearnHostKey && !t?.ssh_host_key_fingerprint && t?.protocol === Protocol.SSH && (
+            <Tooltip title="Read and pin the key the target presents now; no credential is sent">
+              <Button variant="admin" size="small" onClick={() => onLearnHostKey(t)}>
+                Learn host key
+              </Button>
+            </Tooltip>
+          )}
           {t?.ssh_host_key_fingerprint && (
             <Button variant="admin" size="small" onClick={() => onResetHostKey(t)}>
               Reset host key

@@ -6,6 +6,7 @@ import { StatusVariant } from '@/constants/enums/status';
 import { tableStateProps } from '@/lib/tableStateProps';
 import type { Account } from '@/services/inventory-services';
 import { fromNow } from '@/utils/format';
+import { SYNC_LABEL, SYNC_VARIANT } from '@/features/rotation/constants';
 import type { useAccounts } from '@/features/inventory/hooks';
 
 interface AccountsTableProps {
@@ -17,6 +18,8 @@ interface AccountsTableProps {
   onSetSecret: (account: Account) => void;
   onEdit: (account: Account) => void;
   onDelete: (account: Account) => void;
+  /** The account's Rotation tab. */
+  onRotation?: (account: Account) => void;
   /** Shown only to holders of access.emergency (break-glass). */
   onEmergency?: (account: Account) => void;
   /** The caller's permissions per safe id (from GET /safes); unknown safes stay enabled. */
@@ -34,6 +37,7 @@ export function AccountsTable({
   onDelete,
   safePermissions,
   onEmergency,
+  onRotation,
 }: AccountsTableProps) {
   const holds = (a: Account, ...perms: SafePermission[]) => {
     const held = safePermissions?.[a?.safe?.id];
@@ -84,6 +88,23 @@ export function AccountsTable({
         ),
     },
     {
+      title: 'Rotation',
+      key: 'rotation',
+      render: (_, a) => (
+        <Space size={4} wrap>
+          {a?.risk_flags?.includes('high_risk_empty_password') && (
+            <StatusTag label="empty password" variant={StatusVariant.DANGER} />
+          )}
+          {a?.sync_status && a.sync_status !== 'unknown' && (
+            <StatusTag label={SYNC_LABEL[a.sync_status] ?? a.sync_status} variant={SYNC_VARIANT[a.sync_status] ?? StatusVariant.NEUTRAL} />
+          )}
+          {a?.rotation_status && a.rotation_status !== 'idle' && (
+            <StatusTag label={a.rotation_status.replace(/_/g, ' ')} variant={StatusVariant.WARNING} />
+          )}
+        </Space>
+      ),
+    },
+    {
       title: 'In use',
       dataIndex: 'active_checkouts',
       key: 'active_checkouts',
@@ -92,7 +113,7 @@ export function AccountsTable({
     {
       title: '',
       key: 'actions',
-      width: 460,
+      width: 540,
       render: (_, a) => (
         <Space>
           <Button
@@ -121,6 +142,11 @@ export function AccountsTable({
                 Break glass
               </Button>
             </Tooltip>
+          )}
+          {onRotation && (
+            <Button variant="admin" size="small" onClick={() => onRotation(a)}>
+              Rotation
+            </Button>
           )}
           {canManage && holds(a, SafePermission.MANAGE_ACCOUNTS) && (
             <>

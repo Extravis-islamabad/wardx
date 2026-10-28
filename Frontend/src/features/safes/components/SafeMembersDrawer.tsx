@@ -15,6 +15,7 @@ import { AddMemberModal } from './AddMemberModal';
 import { ApprovalPolicyTab } from './ApprovalPolicyTab';
 import { SafeAuditTab } from './SafeAuditTab';
 import { SafeHealthTag } from './SafeHealthTag';
+import { SafeRotationPolicyTab } from '@/features/rotation/components/SafeRotationPolicyTab';
 
 const DRAWER_SIZE = 900;
 const PRINCIPAL_VARIANT: Record<PrincipalType, StatusVariant> = {
@@ -137,6 +138,11 @@ export function SafeMembersDrawer({ safe, onClose }: { safe: Safe | null; onClos
               key: 'policy',
               label: 'Approval policy',
               children: <ApprovalPolicyTab safe={safe} canEdit={canManageSafes} />,
+            },
+            {
+              key: 'rotation',
+              label: 'Rotation policy',
+              children: <SafeRotationPolicyTab safeId={safe.id} canEdit={canManageSafes} />,
             },
             ...(canSeeAudit ? [{ key: 'audit', label: 'Audit', children: <SafeAuditTab safeId={safe.id} /> }] : []),
             {

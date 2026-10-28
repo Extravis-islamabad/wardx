@@ -17,6 +17,12 @@ export interface Target {
   ssh_host_key_learned_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Rotation's per-target switch (off by default). */
+  rotation_allowed: boolean;
+  /** Device-specific password policy caps, e.g. {max_length: 16}. */
+  policy_overrides: Record<string, number | string | boolean | string[]>;
+  /** Set when the target can never be rotated, e.g. "non-rotatable (Telnet)". */
+  non_rotatable_reason: string | null;
 }
 
 export type TargetPayload = Partial<Target>;
@@ -41,6 +47,12 @@ export const targetsService = {
 
   async remove(id: string): Promise<ApiResponse<null>> {
     const { data } = await apiClient.delete<ApiResponse<null>>(`${BASE}/${id}`);
+    return data;
+  },
+
+  /** Pin the key the target presents now; sends no credential. */
+  async learnHostKey(id: string): Promise<ApiResponse<Target>> {
+    const { data } = await apiClient.post<ApiResponse<Target>>(`${BASE}/${id}/host-key/learn`);
     return data;
   },
 

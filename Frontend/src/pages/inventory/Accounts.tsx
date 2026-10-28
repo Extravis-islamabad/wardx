@@ -11,6 +11,7 @@ import { useAccounts, useDeleteAccount } from '@/features/inventory/hooks';
 import { useSafes } from '@/features/safes/hooks';
 import { PICKER_PAGE } from '@/constants/globals';
 import { ConnectModal } from '@/features/sessions/components';
+import { AccountRotationDrawer } from '@/features/rotation/components';
 import type { Checkout } from '@/services/access-services';
 import type { Account } from '@/services/inventory-services';
 import { notify } from '@/utils/notify';
@@ -31,6 +32,7 @@ export default function Accounts() {
   const [revealing, setRevealing] = useState<Checkout | null>(null);
   const [connecting, setConnecting] = useState<Account | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+  const [rotationOf, setRotationOf] = useState<Account | null>(null);
   const { page, page_size, setPage, paginationFor } = usePagination();
   const accounts = useAccounts({ page, page_size, search: search || undefined, safe_id: safeId });
   const { mutateAsync: removeAccount } = useDeleteAccount();
@@ -110,6 +112,12 @@ export default function Accounts() {
           setFormOpen(true);
         }}
         onDelete={setDeleteTarget}
+        onRotation={setRotationOf}
+      />
+      <AccountRotationDrawer
+        account={accounts.data?.data?.find((a) => a.id === rotationOf?.id) ?? rotationOf}
+        canManage={canManage}
+        onClose={() => setRotationOf(null)}
       />
       {canManage && (
         <AccountFormModal
