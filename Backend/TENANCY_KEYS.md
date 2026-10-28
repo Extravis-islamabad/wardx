@@ -1,6 +1,12 @@
 # Tenancy key management (design, for review)
 
-Status: **draft for review. Nothing here is implemented yet.**
+Status: **draft for review, revision 2. Nothing here is implemented yet.**
+Revision 2 adds:
+- audit integrity against a DB superuser (keyed HMAC chain, signed checkpoints, real-time
+  forwarding), §8.1;
+- a key-compromise procedure separate from rotation, §6.1;
+- explicit MK-wrapping of backup key bundles and fail-safe restore, §7;
+- master key loss and HSM failure, §8.2.
 Scope: how WardX encrypts tenant data once it is multi-tenant (MonetX style: a parent control-plane
 database plus one database per tenant), how keys rotate without manual re-encryption, and how
 backups are encrypted and restored one tenant at a time.
@@ -17,6 +23,8 @@ backups are encrypted and restored one tenant at a time.
 | T6 | Key suspected compromised | Rotate on demand. Old data is re-wrapped in the background, not re-entered by hand. |
 | T7 | Master key provider unavailable | Fail closed: the vault reports sealed, nothing is decrypted with a fallback key. |
 | T8 | Tenant offboarded | Crypto-shred: destroying its keys makes its data, including backups, unrecoverable. |
+| T9 | DB superuser drops triggers and rewrites or truncates the audit chain | Detected: keyed chain, signed checkpoints and an external copy (§8.1). |
+| T10 | Master key lost, or HSM fails | No silent loss: HSM cluster and backup, M-of-N escrow, enforced checks (§8.2). |
 
 Non-goals: protecting secrets from a fully compromised running WardX process (it holds unwrapped
 keys in memory by design), and side channels on the host.
@@ -28,7 +36,8 @@ Master key (MK)          in an HSM / KMS / TPM; never leaves it (file only in de
   └─ wraps → Tenant KEK (TKEK), one active version per tenant, per purpose
        ├─ vault   → wraps a data key (DEK) per secret version → AES-256-GCM secret
        ├─ backup  → wraps a DEK per backup archive            → AES-256-GCM stream
-       └─ files   → wraps a DEK per session recording          → AES-256-GCM stream
+       ├─ files   → wraps a DEK per session recording          → AES-256-GCM stream
+       └─ audit   → HMAC key for the tenant's audit chain (§8.1); never in the tenant DB
   └─ wraps → Platform KEK (PKEK): control-plane secrets (parent-DB MFA seeds, LDAP bind
              passwords held in the parent, signing-key private halves)
 ```
@@ -72,9 +81,10 @@ anything needs both, plus the MK provider.
 CREATE TABLE platform.tenant_keys (
     id           UUID PRIMARY KEY,
     tenant_id    UUID        NOT NULL REFERENCES platform.tenants (id),
-    purpose      VARCHAR(16) NOT NULL CHECK (purpose IN ('vault','backup','files')),
+    purpose      VARCHAR(16) NOT NULL CHECK (purpose IN ('vault','backup','files','audit')),
     version      INTEGER     NOT NULL,
-    state        VARCHAR(12) NOT NULL CHECK (state IN ('active','retired','destroyed')),
+    state        VARCHAR(12) NOT NULL
+                 CHECK (state IN ('active','retired','compromised','destroyed')),
     mk_id        TEXT        NOT NULL,      -- which MK (and version) wrapped it
     wrapped_key  BYTEA,                     -- NULL once destroyed
     wrap_nonce   BYTEA,
@@ -157,9 +167,57 @@ re-wrapped.
    retention window passes (see §7), because older backups still need it.
 5. Every step is audited in the tenant's audit chain and the platform audit.
 
-**On compromise:** rotate the TKEK as above, **and** queue a credential rotation (CPM, Phase 1)
-for every account whose secret could have been read with it. Re-wrapping alone doesn't help if
-the plaintext was already exposed.
+Routine rotation is **not** a response to a leaked key. Re-wrapping leaves every data key, and
+so every secret's ciphertext, exactly as it was. Anyone who already holds an old TKEK or DEK can
+still decrypt copies of those blobs. A suspected leak follows §6.1 instead.
+
+### 6.1 Key-compromise procedure
+
+Triggered when a tenant KEK, a data key, the MK, or a process memory image holding them may have
+leaked: an HSM or KMS audit anomaly, a host compromise, a stolen backup together with key
+material, or an insider report. It is a separate, audited runbook, not the rotation job.
+
+1. **Declare and contain.**
+   - A platform admin opens a key incident naming the suspected keys and time window. It is
+     recorded in the platform audit.
+   - The suspected key versions are marked `compromised`. They can still decrypt (needed for
+     step 3) but are never used to seal again.
+   - The affected tenant's vault switches to "reveal requires re-approval" until step 4 is
+     complete.
+2. **Scope.**
+   - Leaked TKEK version: every secret whose DEK it wrapped, now or in any backup taken while it
+     was active.
+   - Leaked DEK: that one secret version.
+   - Leaked MK: every TKEK row it wrapped, so all tenants on that MK. Treat as a TKEK leak for
+     every tenant.
+   - The scope list is produced from `kek_id` references plus the backup manifests (which record
+     the key ids they hold).
+3. **Fully re-encrypt.** For every secret in scope:
+   - Decrypt it, then seal it again with a **new DEK** (new nonce) under a **new TKEK** version.
+     This replaces both ciphertext and wrapped key, so blobs an attacker copied earlier stay
+     tied to keys that no longer protect anything current.
+   - Leaked MK: rotate the MK first. Then generate new TKEKs for every tenant (not re-wrap the
+     old ones) and re-encrypt as above.
+   - The job is resumable and audited like rotation, but it runs at incident priority and
+     touches ciphertext.
+4. **Rotate the real credentials.**
+   - Re-encryption protects WardX's copy only. Anyone who held the old key may already have
+     decrypted the passwords, SSH keys, SNMP communities and API tokens of the actual devices,
+     servers, databases and cloud accounts.
+   - So every in-scope account gets a credential rotation **on the target itself** through CPM
+     (Phase 1), ordered by privilege: domain admins and network-device enable credentials first.
+   - Accounts CPM can't rotate automatically (no driver, target unreachable) are listed as
+     `credential_exposed`, shown on the dashboard, and blocked from check-out until an
+     admin confirms a manual change.
+   - The incident isn't closed while any in-scope account remains `credential_exposed`.
+5. **Retire the leaked keys.**
+   - Once nothing current references them, compromised key versions are destroyed at once. The
+     backup-retention wait in §6 doesn't apply.
+   - Backups encrypted under them are compromised: they are re-encrypted under new keys (§7), or
+     expired early by an explicit, audited decision.
+6. **Report.** An incident record covers scope, timeline, re-encrypted count, target credentials
+   rotated, anything still exposed, and tenant notification (the tenant's admins are notified
+   in-product and by email).
 
 **Migration from today's single env KEK:**
 - Today `WARDX_VAULT_KEK` wraps DEKs directly, with no tenant id in the AAD.
@@ -188,9 +246,22 @@ the plaintext was already exposed.
   PKEK).
 - A restore refuses an archive whose manifest doesn't verify.
 
-**Key bundle.** Next to each archive goes that tenant's `tenant_keys` rows (all purposes, every
-version the data references), **still MK-wrapped**. A tenant restore never needs another tenant's
-key rows, or a parent DB restore.
+**Key bundle.**
+- Next to each archive goes that tenant's `tenant_keys` rows (all purposes, every version the data
+  references). A tenant restore never needs another tenant's key rows, or a parent DB restore.
+- **Every key in the bundle is stored wrapped by the master key. No backup, bundle, manifest or
+  export ever contains a key in plaintext.** The export code takes the wrapped bytes straight from
+  the parent row, never calls the provider to unwrap, and a test asserts that no bundle field
+  decodes to a valid raw key.
+
+**Restore without the master key fails safely.**
+- The restore tool's first action is to unwrap the backup TKEK through the MK provider.
+- If the provider is unreachable, the MK version is missing, or the wrapped key fails
+  authentication, it stops with `restore_refused: master key unavailable`.
+- That happens **before** creating the target database or writing anything: no partial restore,
+  no half-loaded tenant, and no fallback key.
+- An archive and bundle copied off-site can't be decrypted offline by anyone, operators included,
+  without the MK provider.
 
 **Parent DB backups** are encrypted the same way under a platform backup key. They contain only
 MK-wrapped TKEKs, so on their own they reveal nothing.
@@ -227,7 +298,120 @@ MK-wrapped TKEKs, so on their own they reveal nothing.
 | Session recordings | plaintext asciicast files | Encrypted with the tenant's **files** TKEK (streaming GCM, as backups). The SHA-256 integrity hash stays in the audit chain. |
 | MFA seeds, LDAP bind password | in the vault (single KEK) | Tenant users: tenant vault. Platform operators: PKEK. |
 | Gateway SSH host key | file | Per gateway node, under the PKEK. |
-| Audit-chain anchor (new) | none | Fixes the tail-truncation gap found by the security tests. A per-tenant Ed25519 key signs a checkpoint of the chain head (seq, hash, time) every N minutes and on shutdown. Checkpoints are stored in the **parent** DB and shipped to the SIEM. Verify then fails if the chain ends before the last signed checkpoint. |
+| Audit chain key and checkpoint key (new) | none | See §8.1. |
+
+### 8.1 Audit integrity against a database superuser
+
+Today the chain is `hash_n = SHA-256(prev_hash || event)`, protected by triggers. That stops
+ordinary writes, and the security tests show it catches an edited or deleted middle event. It
+doesn't stop someone with database superuser rights in two ways:
+- **Tail truncation:** they can delete the newest events (the known gap, recorded as a strict
+  xfail).
+- **Full rewrite:** they can drop the triggers, edit any events, and **recompute the entire chain
+  consistently**, because SHA-256 needs no secret.
+
+Three layers close this. Each one alone is not enough.
+
+1. **Keyed chain (HMAC).**
+   - `hash_n = HMAC-SHA256(K_audit, prev_hash || canonical(event))`.
+   - `K_audit` is a per-tenant key with purpose `audit`. It is stored only MK-wrapped in the
+     **parent** DB (like every TKEK) and unwrapped only in WardX process memory.
+   - It is never in the tenant DB, so tenant-DB access alone, even as superuser, can't produce a
+     valid chain for edited events.
+   - Each event records the `K_audit` version. Rotation writes an `audit.key_rotated` event that
+     links the old segment to the new one, so verification follows key versions across the
+     whole history.
+2. **Signed checkpoints.**
+   - Every N minutes (default 5) and on shutdown, WardX signs the chain head (tenant, seq, hash,
+     time, key version) with a per-tenant Ed25519 key under the PKEK.
+   - Checkpoints are stored in the **parent** DB and sent to the external sink (layer 3).
+   - Verification fails if the chain ends before the last checkpoint (tail truncation), or if a
+     checkpointed hash no longer matches its event (rewrite).
+3. **Real-time forwarding to an external sink.**
+   - Every audit event is also written to a **transactional outbox**, in the same transaction as
+     the action it records, so no committed event can be skipped.
+   - A forwarder delivers each one at least once to the configured sinks:
+     - syslog (RFC 5424 over TLS, CEF or LEEF);
+     - Splunk HEC, Microsoft Sentinel, QRadar or Cortex XSIAM;
+     - optionally S3-compatible object storage with object lock (WORM).
+   - Each forwarded record carries `seq`, `hash` and `prev_hash`, so the external copy can be
+     verified on its own and compared against the DB.
+   - The sink is administered by someone other than the WardX DB admin. That separation of duties
+     is what puts the copy out of the DB admin's reach.
+   - Forwarding lag and failures are monitored. An outbox older than a threshold raises an alert
+     and shows on the platform dashboard.
+   - `wardx audit reconcile --tenant X` compares the DB chain with the sink's copy and reports the
+     first difference.
+
+**Supporting controls.**
+- The WardX application role is not a superuser and doesn't own the audit tables or triggers.
+  A separate owner role does.
+- Trigger drops and `ALTER TABLE ... DISABLE TRIGGER` are caught by an event trigger that writes
+  to the outbox, and by PostgreSQL logging forwarded to the same sink.
+
+**Residual risk:** someone who controls a running WardX process (and so holds `K_audit`) *and*
+the database *and* the external sink can still forge history. That is the §1 non-goal, and the
+reason the sink must be run separately.
+
+### 8.2 Master key loss and HSM failure
+
+Every tenant key is wrapped by the MK, so losing the MK would make every tenant's secrets
+unrecoverable. The design treats that as an outcome the controls must prevent, never as
+something that can happen silently.
+
+**Never one copy.**
+- **HSM:** a cluster of at least two HSMs sharing the key partition (replicated), plus the
+  vendor's encrypted backup of the partition (for example a Luna backup HSM or Utimaco backup
+  file) held off-site. Losing one appliance is a non-event.
+- **Cloud KMS:**
+  - multi-region keys;
+  - deletion protection, with the longest pending-deletion window (30 days);
+  - an IAM policy that needs two people to schedule deletion or disable the key;
+  - alerting on any `ScheduleKeyDeletion` or `DisableKey`.
+  - For regulated tenants, BYOK (import our own key material) so an escrowed copy exists outside
+    the cloud provider.
+- **TPM appliance:** never acceptable alone (§4). The escrow below is mandatory.
+
+**Escrow by M-of-N key ceremony.**
+- The MK is generated inside the HSM (or KMS) in a documented **key ceremony**, which covers:
+  - named participants and an independent witness;
+  - a scripted procedure;
+  - a signed ceremony log.
+- At generation, an export-wrapped copy of the MK (or the vendor backup blob) is split with
+  Shamir secret sharing into **N shares, any M of which rebuild it** (default 3-of-5). Each share
+  goes to a separate named custodian, on a smart card or in tamper-evident sealed storage in a
+  separate safe.
+- No single custodian, including the platform owner, can rebuild the MK alone.
+- Custodian changes re-split the shares in a new ceremony. Old shares are destroyed under
+  witness.
+
+**WardX enforces it; it doesn't just document it.**
+- Each MK version records `escrow_verified_at` and `backup_verified_at` in the parent DB.
+- A production install refuses to create tenants or generate keys under an MK version whose
+  escrow or backup hasn't been confirmed (by the ceremony tooling or a two-admin attestation).
+  The platform dashboard shows the status as red until it is confirmed.
+- `/health/ready` reports `master_key: available | unavailable | escrow_unverified`.
+- If the provider stops answering, the vault seals (fail closed, §4) and alerts fire at once.
+  It is never "keys quietly missing".
+
+**Recovery runbook (HSM or KMS key lost).**
+1. The vault is sealed automatically. Tenants see "vault temporarily sealed"; no data is
+   modified.
+2. Restore the MK from the HSM cluster peer or the vendor backup. If both are gone, M custodians
+   rebuild it from their shares into a replacement HSM, in a witnessed recovery ceremony.
+3. WardX verifies the recovered MK by unwrapping a known **canary** key row stored with each MK
+   version, then unseals.
+4. Rotate to a fresh MK (§6) and redo escrow for it, since the recovery exposed the shares.
+
+**Recovery drills.** At least once a year, rebuild the MK from shares into a test HSM and unwrap
+the canary. The result is recorded and shown on the platform dashboard.
+
+**If every copy is truly lost** (all HSMs, the vendor backup and more than N−M shares), the
+encrypted secrets can't be recovered. That is the cost of real encryption, and the reason the
+layers above are mandatory. The documented fallback is operational:
+- WardX still holds the inventory: targets, accounts and policies are not encrypted.
+- Credentials are re-established on each target out-of-band and re-onboarded. CPM can set fresh
+  passwords only where it has another valid admin path to the target.
 
 ## 9. Tests this design must pass
 
@@ -242,6 +426,16 @@ MK-wrapped TKEKs, so on their own they reveal nothing.
   rows are never read (query log assertion).
 - Provider down: fail closed after the cache TTL; no plaintext fallback.
 - The audit tail-truncation xfail turns into a pass, and its marker is removed.
+- Audit full rewrite: with triggers dropped and the chain recomputed with plain SHA-256 from DB
+  access alone, verification fails (HMAC mismatch), and the external sink still holds the
+  original events.
+- Outbox: an action whose transaction rolls back forwards nothing; a committed action always
+  forwards, including across a forwarder restart.
+- Compromise drill: a marked-compromised TKEK leads to re-encryption with new DEKs (every
+  ciphertext changes) and to `credential_exposed` on accounts CPM couldn't rotate.
+- Backup bundle holds no plaintext key; restore with the MK provider unavailable is refused
+  before any database is created.
+- MK recovery: rebuild from 3-of-5 test shares into SoftHSM2, unwrap the canary, unseal.
 
 ## 10. Decisions needed in review
 
@@ -258,3 +452,7 @@ MK-wrapped TKEKs, so on their own they reveal nothing.
    Recommendation: tenancy step, since recordings already contain sensitive output today.
 6. **Key generation:** in-HSM `GenerateDataKey` where available (recommended), or always
    in-process?
+7. **Escrow quorum and custodians:** is 3-of-5 right, and who are the custodians (roles, not
+   names)?
+8. **External audit sink for the MVP:** syslog over TLS only, or a SIEM connector too (and
+   which)?
