@@ -1,7 +1,7 @@
 # Phase 1 (e) High availability and disaster recovery: spec (draft for review)
 
-Status: **draft, 2026-10-29. Design decisions in §9 await the product owner; nothing is built
-yet.** Scope: a **single-tenant** WardX install (multi-tenancy is deferred; `TENANCY_KEYS.md`
+Status: **approved 2026-10-29** (decisions in §9, with the product owner's changes to D3, D5
+and D7; new sections §5.1 and §6.1). Scope: a **single-tenant** WardX install (multi-tenancy is deferred; `TENANCY_KEYS.md`
 covers the per-tenant backup design for later). Windows and AD work stay out of scope.
 
 ## 1. What WardX is made of, and what each part keeps locally
@@ -72,6 +72,21 @@ Two simpler supported profiles, chosen at deployment:
   carries it as-is; the HMAC key comes from the KEK on the app nodes, never from the database.
 - **Replication lag and health:** exposed on a new admin-only `/api/v1/health/cluster`
   endpoint and as dashboard warnings (lag above threshold, no synchronous standby).
+- **Degraded mode (D3):** if the synchronous standby is unavailable, the primary **falls back
+  to asynchronous replication instead of blocking writes**. WardX raises a **high-severity
+  alert** for as long as no synchronous standby is attached, and clears it when one returns.
+  The check reads `pg_stat_replication` (`sync_state = 'sync'`) on the primary.
+  - **Patroni:** `synchronous_mode: true` with `synchronous_mode_strict: false` (the default).
+    Patroni keeps one synchronous standby while one is healthy. If none is, it clears
+    `synchronous_standby_names`, so commits stop waiting and the primary keeps accepting
+    writes. With `synchronous_mode_strict: true` the primary would block writes instead, so
+    don't use it. `maximum_lag_on_failover` (for example 1 MB) stops Patroni promoting a
+    standby that is too far behind.
+  - **Plain PostgreSQL without Patroni:** `synchronous_standby_names = 'ANY 1 (standby1)'`
+    blocks commits while the standby is down; there is no built-in fallback. Manual installs
+    run asynchronous, or use the WardX watchdog in the HA lab
+    (`lab/ha/sync-watchdog.sh`) that clears and restores `synchronous_standby_names`. It
+    must never be enabled together with Patroni.
 
 ## 4. Scheduler leader election
 
@@ -111,7 +126,7 @@ Two simpler supported profiles, chosen at deployment:
   - Their check-outs are closed by the normal session-end path, so after-use rotation and
     exclusivity work as usual.
   - Users reconnect and land on a healthy node.
-- **Recordings** (§9 D5):
+- **Recordings** (§9 D5, encrypted per §5.1):
   - Each node writes to a local spool, then **uploads to shared storage**: an S3-compatible
     object store such as MinIO on-prem or S3/Azure Blob in the cloud. That happens
     continuously in chunks during the session, and in full at session end.
@@ -119,10 +134,40 @@ Two simpler supported profiles, chosen at deployment:
   - The SHA-256 over the recording is finalised at session end. A session cut off by a node
     loss keeps the chunks uploaded so far, marked **incomplete**: no final hash, and the replay
     UI says so.
-  - Encryption of recordings at rest (`TENANCY_KEYS.md` §8) is unaffected: chunks are
-    encrypted before upload.
+  - Recordings are **encrypted before they leave the gateway** (§5.1); the object store only
+    ever holds ciphertext.
 - **Kill requests and check-out expiry** are already polled from the database, so they work
   from any node.
+
+### 5.1 Recording encryption (pulled forward from `TENANCY_KEYS.md` §8)
+
+- **Keys:**
+  - Each recording gets a fresh 256-bit data key (DEK), wrapped by the tenant's **`files`**
+    key (`KeyPurpose.FILES`, through `TenantKeyService` and the key provider).
+  - The wrapped DEK, the files-key version and the format version go in a small header at the
+    start of the encrypted object.
+  - No code outside the key provider touches a key-encryption key
+    (`tests/security/test_key_boundary.py`).
+- **Format:** streaming AES-256-GCM in chunks of at most 64 KiB. Each chunk's nonce is derived
+  from a per-recording random prefix and the chunk index. Its AAD carries the recording id,
+  the chunk index and a final-chunk flag, so reordering, dropping, truncating or appending
+  chunks fails to decrypt.
+- **Integrity:**
+  - `recording_sha256` stays the SHA-256 of the **plaintext** asciicast, hashed while it's
+    written and recorded in the audit chain as today.
+  - A second hash over the ciphertext object is stored for storage-level checks.
+  - Replay decrypts while streaming, and refuses with a clear error on any authentication
+    failure.
+- **Incomplete recordings** (node lost): the chunks uploaded so far decrypt and replay up to
+  the last complete chunk. With no final chunk the recording is marked **incomplete**, and
+  that's what the UI shows. Nothing is presented as a full session.
+- **Migrating existing recordings:** a resumable command (`wardx recordings encrypt`):
+  1. Encrypt each plaintext recording into a new encrypted object.
+  2. Decrypt it back and compare its SHA-256 with the stored `recording_sha256` before
+     marking it migrated. A mismatch leaves the original untouched and reports it.
+  3. **Originals are kept by default.** They're removed only by a separate, explicit
+     `--remove-verified-originals` run, and only for recordings whose encrypted copy verified.
+  4. Every step is audited per recording, with the session's safe.
 
 ## 6. Keys and secrets on every node and at the DR site
 
@@ -153,6 +198,34 @@ Every node of a role must have the **same**:
   4. Point DNS or the VIP at it.
   5. Run the post-failover checks: chain verify, canary decrypt, a sample verify of rotation
      jobs that were in flight.
+
+### 6.1 Rotation safety around the site-loss data-loss window (D7)
+
+With asynchronous replication to the DR site, a site loss can lose up to the replication lag
+of committed data. That includes rotation commits, so a rotated device could end up holding a
+password the DR copy of the vault doesn't know about.
+
+- **Pause on lag:**
+  - While the DR replica's replay lag exceeds `WARDX_DR_MAX_LAG_SECONDS` (default **60**),
+    the scheduler **pauses scheduled rotations**: it queues none, and jobs already queued wait
+    in `pending`. It raises a high-severity alert, cleared when the lag recovers.
+  - Lag is read on the primary from `pg_stat_replication` for the replica named in
+    `WARDX_DR_REPLICA_NAME`.
+  - If no DR replica is configured, nothing pauses (single-site installs).
+  - An unreadable lag counts as "too high": fail safe.
+- **On-demand rotation** is still allowed while the lag is high, but the API returns a
+  `dr_lag_warning` alongside the job and the console shows it before confirming.
+- **DR activation runbook step** (`wardx dr post-failover-check`):
+  1. **List every account rotated in the possible loss window** (from
+     `--since <time of last confirmed replication>` to failover). It uses the promoted
+     database's audit trail **and**, if given, the forwarded audit or SIEM export
+     (`--audit-export <file>`, JSON lines of WardX audit events). The export catches
+     rotations the DR copy never received.
+  2. **Run verify immediately** on each listed account (normal verify jobs, negative check
+     included).
+  3. **Reconcile every account whose verify fails**, through its reconcile account. Accounts
+     without one are listed for manual action and flagged out of sync.
+  4. Print a report and audit the whole run. `--dry-run` lists without queueing anything.
 
 ## 7. Backup and restore (single tenant)
 
@@ -200,7 +273,7 @@ Every node of a role must have the **same**:
   the test database, the heartbeat sweeper, the canary check, the recording upload and replay
   path against a local fake object store.
 
-## 9. Decisions for the product owner (with recommendations)
+## 9. Decisions (answered 2026-10-29; D1, D2, D4, D6, D8, D9, D10 as recommended)
 
 1. **D1. Topology.**
    - Options: (a) active-active app tier with active-passive DB; (b) everything
@@ -213,10 +286,10 @@ Every node of a role must have the **same**:
    - Options: (a) tool-agnostic WardX, recommending Patroni on-prem and managed HA in cloud,
      plus a manual runbook; (b) bundle Patroni in the on-prem installer; (c) manual only.
    - **Recommend (a) now, (b) later for the packaged appliance.**
-3. **D3. Replication mode.**
-   - **Recommend synchronous within the primary site (RPO 0) and asynchronous to the DR site
-     (RPO of seconds).** Synchronous replication keeps rotation's "store first, then change
-     the device" guarantee across an in-site failover.
+3. **D3. Replication mode.** **Decided:** synchronous within the primary site and
+   asynchronous to the DR site. **Changed by the owner:** if the synchronous standby is
+   unavailable, the primary falls back to asynchronous instead of blocking writes, with a
+   high-severity alert while degraded (§3).
 4. **D4. Scheduler leader election.**
    - Options: (a) a Postgres advisory lock on a dedicated connection; (b) an external
      coordinator (etcd, Consul, Kubernetes lease).
@@ -225,14 +298,16 @@ Every node of a role must have the **same**:
 5. **D5. Recordings storage.**
    - Options: (a) S3-compatible object store with local spool and chunked upload; (b) shared
      NFS; (c) local disk per node plus rsync.
-   - **Recommend (a).** It's replicable to DR, works on-prem (MinIO) and in cloud, and NFS
-     brings its own locking and HA problems.
+   - **Decided (a).** **Changed by the owner:** recordings are encrypted before upload,
+     pulled forward into this module, and existing recordings are migrated with originals
+     kept until the encrypted copies verify (§5.1).
 6. **D6. Live gateway sessions when a node is lost.**
    - **Recommend: end them, audited as "gateway node lost", close their check-outs, keep the
      partial recording marked incomplete.** SSH sessions can't be migrated.
-7. **D7. Targets.**
-   - **Recommend: RTO 5 minutes or less and RPO 0 for an in-site failure (automatic). RTO 1
-     hour or less and RPO 5 minutes or less for a site loss (manual DR activation).**
+7. **D7. Targets.** **Decided:** RTO 5 minutes or less and RPO 0 in-site (automatic); RTO 1
+   hour or less and RPO 5 minutes or less for a site loss (manual DR activation). **Added by
+   the owner:** the rotation-safety rule in §6.1 (pause scheduled rotation on DR lag, warn on
+   on-demand, and a post-failover verify and reconcile command).
 8. **D8. DR activation.**
    - **Recommend manual, by runbook, with a named decision-maker.** Automatic cross-site
      failover risks a split brain for a vault, where two primaries could each rotate the same
@@ -244,14 +319,26 @@ Every node of a role must have the **same**:
     - **Recommend: a node refuses to start if its KEK can't open the install's canary.** It's
       better to fail at deploy time than to serve "secret could not be decrypted" to users.
 
-## 10. Effort (one engineer)
+## 10. Build stop
+
+Stop for review when failover works end to end in a local test setup: primary plus standby
+database, two API nodes, two gateway nodes. That includes a **killed-primary test** and a
+**killed-gateway test** (§8).
+
+## 11. Effort (one engineer)
 
 | Part | Days |
 |---|---|
 | Leader election, `/health/cluster`, dashboard items | 2 |
 | Gateway heartbeat, lost-node sweeper, shared host key checks | 2 |
 | Recordings to object storage (spool, chunked upload, replay from storage, incomplete marking) | 3–4 |
+| Recording encryption (streaming GCM, files key) and the migration command | 2–3 |
+| Degraded-sync alert, DR-lag rotation pause and warning, `dr post-failover-check` | 2–3 |
 | KEK canary and startup checks | 1 |
 | Backup and restore tooling and runbooks (PITR, restore verification, drill script) | 2–3 |
 | HA lab (compose) and failover scenario tests | 3 |
-| **Total** | **13–15** |
+| **Total** | **17–21** |
+
+## 12. Build log (smaller choices, logged rather than asked)
+
+Filled in during the build.
