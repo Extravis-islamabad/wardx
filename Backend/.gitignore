@@ -2,7 +2,10 @@
 __pycache__/
 *.pyc
 .env
+# Dev secrets (keys, initial admin password): ignored wherever such a folder appears.
 .wardx/
 .pytest_cache/
 .ruff_cache/
-recordings/
+# The local session-recording directory only: anchored, so a source package or test
+# folder named "recordings" is never silently left out of a commit.
+/recordings/

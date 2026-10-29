@@ -1,2 +1,4 @@
 .devdb/
 .DS_Store
+# Dev secrets, wherever WardX was started from.
+.wardx/
