@@ -2,7 +2,8 @@
 
 A plain ``pytest`` run must never touch a device, a lab VM or a lab container: lab
 tests run only when ``WARDX_LAB`` names their lab (comma-separated, or ``all``), e.g.
-``WARDX_LAB=mikrotik`` or ``WARDX_LAB=linux,mikrotik``. CI never sets it.
+``WARDX_LAB=mikrotik``, ``WARDX_LAB=linux,mikrotik`` or ``WARDX_LAB=ha`` (the HA lab,
+lab/ha/). CI never sets it.
 
 Check the gate BEFORE probing anything: an unavailable-lab check that connects to the
 device is itself device contact.
@@ -13,7 +14,7 @@ from __future__ import annotations
 import os
 
 LAB_ENV = "WARDX_LAB"
-KNOWN_LABS = frozenset({"linux", "mikrotik"})
+KNOWN_LABS = frozenset({"ha", "linux", "mikrotik"})
 
 
 def enabled_labs() -> frozenset[str]:

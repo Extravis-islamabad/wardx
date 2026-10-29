@@ -42,14 +42,19 @@ def test_no_device_contact_without_the_flag(monkeypatch):
 
     monkeypatch.setattr(routeros_api, "fetch_certificate", no_chr)
     monkeypatch.setattr(subprocess, "run", no_subprocess)
+    from tests.lab_ha import ha_cluster
+
     importlib.reload(mikrotik_lab)
     importlib.reload(linux_lab)
+    importlib.reload(ha_cluster)
+    assert ha_cluster.main(["start"]) == 2  # refuses without WARDX_LAB=ha
     assert touched == []
+    assert "WARDX_LAB=ha" in lab_skip_reason("ha")
     assert "WARDX_LAB" in mikrotik_lab._REASON
     assert "WARDX_LAB" in linux_lab._REASON
 
 
-@pytest.mark.parametrize("lab", ["linux", "mikrotik"])
+@pytest.mark.parametrize("lab", ["ha", "linux", "mikrotik"])
 def test_ci_never_enables_a_lab(lab):
     """The CI workflows must not set WARDX_LAB."""
     import pathlib

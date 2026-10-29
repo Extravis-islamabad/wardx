@@ -7,3 +7,6 @@
 
 # Lab credentials (generated locally)
 .secrets/
+
+# HA lab runtime state (node logs, pid files, spools)
+ha/.run/
