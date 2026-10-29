@@ -34,6 +34,7 @@ from src.contracts.schemas.responses.rotation.rotation_responses import (
 from src.core.config import get_settings
 from src.core.permissions import INVENTORY_MANAGE, INVENTORY_VIEW
 from src.dependencies.auth import ActorDep, require_permission
+from src.dependencies.health import ClusterServiceDep
 from src.dependencies.rotation import RotationReviewServiceDep, RotationServiceDep
 from src.routers.v1.rotation.mappers import job_response, policy_response
 
@@ -56,7 +57,7 @@ _WRITE_RESPONSES = {
     responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
 )
 async def account_rotation(
-    account_id: uuid.UUID, service: RotationServiceDep, actor: ActorDep
+    account_id: uuid.UUID, service: RotationServiceDep, cluster: ClusterServiceDep, actor: ActorDep
 ) -> APIResponse[AccountRotationResponse]:
     v = await service.account_rotation(actor, account_id)
     a, t = v.account, v.target
@@ -90,13 +91,19 @@ async def account_rotation(
             safe_policy=policy_response(v.safe_policy),
             open_job=job_response(v.open_job) if v.open_job else None,
             jobs=[job_response(j) for j in v.jobs],
+            dr_lag_warning=await cluster.dr_lag_warning(),
         )
     )
 
 
-async def _queue(service, actor, account_id, operation, reason, dry_run=False):
-    job = await service.request(actor, account_id, operation, reason, dry_run=dry_run)
-    return ok(job_response(job), f"{operation.capitalize()} queued")
+async def _queue(service, actor, account_id, operation, reason, dry_run=False, cluster=None):
+    # On-demand rotation stays allowed while the DR replica lags, with a warning (§6.1).
+    warning = await cluster.dr_lag_warning() if cluster is not None else None
+    job = await service.request(
+        actor, account_id, operation, reason, dry_run=dry_run, dr_lag_warning=warning is not None
+    )
+    body = job_response(job).model_copy(update={"dr_lag_warning": warning})
+    return ok(body, f"{operation.capitalize()} queued")
 
 
 @router.post(
@@ -108,9 +115,15 @@ async def _queue(service, actor, account_id, operation, reason, dry_run=False):
     responses=_WRITE_RESPONSES,
 )
 async def rotate(
-    account_id: uuid.UUID, request: RotateIn, service: RotationServiceDep, actor: ActorDep
+    account_id: uuid.UUID,
+    request: RotateIn,
+    service: RotationServiceDep,
+    cluster: ClusterServiceDep,
+    actor: ActorDep,
 ) -> APIResponse[RotationJobResponse]:
-    return await _queue(service, actor, account_id, "rotate", request.reason, request.dry_run)
+    return await _queue(
+        service, actor, account_id, "rotate", request.reason, request.dry_run, cluster
+    )
 
 
 @router.post(
@@ -136,9 +149,13 @@ async def verify(
     responses=_WRITE_RESPONSES,
 )
 async def reconcile(
-    account_id: uuid.UUID, request: RotationRequestIn, service: RotationServiceDep, actor: ActorDep
+    account_id: uuid.UUID,
+    request: RotationRequestIn,
+    service: RotationServiceDep,
+    cluster: ClusterServiceDep,
+    actor: ActorDep,
 ) -> APIResponse[RotationJobResponse]:
-    return await _queue(service, actor, account_id, "reconcile", request.reason)
+    return await _queue(service, actor, account_id, "reconcile", request.reason, cluster=cluster)
 
 
 @router.post(

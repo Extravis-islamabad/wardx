@@ -40,10 +40,12 @@ class RotationWorker:
         self._lease = timedelta(seconds=lease_seconds)
         self._repo_factory = repo_factory
 
-    async def claim(self) -> uuid.UUID | None:
+    async def claim(self, hold: frozenset[str] = frozenset()) -> uuid.UUID | None:
         async with self._sessions() as session:
             repo = self._repo_factory(session)
-            job_id = await repo.claim(self.worker_id, utcnow(), self._lease)
+            job_id = await repo.claim(
+                self.worker_id, utcnow(), self._lease, hold_pending_reasons=hold
+            )
             await repo.commit()
             return job_id
 
@@ -56,11 +58,12 @@ class RotationWorker:
             # The lease expires and a later claim resumes the job from its last state.
             logger.exception("rotation_job_crashed", job_id=str(job_id))
 
-    async def run_once(self) -> int:
-        """Claim up to ``pool_size`` jobs (one per target) and run them concurrently."""
+    async def run_once(self, hold: frozenset[str] = frozenset()) -> int:
+        """Claim up to ``pool_size`` jobs (one per target) and run them concurrently.
+        ``hold``: reasons whose pending jobs wait (the DR lag pause, HA_DR.md §6.1)."""
         claimed: list[uuid.UUID] = []
         for _ in range(self.pool_size):
-            job_id = await self.claim()
+            job_id = await self.claim(hold)
             if job_id is None:
                 break
             claimed.append(job_id)

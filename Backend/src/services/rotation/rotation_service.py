@@ -105,6 +105,7 @@ class RotationService:
         note: str,
         *,
         dry_run: bool = False,
+        dr_lag_warning: bool = False,
     ) -> RotationJobDTO:
         reason = OPERATIONS[operation]
         visible = await self._account_service.get(account_id, lock=True)
@@ -137,7 +138,12 @@ class RotationService:
             object_type="rotation_job",
             object_id=job_id,
             safe_id=account.safe_id,
-            details={"account_id": str(account.id), "reason": note, "dry_run": dry_run},
+            details={
+                "account_id": str(account.id),
+                "reason": note,
+                "dry_run": dry_run,
+                **({"dr_lag_warning": True} if dr_lag_warning else {}),
+            },
         )
         await self._jobs.commit()
         return await self._jobs.get(job_id)

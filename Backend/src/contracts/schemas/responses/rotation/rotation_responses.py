@@ -53,6 +53,9 @@ class RotationJobResponse(BaseModel):
     created_at: datetime
     steps: list[RotationStepResponse] = []
 
+    # On-demand rotate/reconcile while the DR replica lags (HA_DR.md §6.1).
+    dr_lag_warning: str | None = None
+
 
 class SafeRotationPolicyResponse(BaseModel):
     safe_id: uuid.UUID
@@ -95,6 +98,9 @@ class AccountRotationResponse(BaseModel):
     safe_policy: SafeRotationPolicyResponse
     open_job: RotationJobResponse | None
     jobs: list[RotationJobResponse]
+    # Set while the DR replica lags or its lag is unreadable (HA_DR.md §6.1): shown before
+    # an on-demand rotation is confirmed. None without a DR site.
+    dr_lag_warning: str | None = None
 
 
 class RotationAccountBriefResponse(BaseModel):

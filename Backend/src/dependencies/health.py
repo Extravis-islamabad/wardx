@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import get_settings
+from src.core.config import Settings, get_settings
 from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
 from src.repositories.health.cluster_repository import ClusterRepository
@@ -27,14 +27,16 @@ async def get_health_service(session: SQLSessionDep) -> HealthService:
 HealthServiceDep = Annotated[HealthService, Depends(get_health_service)]
 
 
-def build_cluster_service(session: AsyncSession) -> ClusterService:
+def build_cluster_service(
+    session: AsyncSession, settings: Settings | None = None
+) -> ClusterService:
     from src.dependencies.identity import build_alert_service
 
     return ClusterService(
         ClusterRepository(session),
         build_alert_service(session),
         build_audit_service(session),
-        get_settings(),
+        settings or get_settings(),
     )
 
 

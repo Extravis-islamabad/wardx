@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from src.contracts.dto.rotation.rotation_dto import AFTER_USE, SCHEDULE
 from src.core.config import Settings, get_settings
 from src.core.db import session_factory
 from src.core.tenant import current_tenant
@@ -79,6 +80,26 @@ async def directory_sync_tick() -> None:
         )
 
 
+# Automatic rotations wait while the DR replica lags (HA_DR.md §6.1). On-demand rotation
+# (manual, reconcile, compromise) still runs, with a warning; verifies change nothing.
+DR_PAUSED_REASONS = frozenset({SCHEDULE, AFTER_USE})
+
+
+async def dr_rotation_paused(settings: Settings) -> bool:
+    """With a DR site configured: refresh the DR lag condition (alert raised or cleared)
+    and say whether scheduled rotation must pause. Fails safe: an error pauses."""
+    if not settings.dr_site_configured:
+        return False
+    async with current_tenant().session_factory()() as session:
+        try:
+            service = build_cluster_service(session, settings)
+            return bool((await service.check())["rotation_paused"])
+        except Exception:
+            logger.exception("dr_lag_check_failed")
+            await session.rollback()
+            return True
+
+
 async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
     """Rotation housekeeping, then run due jobs (ROTATION.md sections 4 to 6).
 
@@ -89,13 +110,16 @@ async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
     settings = settings or get_settings()
     sessions = current_tenant().session_factory()
     result: dict[str, int] = {}
+    paused = await dr_rotation_paused(settings)
     for name, step in (
         ("scan", lambda s: s.scan_empty_passwords()),
         ("release", lambda s: s.release_waiting()),
         (
             "enqueue",
             lambda s: s.enqueue_due(
-                enabled=settings.rotation_enabled, jitter_seconds=settings.rotation_jitter_seconds
+                enabled=settings.rotation_enabled,
+                jitter_seconds=settings.rotation_jitter_seconds,
+                rotations_paused=paused,
             ),
         ),
     ):
@@ -110,7 +134,9 @@ async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
             result.update({f"{name}_{k}": v for k, v in out.items()})
         else:
             result[name] = out
-    result["ran"] = await build_rotation_worker(settings).run_once()
+    hold = DR_PAUSED_REASONS if paused else frozenset()
+    result["ran"] = await build_rotation_worker(settings).run_once(hold)
+    result["dr_paused"] = int(paused)
     if any(result.values()):
         logger.info("rotation_tick", **result)
     return result

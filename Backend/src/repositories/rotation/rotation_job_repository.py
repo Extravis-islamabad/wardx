@@ -199,17 +199,31 @@ class RotationJobRepository(BaseRepository):
         await self._session.flush()
 
     async def claim(
-        self, worker: str, now: datetime, lease: timedelta, *, limit: int = 20
+        self,
+        worker: str,
+        now: datetime,
+        lease: timedelta,
+        *,
+        limit: int = 20,
+        hold_pending_reasons: frozenset[str] = frozenset(),
     ) -> uuid.UUID | None:
-        """Claim the next due job whose target has no running job. The caller commits."""
+        """Claim the next due job whose target has no running job. The caller commits.
+
+        ``hold_pending_reasons``: pending jobs with these reasons are left waiting (the DR
+        lag pause); jobs already past pending always resume."""
+        conditions = [
+            RotationJob.status.in_(CLAIMABLE_STATES),
+            RotationJob.not_before <= now,
+            (RotationJob.lease_until.is_(None)) | (RotationJob.lease_until < now),
+        ]
+        if hold_pending_reasons:
+            conditions.append(
+                ~((RotationJob.status == PENDING) & RotationJob.reason.in_(hold_pending_reasons))
+            )
         candidates = (
             await self._session.execute(
                 select(RotationJob.id, RotationJob.target_id)
-                .where(
-                    RotationJob.status.in_(CLAIMABLE_STATES),
-                    RotationJob.not_before <= now,
-                    (RotationJob.lease_until.is_(None)) | (RotationJob.lease_until < now),
-                )
+                .where(*conditions)
                 .order_by(RotationJob.not_before)
                 .limit(limit)
                 .with_for_update(skip_locked=True, of=RotationJob)

@@ -118,14 +118,21 @@ class RotationSchedulerService:
         return True
 
     async def enqueue_due(
-        self, *, enabled: bool, jitter_seconds: int = 300, limit: int = 100
+        self,
+        *,
+        enabled: bool,
+        jitter_seconds: int = 300,
+        limit: int = 100,
+        rotations_paused: bool = False,
     ) -> dict[str, int]:
-        """Queue scheduled rotations and verifies (nothing while rotation is switched off)."""
+        """Queue scheduled rotations and verifies (nothing while rotation is switched off).
+        ``rotations_paused`` (DR lag, HA_DR.md §6.1): verifies only, no rotations."""
         if not enabled:
             return {"rotations": 0, "verifies": 0}
         now = utcnow()
         rotations = verifies = 0
-        for account in await self._accounts.due_for_rotation(now, limit):
+        due = [] if rotations_paused else await self._accounts.due_for_rotation(now, limit)
+        for account in due:
             policy = await self._accounts.safe_policy(account.safe_id)
             if not in_window(policy.maintenance_window if policy else None, now):
                 continue

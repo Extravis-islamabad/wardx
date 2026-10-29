@@ -2,7 +2,7 @@ import { Alert, Checkbox, Input, Modal } from 'antd';
 import { useEffect, useState } from 'react';
 import { Box, Button, FormField, ModalFooter, ModalTitle } from '@/components';
 import { MIN_CONFIRM_REASON } from '@/features/rotation/constants';
-import { useConfirmRotation, useRequestRotation } from '@/features/rotation/hooks';
+import { useAccountRotation, useConfirmRotation, useRequestRotation } from '@/features/rotation/hooks';
 import type { RotationOperation } from '@/services/rotation-services';
 import { notify } from '@/utils/notify';
 
@@ -37,6 +37,9 @@ export function RotationActionModal({ accountId, action, onClose }: Props) {
   const [dryRun, setDryRun] = useState(false);
   const request = useRequestRotation(accountId);
   const confirm = useConfirmRotation(accountId);
+  // DR lag (HA_DR.md §6.1): shown before an on-demand rotation is confirmed.
+  const drWarning = useAccountRotation(accountId).data?.dr_lag_warning ?? null;
+  const changesDevice = action === 'rotate' || action === 'reconcile';
   useEffect(() => {
     setReason('');
     setDryRun(false);
@@ -51,8 +54,9 @@ export function RotationActionModal({ accountId, action, onClose }: Props) {
         await confirm.mutateAsync(reason.trim());
         notify.success('Confirmed: risk accepted');
       } else {
-        await request.mutateAsync({ op: action, reason: reason.trim(), dryRun });
+        const job = await request.mutateAsync({ op: action, reason: reason.trim(), dryRun });
         notify.success(`${action.charAt(0).toUpperCase()}${action.slice(1)} queued`);
+        if (job.data?.dr_lag_warning) notify.warning(job.data.dr_lag_warning);
       }
       onClose();
     } catch {
@@ -64,6 +68,9 @@ export function RotationActionModal({ accountId, action, onClose }: Props) {
     <Modal open title={<ModalTitle>{TITLES[action]}</ModalTitle>} onCancel={onClose} footer={null} destroyOnHidden>
       <Box className="px-2 border-0">
         <Alert className="!mb-3" type={action === 'confirm' ? 'warning' : 'info'} showIcon title={HELP[action]} />
+        {changesDevice && drWarning && (
+          <Alert className="!mb-3" type="warning" showIcon title="DR replication is behind" description={drWarning} />
+        )}
         <FormField
           label={action === 'confirm' ? 'Why is accepting this risk right? (audited)' : 'Reason (audited)'}
           htmlFor="rotation-reason"

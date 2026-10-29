@@ -20,10 +20,12 @@ from src.dependencies.identity import build_alert_service
 from src.dependencies.inventory import build_account_service
 from src.dependencies.sessions import build_host_key_service, build_tls_cert_service
 from src.dependencies.vault import build_vault_service
+from src.repositories.rotation.dr_window_repository import DrWindowRepository
 from src.repositories.rotation.rotation_account_repository import RotationAccountRepository
 from src.repositories.rotation.rotation_job_repository import RotationJobRepository
 from src.repositories.security.alert_repository import AlertRepository
 from src.rotation.drivers.registry import DriverRegistry, default_registry
+from src.services.rotation.dr_failover_service import DrFailoverService
 from src.services.rotation.rotation_engine import Checkpoint, RotationEngine
 from src.services.rotation.rotation_guard import RotationGuard
 from src.services.rotation.rotation_review_service import RotationReviewService
@@ -146,3 +148,12 @@ RotationReviewServiceDep = Annotated[RotationReviewService, Depends(get_rotation
 SafeRotationPolicyServiceDep = Annotated[
     SafeRotationPolicyService, Depends(get_safe_rotation_policy_service)
 ]
+
+
+def build_dr_failover_service(session: AsyncSession) -> DrFailoverService:
+    return DrFailoverService(
+        DrWindowRepository(session),
+        RotationJobRepository(session),
+        RotationAccountRepository(session),
+        build_audit_service(session),
+    )

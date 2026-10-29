@@ -205,16 +205,24 @@ With asynchronous replication to the DR site, a site loss can lose up to the rep
 of committed data. That includes rotation commits, so a rotated device could end up holding a
 password the DR copy of the vault doesn't know about.
 
-- **Pause on lag:**
+- **DR is an explicit setting:** `dr_site_configured` (`WARDX_DR_SITE_CONFIGURED`, default
+  **false**). (Product owner, 2026-10-29: this replaces the earlier "if no DR replica is
+  configured, nothing pauses".)
+  - **false** (single-site installs): the DR-lag pause does not apply, scheduled rotation runs
+    normally, on-demand rotation carries no `dr_lag_warning`, and no security alert is raised.
+    The dashboard shows "No DR site configured" as an informational item, and
+    `/health/cluster` reports `dr_site_configured: false`.
+  - **true:** the rules below apply.
+- **Pause on lag** (DR site configured):
   - While the DR replica's replay lag exceeds `WARDX_DR_MAX_LAG_SECONDS` (default **60**),
     the scheduler **pauses scheduled rotations**: it queues none, and jobs already queued wait
     in `pending`. It raises a high-severity alert, cleared when the lag recovers.
   - Lag is read on the primary from `pg_stat_replication` for the replica named in
     `WARDX_DR_REPLICA_NAME`.
-  - If no DR replica is configured, nothing pauses (single-site installs).
-  - An unreadable lag counts as "too high": fail safe.
-- **On-demand rotation** is still allowed while the lag is high, but the API returns a
-  `dr_lag_warning` alongside the job and the console shows it before confirming.
+  - An **unreadable** lag pauses too, with the alert (fail safe): the replica is not in
+    `pg_stat_replication`, the query fails, or `WARDX_DR_REPLICA_NAME` is not set.
+- **On-demand rotation** is still allowed while the lag is high or unreadable, but the API
+  returns a `dr_lag_warning` alongside the job and the console shows it before confirming.
 - **DR activation runbook step** (`wardx dr post-failover-check`):
   1. **List every account rotated in the possible loss window** (from
      `--since <time of last confirmed replication>` to failover). It uses the promoted

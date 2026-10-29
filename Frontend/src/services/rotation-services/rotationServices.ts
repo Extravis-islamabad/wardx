@@ -17,6 +17,8 @@ export interface RotationStep {
 
 export interface RotationJob {
   id: string;
+  /** On-demand rotate / reconcile queued while the DR replica lags (HA_DR.md §6.1). */
+  dr_lag_warning?: string | null;
   account_id: string;
   account_username: string;
   target_id: string;
@@ -92,6 +94,8 @@ export interface AccountRotation {
   safe_policy: SafeRotationPolicy;
   open_job: RotationJob | null;
   jobs: RotationJob[];
+  /** Set while the DR replica lags or its lag is unreadable (HA_DR.md §6.1); null without a DR site. */
+  dr_lag_warning: string | null;
 }
 
 export interface RotationAccountBrief {
