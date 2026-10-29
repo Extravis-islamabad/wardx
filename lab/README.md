@@ -1,5 +1,10 @@
 # WardX rotation lab
 
+> **Lab tests are opt-in.** A plain `pytest` run never touches a device, lab VM or lab container:
+> those tests run only with `WARDX_LAB` naming their lab, e.g. `WARDX_LAB=mikrotik`,
+> `WARDX_LAB=linux,mikrotik` or `WARDX_LAB=all`. CI never sets it (`tests/lab_gate.py`;
+> guarded by `tests/security/test_lab_opt_in.py`).
+
 Lab targets for the rotation engine (Backend/docs/phase1/ROTATION.md §1, §9).
 **Lab only: never point rotation at a production, customer or shared device.**
 Rotation tests create their own `wardx_rot_*` accounts and remove only those.

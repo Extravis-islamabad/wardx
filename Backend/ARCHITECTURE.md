@@ -49,5 +49,8 @@ Reference module: **inventory** (targets, accounts). Copy it.
     `tests/security/test_key_boundary.py` enforces this.
   - Per-tenant purpose keys (`KeyPurpose`) are created through `TenantKeyService` and stored
     only wrapped in `keystore.tenant_keys`.
+- **Device lab tests are opt-in.** Any test that talks to a device, lab VM or lab container
+  checks `tests/lab_gate.py` (`WARDX_LAB`) **before** probing anything, and is skipped
+  otherwise. A plain `pytest` run and CI never touch a device.
 - **Migrations**: raw SQL `migrations/NNN_name.sql`, applied in order, idempotent.
 - No file over 500 lines; split by sub-area like MonetX.

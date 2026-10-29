@@ -33,6 +33,7 @@ import pytest
 from src.rotation.passwords import generate
 from src.rotation.policy import platform_default
 from src.transport import routeros_api as api
+from tests.lab_gate import lab_skip_reason
 
 CONTAINER = "wardx-lab-mikrotik"
 HOST = "127.0.0.1"
@@ -70,7 +71,8 @@ def chr_unavailable() -> str | None:
     return None
 
 
-_REASON = chr_unavailable()
+# The opt-in gate first: without WARDX_LAB=mikrotik nothing below probes the CHR.
+_REASON = lab_skip_reason("mikrotik") or chr_unavailable()
 requires_chr = pytest.mark.skipif(_REASON is not None, reason=_REASON or "")
 
 

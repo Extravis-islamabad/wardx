@@ -22,6 +22,7 @@ import pytest
 
 from src.rotation.passwords import generate
 from src.rotation.policy import platform_default
+from tests.lab_gate import lab_skip_reason
 
 IMAGE = "wardx-lab/linux-ssh:1"
 NETWORK = "wardx-lab"
@@ -58,9 +59,9 @@ def docker_unavailable() -> str | None:
     return None
 
 
-requires_docker = pytest.mark.skipif(
-    docker_unavailable() is not None, reason=docker_unavailable() or ""
-)
+# The opt-in gate first: without WARDX_LAB=linux no container is started or inspected.
+_REASON = lab_skip_reason("linux") or docker_unavailable()
+requires_docker = pytest.mark.skipif(_REASON is not None, reason=_REASON or "")
 
 
 @dataclass
