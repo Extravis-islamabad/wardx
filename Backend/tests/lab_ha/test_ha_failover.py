@@ -7,7 +7,9 @@ wrong KEK -> API node killed -> scheduler leader killed -> gateway killed -> pri
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
+import subprocess  # noqa: S404 - lab only
 
 import asyncssh
 import pytest
@@ -345,3 +347,44 @@ async def test_killed_primary(cluster, seeded):
 
     assert await wait_for(degraded_alert, 30, 1, "the degraded-sync alert")
     print(f"HA lab: {len(acked)} writes acknowledged, rotation caught at {in_flight_at_kill}")
+
+
+async def test_base_backup_and_restore_drill(cluster, seeded):
+    """§7 on the promoted primary: an encrypted base backup, then the scripted restore
+    drill into a scratch database, recorded on the production database."""
+    scripts = hc.REPO / "scripts" / "backup"
+    env = {
+        **hc.node_env(hc.NODES["api-2"]),
+        "HOME": os.environ.get("HOME", ""),  # the docker CLI finds its context there
+        "WARDX_BACKEND": str(hc.BACKEND),
+        "WARDX_BACKUP_DIR": str(hc.RUN / "backups"),
+        "PG_EXEC": "docker exec -i -e PGUSER=wardx wardx-lab-ha-pg2",
+        "WARDX_DRILL_DB_URL_TEMPLATE": (
+            f"postgresql+asyncpg://wardx:{hc.secret('pg-password')}@127.0.0.1:15433/{{db}}"
+        ),
+    }
+
+    def sh(script: str):
+        return subprocess.run(  # noqa: S603 - lab only, fixed script path
+            ["sh", str(scripts / script)],  # noqa: S607
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+
+    out = await asyncio.to_thread(sh, "base-backup.sh")
+    assert out.returncode == 0, out.stderr[-800:]
+    archives = list((hc.RUN / "backups").glob("wardx-base-*.tar.wxbak"))
+    assert archives and archives[0].stat().st_size > 1_000_000
+    assert b"PG_VERSION" not in archives[0].read_bytes()[:4_000_000]
+
+    out = await asyncio.to_thread(sh, "restore-drill.sh")
+    assert out.returncode == 0, (out.stdout[-800:], out.stderr[-800:])
+    assert "recorded: ok" in out.stdout
+    async with api("api-2", seeded["token"]) as c:
+        drill = (await c.get("/health/cluster")).json()["data"]["last_restore_drill"]
+    assert drill["ok"] is True
+    scratch = await fetchval("SELECT count(*) FROM pg_database WHERE datname LIKE 'wardx_drill_%'")
+    assert scratch == 0  # dropped afterwards

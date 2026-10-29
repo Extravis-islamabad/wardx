@@ -93,3 +93,4 @@ class ClusterDTO:
     conditions: list[ConditionDTO] = field(default_factory=list)
     gateways: list[GatewayNodeDTO] = field(default_factory=list)
     gateway_host_keys_consistent: bool = True
+    last_restore_drill: dict[str, Any] | None = None

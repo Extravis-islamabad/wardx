@@ -36,7 +36,7 @@ export function ClusterPanel() {
   const cluster = useCluster(true);
   const data = cluster.data;
   if (!data) return null;
-  const { leader, replication, dr, gateways } = data;
+  const { leader, replication, dr, gateways, last_restore_drill: drill } = data;
   const degraded = replication.sync_state === 'degraded';
   return (
     <Space orientation="vertical" size={12} className="w-full">
@@ -96,6 +96,19 @@ export function ClusterPanel() {
           </Descriptions.Item>
           <Descriptions.Item label="DR site">
             <DrItem dr={dr} />
+          </Descriptions.Item>
+          <Descriptions.Item label="Restore drill">
+            {drill ? (
+              <Space wrap>
+                <StatusTag
+                  label={drill.ok ? 'passed' : 'FAILED'}
+                  variant={drill.ok ? StatusVariant.SUCCESS : StatusVariant.DANGER}
+                />
+                <Typography.Text type="secondary">{fmtTime(drill.ran_at)}</Typography.Text>
+              </Space>
+            ) : (
+              <Typography.Text type="secondary">No restore drill recorded (run one quarterly)</Typography.Text>
+            )}
           </Descriptions.Item>
           {gateways.length > 0 && (
             <Descriptions.Item label="Gateway nodes">

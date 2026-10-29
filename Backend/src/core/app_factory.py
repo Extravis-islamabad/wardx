@@ -31,12 +31,17 @@ from src.services.keys.kek_canary_service import KekCanaryService
 logger = structlog.get_logger(__name__)
 
 
-async def startup(settings: Settings) -> None:
-    # Fail fast on missing keys before touching the database.
-    resolve_jwt_secret(settings)
+def load_key_provider(settings: Settings) -> None:
+    """Unseal: load the KEK (and retired KEKs) into the process's key provider."""
     set_key_provider(
         FileKeyProvider.from_base64(resolve_vault_kek(settings), settings.vault_kek_retired)
     )
+
+
+async def startup(settings: Settings) -> None:
+    # Fail fast on missing keys before touching the database.
+    resolve_jwt_secret(settings)
+    load_key_provider(settings)
     engine = init_engine(settings.database_url, settings.db_pool_size)
     await run_migrations(engine)
     # Refuse to start with a KEK that cannot open the install's canary (HA_DR.md §6).

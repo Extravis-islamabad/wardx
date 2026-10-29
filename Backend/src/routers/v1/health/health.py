@@ -25,6 +25,7 @@ from src.contracts.schemas.responses.health.cluster_responses import (
     LeaderResponse,
     ReplicaResponse,
     ReplicationResponse,
+    RestoreDrillResponse,
 )
 from src.core.config import get_settings
 from src.core.permissions import CLUSTER_VIEW
@@ -74,6 +75,9 @@ def _to_response(dto: ClusterDTO) -> ClusterResponse:
         ],
         gateways=[GatewayNodeResponse(**asdict(g)) for g in dto.gateways],
         gateway_host_keys_consistent=dto.gateway_host_keys_consistent,
+        last_restore_drill=(
+            RestoreDrillResponse(**dto.last_restore_drill) if dto.last_restore_drill else None
+        ),
     )
 
 

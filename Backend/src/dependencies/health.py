@@ -12,6 +12,8 @@ from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
 from src.repositories.health.cluster_repository import ClusterRepository
 from src.repositories.health.health_repository import HealthRepository
+from src.repositories.health.restore_repository import RestoreRepository
+from src.services.backup.restore_service import RestoreService
 from src.services.health.cluster_service import ClusterService
 from src.services.health.health_service import HealthService
 
@@ -45,3 +47,11 @@ async def get_cluster_service(session: SQLSessionDep) -> ClusterService:
 
 
 ClusterServiceDep = Annotated[ClusterService, Depends(get_cluster_service)]
+
+
+def build_restore_service(session: AsyncSession) -> RestoreService:
+    from src.dependencies.vault import build_vault_service
+
+    return RestoreService(
+        RestoreRepository(session), build_audit_service(session), build_vault_service(session)
+    )

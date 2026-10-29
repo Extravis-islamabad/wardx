@@ -59,6 +59,12 @@ class GatewayNodeResponse(BaseModel):
     fresh: bool
 
 
+class RestoreDrillResponse(BaseModel):
+    ran_at: datetime
+    ok: bool
+    restore_point: datetime | None
+
+
 class ClusterResponse(BaseModel):
     node: str
     leader: LeaderResponse | None
@@ -68,3 +74,4 @@ class ClusterResponse(BaseModel):
     conditions: list[ConditionResponse]
     gateways: list[GatewayNodeResponse]
     gateway_host_keys_consistent: bool
+    last_restore_drill: RestoreDrillResponse | None = None

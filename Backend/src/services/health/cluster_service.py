@@ -158,6 +158,7 @@ class ClusterService:
             conditions=await self._repo.conditions(),
             gateways=gateways,
             gateway_host_keys_consistent=len({g.host_key_fingerprint for g in live}) <= 1,
+            last_restore_drill=await self._repo.last_restore_drill(),
         )
 
     # ── Leadership records (the advisory lock decides; these are for people) ──

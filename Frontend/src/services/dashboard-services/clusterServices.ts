@@ -54,6 +54,8 @@ export interface ClusterHealth {
   dr_site_configured: boolean;
   gateways: ClusterGateway[];
   gateway_host_keys_consistent: boolean;
+  /** The latest scripted restore drill (HA_DR.md §7), or null if none was run. */
+  last_restore_drill: { ran_at: string; ok: boolean; restore_point: string | null } | null;
 }
 
 export const clusterService = {

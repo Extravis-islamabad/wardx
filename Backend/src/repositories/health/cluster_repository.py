@@ -76,6 +76,17 @@ class ClusterRepository(BaseRepository):
         )
         return [GatewayNodeDTO(*r) for r in rows.all()]
 
+    async def last_restore_drill(self) -> dict[str, Any] | None:
+        row = (
+            await self._session.execute(
+                text(
+                    "SELECT ran_at, ok, restore_point FROM ha.restore_drills "
+                    "ORDER BY ran_at DESC LIMIT 1"
+                )
+            )
+        ).first()
+        return dict(row._mapping) if row else None
+
     # ── Conditions ──
 
     async def condition(self, kind: str) -> ConditionDTO | None:
