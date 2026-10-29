@@ -8,7 +8,7 @@ import asyncssh
 import pytest
 
 from src.dependencies.sessions import recording_store
-from src.services.recordings.recording_objects import final_key, spool_prefix
+from src.services.session_recordings.recording_objects import final_key, spool_prefix
 from tests.conftest import DEVICE_USER
 from tests.integration.ha.ha_support import execute, rows
 

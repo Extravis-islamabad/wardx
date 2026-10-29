@@ -19,7 +19,7 @@ from src.gateway.bridge import Bridge, alert
 from src.gateway.broker import Broker, GatewayDenied
 from src.gateway.naming import GatewayLogin, parse_login
 from src.gateway.recording_writer import RecordingWriter, upload_leftover_spools
-from src.services.recordings.recording_objects import salvage
+from src.services.session_recordings.recording_objects import salvage
 from src.storage.object_store import build_object_store
 
 logger = structlog.get_logger(__name__)

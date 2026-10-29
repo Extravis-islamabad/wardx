@@ -27,7 +27,7 @@ from src.models import utcnow
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.audit.audit_service import AuditService
 from src.services.keys.tenant_key_service import TenantKeyService
-from src.services.recordings.recording_format import (
+from src.services.session_recordings.recording_format import (
     RecordingIntegrityError,
     decrypt,
     files_key_version_of,

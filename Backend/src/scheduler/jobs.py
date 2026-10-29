@@ -119,7 +119,7 @@ async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
 async def gateway_sweep(settings: Settings | None = None) -> int:
     """End the sessions of gateway nodes whose heartbeat is stale (HA_DR.md §5)."""
     from src.dependencies.sessions import build_gateway_node_service
-    from src.services.recordings.recording_objects import salvage
+    from src.services.session_recordings.recording_objects import salvage
     from src.storage.object_store import build_object_store
 
     settings = settings or get_settings()

@@ -1,7 +1,7 @@
 """Encrypts a session recording as it is written, spools it, and uploads it (HA_DR.md §5).
 
 Plaintext never touches disk: the asciicast is sealed in chunks of at most 64 KiB
-(src/services/recordings/recording_format.py). Each chunk is appended to a local spool file
+(src/services/session_recordings/recording_format.py). Each chunk is appended to a local spool file
 (ciphertext) and uploaded to the object store as ``spool/<session>/<index>`` while the
 session runs; a partly filled chunk is sealed every WARDX_RECORDING_FLUSH_SECONDS so a lost
 node loses at most that much. At session end the final chunk is sealed and the whole object
@@ -20,8 +20,8 @@ from pathlib import Path
 
 import structlog
 
-from src.services.recordings.recording_format import CHUNK_MAX, RecordingEncryptor
-from src.services.recordings.recording_objects import (
+from src.services.session_recordings.recording_format import CHUNK_MAX, RecordingEncryptor
+from src.services.session_recordings.recording_objects import (
     chunk_key,
     final_key,
     header_key,

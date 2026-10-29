@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from src.services.recordings.recording_format import (
+from src.services.session_recordings.recording_format import (
     CHUNK_MAX,
     RecordingEncryptor,
     RecordingIntegrityError,
