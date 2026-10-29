@@ -24,4 +24,6 @@ export enum PERMISSIONS {
   DIRECTORY_MANAGE = 'directory.manage',
   /** Application identities for the credential provider (admin). */
   APPS_MANAGE = 'apps.manage',
+  /** Cluster health: scheduler leader, replication, DR lag, gateway nodes (admin). */
+  CLUSTER_VIEW = 'cluster.view',
 }

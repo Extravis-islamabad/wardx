@@ -4,4 +4,5 @@ export const dashboardKeys = {
   summary: () => ['dashboard', 'summary'] as const,
   attention: () => ['dashboard', 'attention'] as const,
   alerts: () => ['dashboard', 'alerts'] as const,
+  cluster: () => ['dashboard', 'cluster'] as const,
 };

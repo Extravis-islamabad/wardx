@@ -52,9 +52,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await startup(settings)
-        scheduler = None
+        scheduler = elector = None
         if settings.runs_scheduler():
-            scheduler = build_scheduler(settings)
+            from src.scheduler.leader import LeaderElector
+
+            elector = LeaderElector(settings)
+            elector.start()
+            scheduler = build_scheduler(settings, elector)
             scheduler.start()
         logger.info("wardx_started", role=settings.app_role, environment=settings.environment)
         try:
@@ -62,6 +66,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             if scheduler is not None:
                 scheduler.shutdown(wait=False)
+            if elector is not None:
+                await elector.stop()
             await dispose_engine()
 
     app = FastAPI(

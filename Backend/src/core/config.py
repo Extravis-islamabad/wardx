@@ -89,6 +89,41 @@ class Settings(BaseSettings):
     # Failed token attempts allowed per minute, per client_id and per source IP.
     provider_token_failures_per_minute: int = 10
 
+    # ── High availability and DR (docs/phase1/HA_DR.md) ──
+    # This node's name in leadership records and /health/cluster (default: host:pid).
+    node_name: str = ""
+    # How often a scheduler node tries for (or confirms) leadership.
+    leader_interval_seconds: float = 5.0
+    # How often the leader checks replication (degraded sync, DR lag).
+    cluster_check_seconds: int = 15
+    # A synchronous standby is part of this install: alert while none is attached.
+    ha_expect_sync_standby: bool = False
+    # DR site (§6.1). Off: no DR-lag rotation pause, no dr_lag_warning, no DR alert.
+    dr_site_configured: bool = False
+    dr_replica_name: str = ""
+    dr_max_lag_seconds: int = 60
+    # Gateway heartbeats; a node silent for gateway_lost_seconds is lost (§5).
+    gateway_heartbeat_seconds: float = 5.0
+    gateway_lost_seconds: int = 30
+    # Optional: the SHA256 fingerprint every gateway node's host key must have.
+    gateway_host_key_fingerprint: str = ""
+    # Recordings (§5, §5.1): "local" filesystem store or an S3-compatible "s3" store.
+    recording_store: Literal["local", "s3"] = "local"
+    recording_store_dir: str = ""  # local store; default <recording_dir>/store
+    recording_flush_seconds: float = 5.0
+    s3_endpoint: str = ""
+    s3_bucket: str = "wardx-recordings"
+    s3_region: str = ""
+    s3_secure: bool = True
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_secret_key_file: str = ""
+
+    def node(self) -> str:
+        import socket
+
+        return self.node_name or f"{socket.gethostname()}:{os.getpid()}"
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

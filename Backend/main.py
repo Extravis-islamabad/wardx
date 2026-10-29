@@ -18,9 +18,12 @@ app = create_app(settings) if settings.runs_api() else None
 
 async def run_scheduler_only() -> None:
     from src.scheduler.jobs import build_scheduler
+    from src.scheduler.leader import LeaderElector
 
     await startup(settings)
-    scheduler = build_scheduler(settings)
+    elector = LeaderElector(settings)
+    elector.start()
+    scheduler = build_scheduler(settings, elector)
     scheduler.start()
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -28,6 +31,7 @@ async def run_scheduler_only() -> None:
         loop.add_signal_handler(sig, stop.set)
     await stop.wait()
     scheduler.shutdown(wait=False)
+    await elector.stop()
     await dispose_engine()
 
 
@@ -41,4 +45,7 @@ if __name__ == "__main__":
     else:
         import uvicorn
 
-        uvicorn.run("main:app", host="0.0.0.0", port=8000)  # noqa: S104
+        import os
+
+        port = int(os.environ.get("WARDX_API_PORT", "8000"))
+        uvicorn.run("main:app", host="0.0.0.0", port=port)  # noqa: S104

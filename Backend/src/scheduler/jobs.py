@@ -1,10 +1,15 @@
 """Background jobs (APP_ROLE api / scheduler).
 
-Each tick takes a transaction advisory lock and skips if another process holds
-it, so running several schedulers does not double the work.
+With a leader elector (src/scheduler/leader.py, HA_DR.md §4) only the leader runs
+jobs. Each tick still takes its own advisory lock and skips if another process holds
+it, so even a brief overlap during a leadership change does not double the work.
 """
 
 from __future__ import annotations
+
+import functools
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -14,10 +19,25 @@ from src.core.db import session_factory
 from src.core.tenant import current_tenant
 from src.dependencies.access import build_checkout_service
 from src.dependencies.directory import build_directory_sync_service
+from src.dependencies.health import build_cluster_service
 from src.dependencies.rotation import build_rotation_scheduler_service, build_rotation_worker
 from src.errors.exceptions import ConflictError
 
+if TYPE_CHECKING:
+    from src.scheduler.leader import LeaderElector
+
 logger = structlog.get_logger(__name__)
+
+
+async def cluster_check() -> dict[str, Any] | None:
+    """Degraded synchronous replication and DR lag: conditions and alerts (HA_DR.md)."""
+    async with current_tenant().session_factory()() as session:
+        try:
+            return await build_cluster_service(session).check()
+        except Exception:
+            logger.exception("cluster_check_failed")
+            await session.rollback()
+            return None
 
 
 async def expiry_sweep() -> None:
@@ -96,10 +116,32 @@ async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
     return result
 
 
-def build_scheduler(settings: Settings) -> AsyncIOScheduler:
+def leader_only(
+    elector: LeaderElector | None, job: Callable[..., Awaitable[Any]]
+) -> Callable[..., Awaitable[Any]]:
+    """Run ``job`` only while this node is the scheduler leader (always without an elector)."""
+
+    @functools.wraps(job)
+    async def run(*args: Any, **kwargs: Any) -> Any:
+        if elector is not None and not elector.is_leader:
+            return None
+        return await job(*args, **kwargs)
+
+    return run
+
+
+def build_scheduler(settings: Settings, elector: LeaderElector | None = None) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(
-        expiry_sweep,
+        leader_only(elector, cluster_check),
+        "interval",
+        seconds=settings.cluster_check_seconds,
+        id="cluster_check",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        leader_only(elector, expiry_sweep),
         "interval",
         seconds=settings.expiry_sweep_seconds,
         id="expiry_sweep",
@@ -107,7 +149,7 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
         coalesce=True,
     )
     scheduler.add_job(
-        directory_sync_tick,
+        leader_only(elector, directory_sync_tick),
         "interval",
         seconds=60,
         id="directory_sync",
@@ -115,7 +157,7 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
         coalesce=True,
     )
     scheduler.add_job(
-        rotation_tick,
+        leader_only(elector, rotation_tick),
         "interval",
         seconds=settings.rotation_tick_seconds,
         # The settings this scheduler was built with, not whatever get_settings() returns

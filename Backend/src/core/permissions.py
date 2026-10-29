@@ -45,6 +45,8 @@ APPS_MANAGE = "apps.manage"
 # Fetch a credential through the provider API. Held only by application identities
 # (through a token from /provider/token), never by a user, role or grant.
 PROVIDER_FETCH = "provider.fetch"
+# Cluster health: scheduler leader, replication, DR lag, gateway nodes (HA_DR.md). Admin.
+CLUSTER_VIEW = "cluster.view"
 
 _EVERYONE = frozenset({INVENTORY_VIEW, ACCESS_USE, DASHBOARD_VIEW, PROFILE_SELF})
 
@@ -69,6 +71,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[str]] = {
             DASHBOARD_VIEW,
             PROFILE_SELF,
             APPS_MANAGE,
+            CLUSTER_VIEW,
         }
     ),
     Role.APPROVER: _EVERYONE | {ACCESS_APPROVE},

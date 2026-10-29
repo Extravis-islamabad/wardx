@@ -49,6 +49,14 @@ class AlertService:
             }
         )
 
+    async def clear(self, kind: str, object_id: uuid.UUID) -> list[uuid.UUID]:
+        """A condition recovered: the system acknowledges its open alerts of ``kind``
+        (in the caller's transaction; the caller audits the recovery and commits)."""
+        ids = await self._alerts.open_ids_for(kind, object_id)
+        for alert_id in ids:
+            await self._alerts.acknowledge(alert_id, None, utcnow())
+        return ids
+
     async def list(
         self, filters: AlertFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[AlertDTO], int]:
