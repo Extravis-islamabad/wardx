@@ -33,6 +33,7 @@ from src.dependencies.rotation import build_rotation_guard
 from src.dependencies.safes import build_safe_access_service
 from src.dependencies.sessions import (
     build_command_rule_service,
+    build_gateway_node_service,
     build_gateway_session_service,
     build_host_key_service,
 )
@@ -195,6 +196,7 @@ class Broker:
                 mode=mode,
                 command=command,
                 node=self.node,
+                owns_checkout=owns,
             )
             return Grant(
                 session_id=session_id,
@@ -339,6 +341,26 @@ class Broker:
             except AppError:
                 # Already expired, revoked or returned: nothing to close.
                 await session.rollback()
+
+    # ── Node liveness (HA_DR.md §5) ──
+
+    async def register_node(self, fingerprint: str) -> None:
+        """Raises HostKeyConflict when this node's host key is not the cluster's."""
+        async with session_factory()() as session:
+            await build_gateway_node_service(session).register(
+                self.node,
+                fingerprint,
+                expected=self.settings.gateway_host_key_fingerprint,
+                lost_after=self.settings.gateway_lost_seconds,
+            )
+
+    async def heartbeat(self) -> None:
+        async with session_factory()() as session:
+            await build_gateway_node_service(session).heartbeat(self.node)
+
+    async def node_stopped(self) -> None:
+        async with session_factory()() as session:
+            await build_gateway_node_service(session).stopped(self.node)
 
     async def recover_orphans(self) -> int:
         """Sessions left 'active' by a previous run of this gateway node."""

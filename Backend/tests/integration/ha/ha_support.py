@@ -18,6 +18,12 @@ async def scalar(sql: str, **params):
         return (await s.execute(text(sql), params)).scalar()
 
 
+async def execute(sql: str, **params) -> None:
+    async with session_factory()() as s:
+        await s.execute(text(sql), params)
+        await s.commit()
+
+
 async def rows(sql: str, **params):
     async with session_factory()() as s:
         return (await s.execute(text(sql), params)).all()

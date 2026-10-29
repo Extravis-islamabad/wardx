@@ -156,13 +156,15 @@ class GatewaySessionRepository(BaseRepository):
         )
         return [tuple(r) for r in rows.all()]
 
-    async def finish_active(self, session_id: uuid.UUID, values: dict[str, Any]) -> None:
-        """Close the session with ``values`` unless it is already closed."""
-        await self._session.execute(
+    async def end_if_active(self, session_id: uuid.UUID, values: dict[str, Any]) -> bool:
+        """Close the session with ``values`` if it is still active; whether it was."""
+        rows = await self._session.execute(
             update(GatewaySession)
             .where(GatewaySession.id == session_id, GatewaySession.status == "active")
             .values(**values)
+            .returning(GatewaySession.id)
         )
+        return rows.first() is not None
 
     async def fail_active_on_node(self, node: str, now: datetime) -> list[uuid.UUID]:
         """Mark this node's still-active sessions failed; their ids."""

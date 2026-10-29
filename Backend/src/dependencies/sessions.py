@@ -18,8 +18,10 @@ from src.dependencies.database import SQLSessionDep
 from src.repositories.inventory.account_repository import AccountRepository
 from src.repositories.inventory.target_repository import TargetRepository
 from src.repositories.sessions.command_rule_repository import CommandRuleRepository
+from src.repositories.sessions.gateway_node_repository import GatewayNodeRepository
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.sessions.command_rule_service import CommandRuleService
+from src.services.sessions.gateway_node_service import GatewayNodeService
 from src.services.sessions.gateway_session_service import GatewaySessionService
 from src.services.sessions.host_key_service import HostKeyService
 from src.services.sessions.session_service import SessionService
@@ -45,6 +47,17 @@ def build_command_rule_service(session: AsyncSession) -> CommandRuleService:
 
 def build_gateway_session_service(session: AsyncSession) -> GatewaySessionService:
     return GatewaySessionService(GatewaySessionRepository(session), build_audit_service(session))
+
+
+def build_gateway_node_service(session: AsyncSession) -> GatewayNodeService:
+    from src.dependencies.access import build_checkout_service
+
+    return GatewayNodeService(
+        GatewayNodeRepository(session),
+        GatewaySessionRepository(session),
+        build_checkout_service(session),
+        build_audit_service(session),
+    )
 
 
 def build_host_key_service(session: AsyncSession) -> HostKeyService:

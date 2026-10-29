@@ -146,6 +146,9 @@ class ClusterService:
         leader = await self._repo.leader()
         stale_after = timedelta(seconds=max(self._settings.leader_interval_seconds * 3, 15))
         fresh = leader is not None and utcnow() - leader.last_seen <= stale_after
+        lost_after = timedelta(seconds=self._settings.gateway_lost_seconds)
+        gateways = await self._repo.gateway_nodes(utcnow() - lost_after)
+        live = [g for g in gateways if g.fresh]
         return ClusterDTO(
             node=node,
             leader=leader,
@@ -153,6 +156,8 @@ class ClusterService:
             replication=replication,
             dr=await self.dr(replication),
             conditions=await self._repo.conditions(),
+            gateways=gateways,
+            gateway_host_keys_consistent=len({g.host_key_fingerprint for g in live}) <= 1,
         )
 
     # ── Leadership records (the advisory lock decides; these are for people) ──

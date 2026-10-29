@@ -9,7 +9,12 @@ from typing import Any
 
 from sqlalchemy import text
 
-from src.contracts.dto.health.cluster_dto import ConditionDTO, LeaderDTO, ReplicaDTO
+from src.contracts.dto.health.cluster_dto import (
+    ConditionDTO,
+    GatewayNodeDTO,
+    LeaderDTO,
+    ReplicaDTO,
+)
 from src.repositories.base import BaseRepository
 
 
@@ -59,6 +64,17 @@ class ClusterRepository(BaseRepository):
             )
         )
         return [ReplicaDTO(*r) for r in rows.all()]
+
+    async def gateway_nodes(self, fresh_after: datetime) -> list[GatewayNodeDTO]:
+        rows = await self._session.execute(
+            text(
+                "SELECT node, started_at, last_seen, host_key_fingerprint, stopped_at, "
+                "(stopped_at IS NULL AND last_seen >= :f) AS fresh "
+                "FROM ha.gateway_nodes ORDER BY node"
+            ),
+            {"f": fresh_after},
+        )
+        return [GatewayNodeDTO(*r) for r in rows.all()]
 
     # ── Conditions ──
 

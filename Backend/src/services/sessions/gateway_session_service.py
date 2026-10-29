@@ -32,6 +32,7 @@ class GatewaySessionService:
         mode: str,
         command: str | None,
         node: str,
+        owns_checkout: bool = False,
     ) -> uuid.UUID:
         """Record a session starting, with the credential injected into it."""
         session_id = await self._sessions.create(
@@ -48,6 +49,7 @@ class GatewaySessionService:
                 "exec_command": command,
                 "client_ip": actor.source_ip,
                 "gateway_node": node,
+                "owns_checkout": owns_checkout,
                 "status": "active",
                 "started_at": utcnow(),
             }
@@ -127,7 +129,7 @@ class GatewaySessionService:
         bytes_from_target: int,
         bytes_from_user: int,
     ) -> None:
-        await self._sessions.finish_active(
+        ended = await self._sessions.end_if_active(
             session_id,
             {
                 "status": status,
@@ -140,6 +142,11 @@ class GatewaySessionService:
                 "bytes_from_user": bytes_from_user,
             },
         )
+        if not ended:
+            # Already ended elsewhere (a lost-node sweep while this node was cut off):
+            # the first end stands and is the one audited.
+            await self._sessions.rollback()
+            return
         await self._audit.record(
             actor,
             "session.end",

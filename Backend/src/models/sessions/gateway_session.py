@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -51,5 +51,7 @@ class GatewaySession(Base):
     bytes_from_user: Mapped[int] = mapped_column(BigInteger, default=0)
     commands_count: Mapped[int] = mapped_column(Integer, default=0)
     blocked_count: Mapped[int] = mapped_column(Integer, default=0)
+    # The session opened its own check-out, closed again when the session ends.
+    owns_checkout: Mapped[bool] = mapped_column(Boolean, default=False)
 
     user: Mapped[User] = relationship(foreign_keys=[user_id], lazy="joined", innerjoin=True)

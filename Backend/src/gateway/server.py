@@ -136,6 +136,8 @@ class Gateway:
         self.bridges: set[Bridge] = set()
         self.server: asyncssh.SSHAcceptor | None = None
         self._watcher: asyncio.Task | None = None
+        self._heartbeat: asyncio.Task | None = None
+        self.host_key_fingerprint = ""
 
     async def start(self) -> None:
         self.recording_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -143,6 +145,9 @@ class Gateway:
         if recovered:
             logger.warning("gateway_orphan_sessions_closed", count=recovered)
         host_key = load_host_key(resolve_gateway_host_key_file(self.settings))
+        self.host_key_fingerprint = host_key.get_fingerprint("sha256")
+        # Every node must present the same host key (HA_DR.md §5): refuse before listening.
+        await self.broker.register_node(self.host_key_fingerprint)
         self.server = await asyncssh.create_server(
             lambda: _Listener(self),
             self.settings.gateway_listen_host,
@@ -158,6 +163,7 @@ class Gateway:
             login_timeout=60,
         )
         self._watcher = asyncio.create_task(self._watch())
+        self._heartbeat = asyncio.create_task(self._beat())
         logger.info(
             "gateway_listening",
             node=self.node,
@@ -170,11 +176,23 @@ class Gateway:
         return self.server.get_port() if self.server else 0
 
     async def stop(self) -> None:
-        if self._watcher:
-            self._watcher.cancel()
+        for task in (self._watcher, self._heartbeat):
+            if task:
+                task.cancel()
         if self.server:
             self.server.close()
             await self.server.wait_closed()
+            with contextlib.suppress(Exception):
+                await self.broker.node_stopped()
+
+    async def _beat(self) -> None:
+        """Heartbeat: a node silent for WARDX_GATEWAY_LOST_SECONDS is treated as lost."""
+        while True:
+            await asyncio.sleep(self.settings.gateway_heartbeat_seconds)
+            try:
+                await self.broker.heartbeat()
+            except Exception:
+                logger.warning("gateway_heartbeat_failed", node=self.node)
 
     async def _handle(self, process: asyncssh.SSHServerProcess) -> None:
         conn = process.channel.get_connection()

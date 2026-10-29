@@ -116,6 +116,25 @@ async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
     return result
 
 
+async def gateway_sweep(settings: Settings | None = None) -> int:
+    """End the sessions of gateway nodes whose heartbeat is stale (HA_DR.md §5)."""
+    from src.dependencies.sessions import build_gateway_node_service
+
+    settings = settings or get_settings()
+    async with current_tenant().session_factory()() as session:
+        try:
+            ended = await build_gateway_node_service(session).sweep_lost(
+                settings.gateway_lost_seconds
+            )
+        except Exception:
+            logger.exception("gateway_sweep_failed")
+            await session.rollback()
+            return 0
+    if ended:
+        logger.warning("gateway_sweep", ended=ended)
+    return ended
+
+
 def leader_only(
     elector: LeaderElector | None, job: Callable[..., Awaitable[Any]]
 ) -> Callable[..., Awaitable[Any]]:
@@ -137,6 +156,15 @@ def build_scheduler(settings: Settings, elector: LeaderElector | None = None) ->
         "interval",
         seconds=settings.cluster_check_seconds,
         id="cluster_check",
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        leader_only(elector, gateway_sweep),
+        "interval",
+        seconds=max(settings.gateway_heartbeat_seconds, 2),
+        kwargs={"settings": settings},
+        id="gateway_sweep",
         max_instances=1,
         coalesce=True,
     )
