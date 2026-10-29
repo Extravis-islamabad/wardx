@@ -6,6 +6,7 @@ gateway, scheduler jobs); the ``get_*`` providers use the same wiring.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import get_settings
 from src.dependencies.audit import build_audit_service
 from src.dependencies.database import SQLSessionDep
+from src.dependencies.keys import build_tenant_key_service
 from src.repositories.inventory.account_repository import AccountRepository
 from src.repositories.inventory.target_repository import TargetRepository
 from src.repositories.sessions.command_rule_repository import CommandRuleRepository
@@ -26,6 +28,7 @@ from src.services.sessions.gateway_session_service import GatewaySessionService
 from src.services.sessions.host_key_service import HostKeyService
 from src.services.sessions.session_service import SessionService
 from src.services.sessions.tls_cert_service import TlsCertService
+from src.storage.object_store import ObjectStore, build_object_store
 
 
 def build_session_service(session: AsyncSession) -> SessionService:
@@ -33,7 +36,15 @@ def build_session_service(session: AsyncSession) -> SessionService:
         GatewaySessionRepository(session),
         build_audit_service(session),
         Path(get_settings().recording_dir),
+        recording_store(),
+        build_tenant_key_service(session),
     )
+
+
+@lru_cache
+def recording_store() -> ObjectStore:
+    """One object store client per process."""
+    return build_object_store(get_settings())
 
 
 def build_command_rule_service(session: AsyncSession) -> CommandRuleService:

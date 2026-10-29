@@ -14,7 +14,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from src.contracts.dto.sessions.gateway_session_dto import GatewaySessionDTO, SessionCommandDTO
 from src.contracts.schemas.requests.common import PageParams
@@ -61,6 +61,8 @@ def _to_response(dto: GatewaySessionDTO) -> SessionResponse:
         has_recording=dto.has_recording,
         recording_sha256=dto.recording_sha256,
         recording_bytes=dto.recording_bytes,
+        recording_encrypted=dto.recording_encrypted,
+        recording_incomplete=dto.recording_incomplete,
         bytes_from_target=dto.bytes_from_target,
         commands_count=dto.commands_count,
         blocked_count=dto.blocked_count,
@@ -140,17 +142,24 @@ async def session_commands(
     "/{session_id}/recording",
     dependencies=[Depends(require_permission(ACCESS_USE))],
     summary="Download a session recording (asciicast)",
-    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE, **NOT_FOUND_RESPONSE},
+    responses={
+        **UNAUTHORIZED_RESPONSE,
+        **FORBIDDEN_RESPONSE,
+        **NOT_FOUND_RESPONSE,
+        **CONFLICT_RESPONSE,
+    },
 )
 async def session_recording(
     session_id: uuid.UUID, service: SessionServiceDep, actor: ActorDep
-) -> FileResponse:
-    path, verified = await service.recording(actor, session_id)
-    return FileResponse(
-        path,
+) -> Response:
+    view = await service.recording(actor, session_id)
+    return Response(
+        view.data,
         media_type="application/x-asciicast",
         headers={
-            "X-WardX-Recording-Verified": "true" if verified else "false",
+            "X-WardX-Recording-Verified": "true" if view.verified else "false",
+            "X-WardX-Recording-Incomplete": "true" if view.incomplete else "false",
+            "X-WardX-Recording-Encrypted": "true" if view.encrypted else "false",
             "Cache-Control": "no-store",
         },
     )

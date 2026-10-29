@@ -2,6 +2,8 @@
 import { apiClient } from '@/lib/apiClient';
 import type { ApiResponse, PageQuery, Paginated } from '@/types/api';
 import {
+  RECORDING_ENCRYPTED_HEADER,
+  RECORDING_INCOMPLETE_HEADER,
   RECORDING_VERIFIED_HEADER,
   type CommandVerdict,
   type SessionMode,
@@ -30,6 +32,8 @@ export interface GatewaySession {
   has_recording: boolean;
   recording_sha256: string | null;
   recording_bytes: number | null;
+  recording_encrypted: boolean;
+  recording_incomplete: boolean;
   bytes_from_target: number;
   commands_count: number;
   blocked_count: number;
@@ -53,6 +57,10 @@ export interface GatewayInfo {
 export interface SessionRecording {
   text: string;
   verified: boolean;
+  /** Cut off by a lost gateway node: no final chunk and no final hash. */
+  incomplete: boolean;
+  /** Stored encrypted (false only for a legacy recording not yet migrated). */
+  encrypted: boolean;
 }
 
 const BASE = 'sessions';
@@ -81,7 +89,12 @@ export const sessionsService = {
       responseType: 'text',
       skipErrorNotify: true,
     });
-    return { text: r.data, verified: r.headers[RECORDING_VERIFIED_HEADER] === 'true' };
+    return {
+      text: r.data,
+      verified: r.headers[RECORDING_VERIFIED_HEADER] === 'true',
+      incomplete: r.headers[RECORDING_INCOMPLETE_HEADER] === 'true',
+      encrypted: r.headers[RECORDING_ENCRYPTED_HEADER] === 'true',
+    };
   },
 
   async terminate(id: string): Promise<ApiResponse<GatewaySession>> {

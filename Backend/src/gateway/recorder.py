@@ -1,7 +1,9 @@
 """Session recording in asciicast v2 (asciinema), hashed while it is written.
 
-The SHA-256 is stored on the session row and in the audit chain's
-``session.end`` event, so a recording edited later no longer matches.
+The SHA-256 of the plaintext is stored on the session row and in the audit chain's
+``session.end`` event, so a recording edited later no longer matches. The lines go to a
+sink: the gateway's RecordingWriter, which encrypts them before anything is stored
+(HA_DR.md §5.1).
 """
 
 from __future__ import annotations
@@ -9,19 +11,20 @@ from __future__ import annotations
 import codecs
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
+from typing import Protocol
+
+
+class Sink(Protocol):
+    def write(self, data: bytes) -> object: ...
 
 
 class AsciicastRecorder:
     def __init__(
-        self, path: Path, *, width: int, height: int, term: str | None, title: str
+        self, sink: Sink, *, width: int, height: int, term: str | None, title: str
     ) -> None:
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        self.path = path
-        self._fh = os.fdopen(fd, "wb")
+        self._fh = sink
         self._hash = hashlib.sha256()
         self._size = 0
         self._start = time.monotonic()
@@ -62,7 +65,6 @@ class AsciicastRecorder:
         tail = self._decoder.decode(b"", final=True)
         if tail:
             self._write([round(self.elapsed, 6), "o", tail])
-        self._fh.close()
         return self._hash.hexdigest(), self._size
 
 

@@ -50,6 +50,11 @@ export function SessionDrawer({ session, onClose }: { session: GatewaySession | 
               {session.client_ip ?? '—'} via {session.gateway_node ?? '—'}
             </Descriptions.Item>
             <Descriptions.Item label="Target">{session.target_address}</Descriptions.Item>
+            {session.recording_incomplete && (
+              <Descriptions.Item label="Recording" span={2}>
+                <StatusTag label="incomplete (gateway node lost)" variant={StatusVariant.WARNING} />
+              </Descriptions.Item>
+            )}
             {session.recording_sha256 && (
               <Descriptions.Item label="Recording SHA-256" span={2}>
                 <Typography.Text code copyable className="text-xs">

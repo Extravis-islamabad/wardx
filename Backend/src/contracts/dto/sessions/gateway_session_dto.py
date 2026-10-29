@@ -34,10 +34,16 @@ class GatewaySessionDTO:
     bytes_from_target: int
     commands_count: int
     blocked_count: int
+    recording_key: str | None = None
+    recording_encrypted: bool = False
+    recording_incomplete: bool = False
+    recording_ciphertext_sha256: str | None = None
+    recording_migrated_at: datetime | None = None
+    recording_original_removed_at: datetime | None = None
 
     @property
     def has_recording(self) -> bool:
-        return self.recording_path is not None
+        return self.recording_key is not None or self.recording_path is not None
 
 
 @dataclass(frozen=True)

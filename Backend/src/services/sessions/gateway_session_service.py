@@ -11,7 +11,7 @@ from datetime import datetime
 
 from src.contracts.dto.inventory.account_dto import AccountDTO
 from src.contracts.dto.inventory.target_dto import TargetDTO
-from src.core.context import SYSTEM_ACTOR, Actor
+from src.core.context import Actor
 from src.models import utcnow
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
 from src.services.audit.audit_service import AuditService
@@ -128,6 +128,7 @@ class GatewaySessionService:
         recording_bytes: int | None,
         bytes_from_target: int,
         bytes_from_user: int,
+        recording: dict | None = None,
     ) -> None:
         ended = await self._sessions.end_if_active(
             session_id,
@@ -140,6 +141,7 @@ class GatewaySessionService:
                 "recording_bytes": recording_bytes,
                 "bytes_from_target": bytes_from_target,
                 "bytes_from_user": bytes_from_user,
+                **(recording or {}),
             },
         )
         if not ended:
@@ -157,22 +159,8 @@ class GatewaySessionService:
                 "status": status,
                 "reason": reason,
                 "recording_sha256": recording_sha256,
+                "recording_key": (recording or {}).get("recording_key"),
                 "bytes_from_target": bytes_from_target,
             },
         )
         await self._sessions.commit()
-
-    async def recover_orphans(self, node: str) -> int:
-        """Fail sessions left 'active' by a previous run of this gateway node."""
-        ids = await self._sessions.fail_active_on_node(node, utcnow())
-        for sid in ids:
-            await self._audit.record(
-                SYSTEM_ACTOR,
-                "session.end",
-                object_type="session",
-                object_id=sid,
-                outcome="failure",
-                details={"status": "failed", "reason": "Gateway restarted"},
-            )
-        await self._sessions.commit()
-        return len(ids)

@@ -30,6 +30,7 @@ from src.services.audit.audit_service import AuditService
 logger = structlog.get_logger(__name__)
 
 NODE_LOST_REASON = "Gateway node lost"
+RESTARTED_REASON = "Gateway restarted"
 
 # Recording fields for a session cut off by a node loss (set by the recordings module).
 Salvage = Callable[[LostSessionDTO], Awaitable[dict[str, Any]]]
@@ -93,15 +94,27 @@ class GatewayNodeService:
     async def sweep_lost(self, lost_after: int, salvage: Salvage | None = None) -> int:
         """End the sessions of nodes silent for ``lost_after`` seconds. One unit of work
         per session; a session another sweeper already ended is skipped."""
+        cutoff = utcnow() - timedelta(seconds=lost_after)
+        lost = await self._nodes.lost_sessions(cutoff)
+        return await self._end(lost, "terminated", NODE_LOST_REASON, salvage)
+
+    async def recover_node(self, node: str, salvage: Salvage | None = None) -> int:
+        """At gateway start: sessions this node's previous run left active."""
+        left = await self._nodes.active_on_node(node)
+        return await self._end(left, "failed", RESTARTED_REASON, salvage)
+
+    async def _end(
+        self, sessions: list[LostSessionDTO], status: str, reason: str, salvage: Salvage | None
+    ) -> int:
         ended = 0
-        for lost in await self._nodes.lost_sessions(utcnow() - timedelta(seconds=lost_after)):
-            recording = await salvage(lost) if salvage else {}
-            values = {
-                "status": "terminated",
-                "ended_at": utcnow(),
-                "close_reason": NODE_LOST_REASON,
-                **recording,
-            }
+        for lost in sessions:
+            recording: dict[str, Any] = {}
+            if salvage is not None:
+                try:
+                    recording = await salvage(lost)
+                except Exception:
+                    logger.exception("recording_salvage_failed", session_id=str(lost.id))
+            values = {"status": status, "ended_at": utcnow(), "close_reason": reason, **recording}
             if not await self._sessions.end_if_active(lost.id, values):
                 await self._sessions.rollback()
                 continue
@@ -112,16 +125,17 @@ class GatewayNodeService:
                 object_id=lost.id,
                 outcome="failure",
                 details={
-                    "status": "terminated",
-                    "reason": NODE_LOST_REASON,
+                    "status": status,
+                    "reason": reason,
                     "gateway": lost.node,
+                    "recording_key": recording.get("recording_key"),
                     "recording_incomplete": bool(recording.get("recording_incomplete")),
                     "recording_sha256": None,
                 },
             )
             await self._sessions.commit()
             ended += 1
-            logger.warning("gateway_session_node_lost", session_id=str(lost.id), node=lost.node)
+            logger.warning("gateway_session_ended", session_id=str(lost.id), reason=reason)
             if lost.owns_checkout and lost.checkout_id is not None:
                 await self._close_checkout(lost)
         return ended

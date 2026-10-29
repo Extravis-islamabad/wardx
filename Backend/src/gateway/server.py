@@ -18,6 +18,9 @@ from src.errors.exceptions import AppError
 from src.gateway.bridge import Bridge, alert
 from src.gateway.broker import Broker, GatewayDenied
 from src.gateway.naming import GatewayLogin, parse_login
+from src.gateway.recording_writer import RecordingWriter, upload_leftover_spools
+from src.services.recordings.recording_objects import salvage
+from src.storage.object_store import build_object_store
 
 logger = structlog.get_logger(__name__)
 
@@ -133,6 +136,8 @@ class Gateway:
         self.node = settings.gateway_node or socket.gethostname()
         self.broker = Broker(settings, self.node)
         self.recording_dir = Path(settings.recording_dir).resolve()
+        self.spool_dir = self.recording_dir / "spool"
+        self.store = build_object_store(settings)
         self.bridges: set[Bridge] = set()
         self.server: asyncssh.SSHAcceptor | None = None
         self._watcher: asyncio.Task | None = None
@@ -141,7 +146,11 @@ class Gateway:
 
     async def start(self) -> None:
         self.recording_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-        recovered = await self.broker.recover_orphans()
+        # Finished uploads that failed last time, then this node's orphaned sessions.
+        uploaded = await upload_leftover_spools(self.store, self.spool_dir)
+        if uploaded:
+            logger.warning("gateway_leftover_recordings_uploaded", count=uploaded)
+        recovered = await self.broker.recover_orphans(self._salvage)
         if recovered:
             logger.warning("gateway_orphan_sessions_closed", count=recovered)
         host_key = load_host_key(resolve_gateway_host_key_file(self.settings))
@@ -185,6 +194,20 @@ class Gateway:
             with contextlib.suppress(Exception):
                 await self.broker.node_stopped()
 
+    async def open_recording(self, grant) -> RecordingWriter:
+        version, key = await self.broker.files_key()
+        return RecordingWriter(
+            grant.session_id,
+            files_key_version=version,
+            files_key=key,
+            store=self.store,
+            spool_dir=self.spool_dir,
+            flush_seconds=self.settings.recording_flush_seconds,
+        )
+
+    async def _salvage(self, lost) -> dict:
+        return await salvage(self.store, lost.id)
+
     async def _beat(self) -> None:
         """Heartbeat: a node silent for WARDX_GATEWAY_LOST_SECONDS is treated as lost."""
         while True:
@@ -219,7 +242,7 @@ class Gateway:
             grant,
             process,
             self.broker,
-            recording_dir=self.recording_dir,
+            open_recording=self.open_recording,
             connect_timeout=self.settings.target_connect_timeout_seconds,
         )
         self.bridges.add(bridge)

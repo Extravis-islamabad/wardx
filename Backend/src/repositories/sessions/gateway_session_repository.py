@@ -44,6 +44,12 @@ def _to_dto(row: GatewaySession) -> GatewaySessionDTO:
         bytes_from_target=row.bytes_from_target,
         commands_count=row.commands_count,
         blocked_count=row.blocked_count,
+        recording_key=row.recording_key,
+        recording_encrypted=row.recording_encrypted,
+        recording_incomplete=row.recording_incomplete,
+        recording_ciphertext_sha256=row.recording_ciphertext_sha256,
+        recording_migrated_at=row.recording_migrated_at,
+        recording_original_removed_at=row.recording_original_removed_at,
     )
 
 
@@ -165,16 +171,6 @@ class GatewaySessionRepository(BaseRepository):
             .returning(GatewaySession.id)
         )
         return rows.first() is not None
-
-    async def fail_active_on_node(self, node: str, now: datetime) -> list[uuid.UUID]:
-        """Mark this node's still-active sessions failed; their ids."""
-        rows = await self._session.execute(
-            update(GatewaySession)
-            .where(GatewaySession.status == "active", GatewaySession.gateway_node == node)
-            .values(status="failed", ended_at=now, close_reason="Gateway restarted")
-            .returning(GatewaySession.id, GatewaySession.checkout_id, GatewaySession.user_id)
-        )
-        return [sid for sid, _checkout_id, _user_id in rows.all()]
 
     async def request_kill_for_user(
         self, user_id: uuid.UUID, now: datetime, reason: str

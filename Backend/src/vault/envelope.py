@@ -63,3 +63,37 @@ async def open_sealed(provider: KeyProvider, sealed: SealedSecret, aad: bytes) -
         return AESGCM(dek).decrypt(sealed.nonce, sealed.ciphertext, aad)
     except InvalidTag as exc:
         raise VaultIntegrityError("secret failed authentication") from exc
+
+
+# ── Streaming data encryption (session recordings, HA_DR.md §5.1) ──
+# Data keys only: the caller passes a per-object DEK, or a tenant purpose key from
+# TenantKeyService to wrap that DEK. Key-encryption keys never reach this module.
+
+DATA_KEY_BYTES = 32
+GCM_TAG_BYTES = 16
+
+
+def new_data_key() -> bytes:
+    return AESGCM.generate_key(bit_length=DATA_KEY_BYTES * 8)
+
+
+def aead_seal(key: bytes, nonce: bytes, plaintext: bytes, aad: bytes) -> bytes:
+    """AES-256-GCM: ciphertext with its 16-byte tag appended."""
+    return AESGCM(key).encrypt(nonce, plaintext, aad)
+
+
+def aead_open(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes) -> bytes:
+    try:
+        return AESGCM(key).decrypt(nonce, ciphertext, aad)
+    except InvalidTag as exc:
+        raise VaultIntegrityError("data failed authentication") from exc
+
+
+def wrap_data_key(purpose_key: bytes, dek: bytes, aad: bytes) -> tuple[bytes, bytes]:
+    """Wrap a DEK under a tenant purpose key; returns (nonce, wrapped)."""
+    nonce = os.urandom(_NONCE_BYTES)
+    return nonce, aead_seal(purpose_key, nonce, dek, _DEK_AAD_PREFIX + aad)
+
+
+def unwrap_data_key(purpose_key: bytes, nonce: bytes, wrapped: bytes, aad: bytes) -> bytes:
+    return aead_open(purpose_key, nonce, wrapped, _DEK_AAD_PREFIX + aad)

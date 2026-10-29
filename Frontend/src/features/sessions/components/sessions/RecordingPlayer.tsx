@@ -28,6 +28,15 @@ export function RecordingPlayer({ sessionId, onVerified }: { sessionId: string; 
     <>
       {recording.isLoading && <Spin />}
       {recording.isError && <Alert type="error" showIcon title={errorMessage(recording.error)} />}
+      {data?.incomplete && (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-2"
+          title="Incomplete recording"
+          description="The gateway node holding this session was lost. The replay ends at the last chunk that reached storage; this is not the full session."
+        />
+      )}
       <div ref={ref} />
     </>
   );

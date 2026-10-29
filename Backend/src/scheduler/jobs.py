@@ -119,12 +119,19 @@ async def rotation_tick(settings: Settings | None = None) -> dict[str, int]:
 async def gateway_sweep(settings: Settings | None = None) -> int:
     """End the sessions of gateway nodes whose heartbeat is stale (HA_DR.md §5)."""
     from src.dependencies.sessions import build_gateway_node_service
+    from src.services.recordings.recording_objects import salvage
+    from src.storage.object_store import build_object_store
 
     settings = settings or get_settings()
+    store = build_object_store(settings)
+
+    async def _salvage(lost) -> dict:
+        return await salvage(store, lost.id)
+
     async with current_tenant().session_factory()() as session:
         try:
             ended = await build_gateway_node_service(session).sweep_lost(
-                settings.gateway_lost_seconds
+                settings.gateway_lost_seconds, _salvage
             )
         except Exception:
             logger.exception("gateway_sweep_failed")

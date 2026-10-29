@@ -53,5 +53,12 @@ class GatewaySession(Base):
     blocked_count: Mapped[int] = mapped_column(Integer, default=0)
     # The session opened its own check-out, closed again when the session ends.
     owns_checkout: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Encrypted recording in the object store (HA_DR.md §5.1, migration 024).
+    recording_key: Mapped[str | None] = mapped_column(Text)
+    recording_encrypted: Mapped[bool] = mapped_column(Boolean, default=False)
+    recording_incomplete: Mapped[bool] = mapped_column(Boolean, default=False)
+    recording_ciphertext_sha256: Mapped[str | None] = mapped_column(String(64))
+    recording_migrated_at: Mapped[datetime | None] = mapped_column(TZ)
+    recording_original_removed_at: Mapped[datetime | None] = mapped_column(TZ)
 
     user: Mapped[User] = relationship(foreign_keys=[user_id], lazy="joined", innerjoin=True)

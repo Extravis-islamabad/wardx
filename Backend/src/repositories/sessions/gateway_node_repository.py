@@ -58,6 +58,19 @@ class GatewayNodeRepository(BaseRepository):
         )
         return [GatewayNodeDTO(*r) for r in rows.all()]
 
+    async def active_on_node(self, node: str, limit: int = 500) -> list[LostSessionDTO]:
+        """This node's sessions still marked active (left by its previous run)."""
+        rows = await self._session.execute(
+            text(
+                "SELECT s.id, s.gateway_node, s.user_id, u.username, u.role, s.checkout_id, "
+                "s.owns_checkout FROM access.sessions s JOIN iam.users u ON u.id = s.user_id "
+                "WHERE s.status = 'active' AND s.gateway_node = :n "
+                "ORDER BY s.started_at LIMIT :lim"
+            ),
+            {"n": node, "lim": limit},
+        )
+        return [LostSessionDTO(*r) for r in rows.all()]
+
     async def lost_sessions(self, cutoff: datetime, limit: int = 200) -> list[LostSessionDTO]:
         """Active sessions whose node stopped heartbeating before ``cutoff`` (or never
         registered, for a session older than ``cutoff``)."""

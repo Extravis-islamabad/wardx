@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from pathlib import Path
+from collections.abc import Awaitable, Callable
 
 import asyncssh
 import structlog
@@ -12,6 +12,7 @@ import structlog
 from src.gateway.broker import Broker, CloseOrder, Grant
 from src.gateway.policy import Bell, Forward, LineTracker, Submit
 from src.gateway.recorder import AsciicastRecorder
+from src.gateway.recording_writer import RecordingWriter
 from src.gateway.target import TargetError, connect
 
 logger = structlog.get_logger(__name__)
@@ -34,13 +35,14 @@ class Bridge:
         user: asyncssh.SSHServerProcess,
         broker: Broker,
         *,
-        recording_dir: Path,
+        open_recording: Callable[[Grant], Awaitable[RecordingWriter]],
         connect_timeout: float,
     ) -> None:
         self.grant = grant
         self.user = user
         self.broker = broker
-        self.recording_dir = recording_dir
+        self.open_recording = open_recording
+        self.writer: RecordingWriter | None = None
         self.connect_timeout = connect_timeout
         self.tracker = LineTracker(restricted=grant.policy.restricted)
         self.recorder: AsciicastRecorder | None = None
@@ -66,8 +68,10 @@ class Bridge:
         width, height, *_ = self.user.get_terminal_size()
         command = self.user.command
         try:
+            # No recording, no session: a failure here ends it before any target contact.
+            self.writer = await self.open_recording(self.grant)
             self.recorder = AsciicastRecorder(
-                self.recording_dir / f"{self.grant.session_id}.cast",
+                self.writer,
                 width=width or 80,
                 height=height or 24,
                 term=term,
@@ -212,20 +216,31 @@ class Bridge:
     async def _close(self, status: str, reason: str, exit_status: int) -> None:
         if self.target_conn is not None:
             self.target_conn.close()
-        sha256 = size = path = None
+        sha256 = size = recording = None
         if self.recorder is not None:
             sha256, size = self.recorder.close()
-            path = str(self.recorder.path)
+        if self.writer is not None:
+            try:
+                stored = await self.writer.close()
+                recording = {
+                    "recording_key": stored.key,
+                    "recording_encrypted": True,
+                    "recording_incomplete": False,
+                    "recording_ciphertext_sha256": stored.ciphertext_sha256,
+                }
+            except Exception:
+                logger.exception("recording_close_failed", session_id=str(self.grant.session_id))
         try:
             await self.broker.finish(
                 self.grant,
                 status=status,
                 reason=reason,
-                recording_path=path,
-                recording_sha256=sha256,
-                recording_bytes=size,
+                recording_path=None,
+                recording_sha256=sha256 if recording else None,
+                recording_bytes=size if recording else None,
                 bytes_from_target=self.bytes_from_target,
                 bytes_from_user=self.bytes_from_user,
+                recording=recording,
             )
         except Exception:
             logger.exception("gateway_finish_failed", session_id=str(self.grant.session_id))

@@ -1,3 +1,4 @@
+import io
 import json
 
 import pytest
@@ -124,12 +125,14 @@ def test_login_name_forms():
 
 
 def test_recording_is_valid_asciicast_and_hash_matches_file(tmp_path):
-    rec = AsciicastRecorder(tmp_path / "s.cast", width=100, height=30, term="xterm", title="t")
+    sink = io.BytesIO()
+    rec = AsciicastRecorder(sink, width=100, height=30, term="xterm", title="t")
     rec.output("héllo".encode()[:2])  # split UTF-8 sequence
     rec.output("héllo".encode()[2:])
     rec.resize(120, 40)
     rec.marker("blocked: reload")
     sha, size = rec.close()
+    (tmp_path / "s.cast").write_bytes(sink.getvalue())
     lines = (tmp_path / "s.cast").read_text().splitlines()
     header = json.loads(lines[0])
     assert header["version"] == 2 and header["width"] == 100
@@ -138,7 +141,6 @@ def test_recording_is_valid_asciicast_and_hash_matches_file(tmp_path):
     assert [e[1] for e in events][-2:] == ["r", "m"]
     assert sha == file_sha256(tmp_path / "s.cast")
     assert size == (tmp_path / "s.cast").stat().st_size
-    assert oct((tmp_path / "s.cast").stat().st_mode & 0o777) == "0o600"
 
 
 def test_pinned_rsa_key_offers_sha2_signatures_first():

@@ -25,10 +25,11 @@ from src.contracts.dto.sessions.command_rule_dto import RuleScopeDTO
 from src.core.config import Settings
 from src.core.context import Actor
 from src.core.db import session_factory
-from src.core.enums import CheckoutStatus, Protocol, Role, SafePermission
+from src.core.enums import CheckoutStatus, KeyPurpose, Protocol, Role, SafePermission
 from src.dependencies.access import build_access_request_service, build_checkout_service
 from src.dependencies.identity import build_auth_service, build_mfa_service
 from src.dependencies.inventory import build_account_service, build_target_service
+from src.dependencies.keys import build_tenant_key_service
 from src.dependencies.rotation import build_rotation_guard
 from src.dependencies.safes import build_safe_access_service
 from src.dependencies.sessions import (
@@ -318,6 +319,7 @@ class Broker:
         recording_bytes: int | None,
         bytes_from_target: int,
         bytes_from_user: int,
+        recording: dict | None = None,
     ) -> None:
         async with session_factory()() as session:
             await build_gateway_session_service(session).finish(
@@ -330,6 +332,7 @@ class Broker:
                 recording_bytes=recording_bytes,
                 bytes_from_target=bytes_from_target,
                 bytes_from_user=bytes_from_user,
+                recording=recording,
             )
         if grant.owns_checkout:
             await self._close_checkout(grant.checkout_id, grant.actor)
@@ -362,8 +365,13 @@ class Broker:
         async with session_factory()() as session:
             await build_gateway_node_service(session).stopped(self.node)
 
-    async def recover_orphans(self) -> int:
-        """Sessions left 'active' by a previous run of this gateway node."""
+    async def recover_orphans(self, salvage) -> int:
+        """Sessions left 'active' by a previous run of this gateway node: ended as failed,
+        their partial recordings salvaged, their own check-outs closed."""
         async with session_factory()() as session:
-            # Their check-outs keep their own expiry; the sweeper closes them.
-            return await build_gateway_session_service(session).recover_orphans(self.node)
+            return await build_gateway_node_service(session).recover_node(self.node, salvage)
+
+    async def files_key(self) -> tuple[int, bytes]:
+        """The tenant's active ``files`` key (version, key) for recording encryption."""
+        async with session_factory()() as session:
+            return await build_tenant_key_service(session).active(KeyPurpose.FILES)

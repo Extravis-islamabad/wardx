@@ -30,6 +30,8 @@ class SessionResponse(BaseModel):
     has_recording: bool
     recording_sha256: str | None
     recording_bytes: int | None
+    recording_encrypted: bool = False
+    recording_incomplete: bool = False
     bytes_from_target: int
     commands_count: int
     blocked_count: int

@@ -60,7 +60,7 @@ async def test_nodes_heartbeat_and_share_one_host_key(gateway, lab, tmp_path):
 
 
 async def test_lost_node_sessions_terminated_and_checkouts_closed(gateway, lab, client, admin):
-    node = _node(gateway, "gw-lost")
+    node = _node(gateway, "gw-lost", recording_flush_seconds=0.2)
     await node.start()
     conn = await _ssh(node.port)
     try:
@@ -74,7 +74,10 @@ async def test_lost_node_sessions_terminated_and_checkouts_closed(gateway, lab, 
         )[0]
         assert await scalar("SELECT owns_checkout FROM access.sessions WHERE id = :i", i=sid)
 
-        # The node dies: no more heartbeats, nothing finishes the session.
+        await asyncio.sleep(0.6)  # the banner is sealed and uploaded as a chunk
+        # The node dies: no more heartbeats, nothing finishes the session or the recording.
+        for bridge in list(node.bridges):
+            bridge.writer.abort()
         node._heartbeat.cancel()
         node._watcher.cancel()
         await execute(
@@ -103,6 +106,20 @@ async def test_lost_node_sessions_terminated_and_checkouts_closed(gateway, lab, 
             "SELECT count(*) FROM audit.events WHERE action = 'checkout.return' AND object_id = :i",
             i=checkout_id,
         )
+        # The partial recording is kept, encrypted, and marked incomplete.
+        rec = await client.get(f"/sessions/{sid}/recording", headers=admin)
+        assert rec.status_code == 200, rec.text
+        assert rec.headers["x-wardx-recording-incomplete"] == "true"
+        assert rec.headers["x-wardx-recording-verified"] == "false"
+        assert "[WardX]" in rec.text
+        flags = (
+            await rows(
+                "SELECT recording_encrypted, recording_incomplete, recording_sha256 "
+                "FROM access.sessions WHERE id = :i",
+                i=sid,
+            )
+        )[0]
+        assert tuple(flags) == (True, True, None)
         # The healthy node is listed in /health/cluster, the lost one is not fresh.
         data = (await client.get("/health/cluster", headers=admin)).json()["data"]
         by_node = {g["node"]: g for g in data["gateways"]}
