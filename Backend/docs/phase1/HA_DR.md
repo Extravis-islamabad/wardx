@@ -412,8 +412,9 @@ Migrations 022 to 026. Where a choice was open, the more restrictive one was tak
 17. S3 client: `minio==7.2.20` (MinIO's Python SDK, pinned), calls in worker threads; the bucket
     is created on first use. Local-filesystem store with the same interface for single-node
     installs and the plain tests.
-18. The package is `src/services/session_recordings/`: `recordings/` is ignored by
-    `Backend/.gitignore` (the local recording directory), and the ignore rule was left as is.
+18. The package is `src/services/session_recordings/`: the then-unanchored `recordings/`
+    rule in `Backend/.gitignore` hid `src/services/recordings/` from a commit (fixed in
+    55d0ebd). The rule itself was anchored separately in 8b85af3.
 
 **`wardx recordings encrypt`**
 19. Verification reads the object back from the store before decrypting and comparing with
