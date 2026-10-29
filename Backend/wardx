@@ -1,0 +1,3 @@
+#!/bin/sh
+# The wardx operator command (src/cli). Uses this node's WARDX_* configuration.
+cd "$(dirname "$0")" && exec .venv/bin/python -m src.cli "$@"

@@ -22,6 +22,9 @@ from src.repositories.inventory.target_repository import TargetRepository
 from src.repositories.sessions.command_rule_repository import CommandRuleRepository
 from src.repositories.sessions.gateway_node_repository import GatewayNodeRepository
 from src.repositories.sessions.gateway_session_repository import GatewaySessionRepository
+from src.services.session_recordings.recording_migration_service import (
+    RecordingMigrationService,
+)
 from src.services.sessions.command_rule_service import CommandRuleService
 from src.services.sessions.gateway_node_service import GatewayNodeService
 from src.services.sessions.gateway_session_service import GatewaySessionService
@@ -38,6 +41,16 @@ def build_session_service(session: AsyncSession) -> SessionService:
         Path(get_settings().recording_dir),
         recording_store(),
         build_tenant_key_service(session),
+    )
+
+
+def build_recording_migration_service(session: AsyncSession) -> RecordingMigrationService:
+    return RecordingMigrationService(
+        GatewaySessionRepository(session),
+        build_audit_service(session),
+        build_tenant_key_service(session),
+        recording_store(),
+        Path(get_settings().recording_dir),
     )
 
 

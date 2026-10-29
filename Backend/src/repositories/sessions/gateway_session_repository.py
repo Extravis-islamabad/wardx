@@ -162,6 +162,36 @@ class GatewaySessionRepository(BaseRepository):
         )
         return [tuple(r) for r in rows.all()]
 
+    # ── Recording migration (`wardx recordings encrypt`) ──
+
+    async def plaintext_recordings(
+        self, after: uuid.UUID | None, limit: int
+    ) -> list[GatewaySessionDTO]:
+        """Finished sessions with a legacy plaintext recording not yet migrated, by id."""
+        stmt = select(GatewaySession).where(
+            GatewaySession.status != "active",
+            GatewaySession.recording_path.is_not(None),
+            GatewaySession.recording_migrated_at.is_(None),
+            GatewaySession.recording_encrypted.is_(False),
+        )
+        if after is not None:
+            stmt = stmt.where(GatewaySession.id > after)
+        rows = await self._session.execute(stmt.order_by(GatewaySession.id).limit(limit))
+        return [_to_dto(r) for r in rows.unique().scalars()]
+
+    async def migrated_with_originals(
+        self, after: uuid.UUID | None, limit: int
+    ) -> list[GatewaySessionDTO]:
+        stmt = select(GatewaySession).where(
+            GatewaySession.recording_migrated_at.is_not(None),
+            GatewaySession.recording_original_removed_at.is_(None),
+            GatewaySession.recording_path.is_not(None),
+        )
+        if after is not None:
+            stmt = stmt.where(GatewaySession.id > after)
+        rows = await self._session.execute(stmt.order_by(GatewaySession.id).limit(limit))
+        return [_to_dto(r) for r in rows.unique().scalars()]
+
     async def end_if_active(self, session_id: uuid.UUID, values: dict[str, Any]) -> bool:
         """Close the session with ``values`` if it is still active; whether it was."""
         rows = await self._session.execute(
