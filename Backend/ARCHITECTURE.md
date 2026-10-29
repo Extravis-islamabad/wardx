@@ -52,5 +52,9 @@ Reference module: **inventory** (targets, accounts). Copy it.
 - **Device lab tests are opt-in.** Any test that talks to a device, lab VM or lab container
   checks `tests/lab_gate.py` (`WARDX_LAB`) **before** probing anything, and is skipped
   otherwise. A plain `pytest` run and CI never touch a device.
+- **High availability** (`docs/phase1/HA_DR.md`): scheduler jobs run only on the elected leader
+  (`src/scheduler/leader.py`, `leader_only`) but keep their own locks; recordings are encrypted
+  before they leave the gateway and live in an object store (`src/storage/`); every node checks
+  the KEK canary at start. The HA lab is opt-in too: `WARDX_LAB=ha` (`lab/ha/README.md`).
 - **Migrations**: raw SQL `migrations/NNN_name.sql`, applied in order, idempotent.
 - No file over 500 lines; split by sub-area like MonetX.

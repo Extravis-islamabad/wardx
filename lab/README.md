@@ -16,6 +16,9 @@ Rotation tests create their own `wardx_rot_*` accounts and remove only those.
 | Windows Server (eval) | not yet: no ARM64 Windows Server build for this Apple Silicon host | — | pending decision |
 | Cisco / Huawei | simulated CLIs until an office lab device is confirmed (**lab-unverified**) | — | simulators |
 
+The **HA lab** (Postgres primary + standby, MinIO, two API, two gateway and two scheduler
+nodes, failover tests) is separate: see [ha/README.md](ha/README.md) (`WARDX_LAB=ha`).
+
 ## Setup
 
 ```bash

@@ -1,6 +1,6 @@
 # Phase 1 (e) High availability and disaster recovery: spec (draft for review)
 
-Status: **approved 2026-10-29** (decisions in §9, with the product owner's changes to D3, D5
+Status: **approved 2026-10-29, built 2026-10-29** (build log in §12; decisions in §9, with the product owner's changes to D3, D5
 and D7; new sections §5.1 and §6.1). Scope: a **single-tenant** WardX install (multi-tenancy is deferred; `TENANCY_KEYS.md`
 covers the per-tenant backup design for later). Windows and AD work stay out of scope.
 
@@ -349,4 +349,126 @@ database, two API nodes, two gateway nodes. That includes a **killed-primary tes
 
 ## 12. Build log (smaller choices, logged rather than asked)
 
-Filled in during the build.
+Built 2026-10-29. Runbooks: [runbooks/failover.md](runbooks/failover.md),
+[runbooks/dr-activation.md](runbooks/dr-activation.md),
+[runbooks/backup-restore.md](runbooks/backup-restore.md). HA lab: `lab/ha/README.md`.
+Migrations 022 to 026. Where a choice was open, the more restrictive one was taken.
+
+**Scheduler leader (§4)**
+1. The lock is held on a connection from its own engine (`NullPool`), separate from the
+   request pool. Keepalive is tuned server side through asyncpg `server_settings`
+   (`tcp_keepalives_idle=5`, `interval=5`, `count=2`), so PostgreSQL frees a vanished leader's
+   lock in about 15 s.
+2. On every tick the leader re-checks, within the interval, that its connection is alive and
+   still holds the lock (`pg_locks`), and stamps `last_seen`. Any error or timeout makes it step
+   down before the server could hand the lock to another node. Jobs are wrapped in
+   `leader_only`; the per-tick, lease and per-account locks stay.
+3. `ha.scheduler_leader` is a display row (node, term, elected_at, last_seen); the lock decides.
+   `scheduler.leader_elected` (with the previous node and term) and `scheduler.leader_released`
+   (clean shutdown) are audited. "Fresh" = last_seen within max(3 × interval, 15 s).
+4. `APP_ROLE=api` (single node) also elects, so `/health/cluster` always names a leader.
+   `build_scheduler()` without an elector keeps running every job (tests, tools).
+5. `/health/cluster` is gated by a new admin-only codename `cluster.view`.
+
+**Degraded synchronous replication (§3)**
+6. Expected only with `WARDX_HA_EXPECT_SYNC_STANDBY=true` (default false, so single-node
+   installs never alert). `sync_state` `sync` or `quorum` (the `ANY 1 (...)` form) with
+   `state = 'streaming'` counts as synchronous.
+7. "Cleared on recovery" = the system acknowledges the open alert (`acknowledged_by` NULL) and
+   audits `cluster.sync_restored`. The append-only alert trigger is unchanged. Each condition
+   (`ha.conditions`) has a stable object id (uuid5), so its alerts are found again; a condition
+   that stays active raises one alert, not one per check.
+
+**Gateways (§5)**
+8. Heartbeat every 5 s, lost after 30 s (defaults). A session on a node that never registered
+   counts as lost once it is older than the threshold.
+9. The sweep is idempotent: a session is ended (and audited) only while still `active`; a
+   cut-off node that finishes late no longer writes a second `session.end`.
+10. A restarted node's own orphans now go through the same path (`failed` / "Gateway
+    restarted"), with recording salvage, and **their check-outs are closed** at once through
+    the normal check-in (before: left to expiry). Sessions record `owns_checkout` (023).
+11. Shared host key: a node refuses to start (before listening) if its key differs from a live
+    node's or from the optional `WARDX_GATEWAY_HOST_KEY_FINGERPRINT`. How to deploy one key:
+    failover runbook §1.
+
+**Recordings (§5, §5.1)**
+12. Plaintext never touches disk: the local spool holds ciphertext. A partial chunk is sealed
+    every `WARDX_RECORDING_FLUSH_SECONDS` (5 s), so chunks are at most 64 KiB, not always
+    64 KiB, and a lost node loses at most that much output.
+13. Objects: `spool/<session>/header` and `spool/<session>/<index>` while live,
+    `recordings/<session>.wxrec` when finished (chunk objects then removed). For a lost node,
+    the sweep joins the header and the contiguous uploaded chunks into the final object, marked
+    incomplete. A final upload that fails stays in the spool and is uploaded when the node starts
+    again.
+14. Chunk AAD also binds the SHA-256 of the header, so a header edit fails every chunk. The
+    AES-GCM calls live in `vault/envelope.py` (data keys only); the key boundary test's allowlist
+    is unchanged. The DEK is wrapped by the `files` key from `TenantKeyService`.
+15. A session whose recording cannot be opened (store or key unavailable) fails before any
+    target contact: no recording, no session.
+16. Replay decrypts the whole object before answering, so an authentication failure is a clean
+    409 (`recording_integrity_failed`) and never half a stream. A recording recorded as finished
+    but missing its final chunk is refused as truncated. Legacy plaintext recordings still replay
+    until migrated.
+17. S3 client: `minio==7.2.20` (MinIO's Python SDK, pinned), calls in worker threads; the bucket
+    is created on first use. Local-filesystem store with the same interface for single-node
+    installs and the plain tests.
+18. The package is `src/services/session_recordings/`: `recordings/` is ignored by
+    `Backend/.gitignore` (the local recording directory), and the ignore rule was left as is.
+
+**`wardx recordings encrypt`**
+19. Verification reads the object back from the store before decrypting and comparing with
+    `recording_sha256`. A mismatch also deletes the unverified copy. A recording with no stored
+    hash cannot be verified, so it is left as is and reported. `--remove-verified-originals`
+    re-verifies each copy right before deleting the original and then clears `recording_path`.
+    Audited: `session.recording_encrypted`, `session.recording_encrypt_failed`,
+    `session.recording_original_removed`, `session.recording_original_remove_failed`.
+20. The `wardx` CLI is `python -m src.cli` (wrapper `Backend/wardx`) and starts like a node
+    (migrations, KEK canary); `backup` commands load only the key provider.
+
+**KEK canary (§6, D10)**
+21. A random 32-byte value wrapped by the key provider (`keystore.kek_canary`, 025), checked
+    after migrations on every start. On an existing install the canary is created only after the
+    node's KEK has opened the existing tenant keys, so a wrong-KEK node can never create it.
+    After a KEK rotation it is re-wrapped under the active KEK while the retired one is loaded.
+
+**DR lag (§6.1, with the owner's explicit `dr_site_configured`)**
+22. Paused while the lag is high or unreadable: scheduled **and after-use** rotations (both
+    automatic). Verifies are still queued; on-demand rotate, reconcile and compromise run with
+    the warning; jobs already past `pending` resume (finishing a half-done rotation is safer).
+23. The lag is read fresh at every rotation tick (and by the cluster check); a check that throws
+    pauses. `replay_lag` NULL with zero bytes behind and `streaming` counts as 0 s (PostgreSQL
+    clears it when idle); NULL while behind is unreadable.
+24. `dr_lag_warning` is also on `GET /accounts/{id}/rotation`, which the console reads to show
+    the warning before confirming; the request's audit event records `dr_lag_warning: true`.
+
+**`wardx dr post-failover-check`**
+25. The window includes any non-verify rotation activity (audited `rotation.*` events, jobs
+    started, finished or still open), not only successes: over-listing costs a verify,
+    under-listing could hide a device holding an unknown password.
+26. It waits for its verify jobs (`--wait-seconds`, default 900) run by the scheduler leader,
+    then reconciles failures or flags them out of sync; exit code 1 when anything needs a person.
+
+**Backup and restore (§7)**
+27. Archive DEKs are wrapped by the **KEK** through the key provider, not by the `backup` tenant
+    key: that key lives inside the database being restored. Archive format mirrors recordings
+    (`WXBAK`, 64 KiB chunks, AAD with name, index, final flag, header hash).
+28. The drill restores a **logical** dump into the scratch database (fast, no second cluster);
+    base backups are physical (`pg_basebackup` tar) and the WAL scripts are the PITR hooks.
+    Base backups are written as `.part` and renamed only when complete.
+
+**HA lab (§8)**
+29. App nodes are host processes from `Backend/.venv` (fast restarts, a SIGKILL is a real
+    process death), in production mode with explicit keys from `lab/.secrets/ha`, each in its own
+    `lab/ha/.run/<node>` directory (no `.env`, no dev state).
+30. Plain PostgreSQL 17.6 with a scripted promote (`pg_promote`) and the lab sync watchdog; no
+    Patroni in the lab. MinIO image `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` (pinned): the
+    upstream `minio/minio` and `quay.io/minio/minio` images could not be pulled here.
+31. Lab timings: heartbeat 2 s, lost after 10 s, leader interval 2 s, rotation lease 15 s,
+    recording flush 1 s.
+
+**Differences from the spec and limitations**
+- §8 "restore to a point in time" is covered by the WAL hooks and the runbook; the lab drill
+  restores a logical dump, and PITR replay itself is not exercised automatically.
+- The DR lag rules are tested with a patched lag source (plain tests); the lab has no DR replica.
+- Replay holds one decrypted recording in memory per request.
+- Patroni is documented, not bundled (D2 a).
