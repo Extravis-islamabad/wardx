@@ -8,6 +8,7 @@ import { JOB_STATUS_OPTIONS, REASON_LABEL } from '@/features/rotation/constants'
 import { ResolveJobModal, RotationAttentionPanel, RotationJobsTable } from '@/features/rotation/components';
 import { useRotationJobs } from '@/features/rotation/hooks';
 import type { RotationJob } from '@/services/rotation-services';
+import RotationKpis from '@/features/rotation/components/RotationKpis';
 
 export default function RotationJobs() {
   const { canAccess } = useAuth();
@@ -19,7 +20,7 @@ export default function RotationJobs() {
   const jobs = useRotationJobs({ page, page_size, status, reason });
 
   return (
-    <PageShell
+    <PageShell kpis={<RotationKpis />}
       title="Password rotation"
       actions={
         <>

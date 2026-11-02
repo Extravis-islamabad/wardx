@@ -12,7 +12,7 @@ export const FieldLabel = ({
   /** The input's `id`, so the label names it for screen readers. */
   htmlFor?: string;
 }) => (
-  <Text as="label" htmlFor={htmlFor} variant="inputLabel" className="mb-1 block">
+  <Text as="label" htmlFor={htmlFor} variant="inputLabel" className="mb-0.5 block">
     {children}
     {required && (
       <Text as="span" variant="errorInline" className="ml-0.5" aria-hidden>
@@ -45,7 +45,7 @@ export const FormField = ({
   required,
   hint,
   error,
-  className = 'mb-3',
+  className = 'mb-2',
   children,
 }: {
   label?: ReactNode;
@@ -71,7 +71,7 @@ export const FormField = ({
 /** Action bar at the bottom of a modal body; Cancel `admin`, confirm `primary` / `danger`. */
 export const ModalFooter = ({ children, start }: { children: ReactNode; start?: ReactNode }) => (
   <div
-    className={`sticky bottom-0 z-[1] mt-2 flex items-center gap-2 border-t border-(--border) pt-3 ${start ? 'justify-between' : 'justify-end'}`}
+    className={`sticky bottom-0 z-[1] mt-2 flex items-center gap-2 border-t border-(--border) bg-(--card) py-2 ${start ? 'justify-between' : 'justify-end'}`}
   >
     {start ? <div className="min-w-0">{start}</div> : null}
     <div className="flex gap-2">{children}</div>

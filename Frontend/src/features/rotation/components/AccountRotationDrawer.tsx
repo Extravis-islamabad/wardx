@@ -36,7 +36,7 @@ function RotationStatus({ account, canManage }: { account: Account; canManage: b
   const busy = !!r.open_job;
 
   return (
-    <Space orientation="vertical" size={12} className="w-full">
+    <Space orientation="vertical" size={8} className="w-full">
       {r.risk_flags.includes('high_risk_empty_password') && (
         <Alert type="error" showIcon title="High risk: the stored password is empty. Set a real password or rotate it." />
       )}

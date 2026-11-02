@@ -7,6 +7,7 @@ import { AppDetailDrawer, AppFormModal, AppsTable, SecretOnceModal } from '@/fea
 import { useApps, useUpdateApp } from '@/features/provider/hooks';
 import type { AppIdentity, NewAppSecret } from '@/services/provider-services';
 import { notify } from '@/utils/notify';
+import AppKpis from '@/features/provider/components/AppKpis';
 
 /** Application identities: the non-human clients (MonetX, its collectors) of the credential provider. */
 export default function AppIdentities() {
@@ -30,7 +31,7 @@ export default function AppIdentities() {
   };
 
   return (
-    <PageShell
+    <PageShell kpis={<AppKpis />}
       title="Application identities"
       actions={
         <>

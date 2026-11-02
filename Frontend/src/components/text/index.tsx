@@ -1,6 +1,19 @@
 import React from 'react';
 
-export type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'body_sm' | 'caption' | 'label' | 'errorInline' | 'inputLabel';
+export type TextVariant =
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h3_black'
+  | 'h4'
+  | 'body'
+  | 'body_sm'
+  | 'body_xs'
+  | 'secondaryText'
+  | 'caption'
+  | 'label'
+  | 'errorInline'
+  | 'inputLabel';
 
 type TextElement = 'span' | 'p' | 'div' | 'h1' | 'h2' | 'h3' | 'h4' | 'label' | 'code';
 
@@ -9,13 +22,18 @@ const variantClasses: Record<TextVariant, string> = {
   h1: 'text-2xl font-bold leading-8 text-(--foreground)',
   h2: 'text-lg font-semibold leading-6 text-(--foreground)',
   h3: 'text-base font-medium leading-6 text-(--foreground)',
+  /** 14px bold — the page heading in the dense console. */
+  h3_black: 'text-sm font-bold leading-[18px] text-(--foreground)',
   h4: 'text-xs font-bold leading-[15.6px] text-(--foreground)',
   body: 'text-base font-normal leading-6 text-(--foreground)',
   body_sm: 'text-sm font-normal leading-5 text-(--foreground)',
+  /** 12px, full contrast, normal weight — table cells. */
+  body_xs: 'text-xs font-normal leading-4 text-(--foreground)',
+  secondaryText: 'text-sm font-medium leading-[22px] text-(--muted-foreground)',
   caption: 'text-xs font-normal leading-4 text-(--muted-foreground)',
   label: 'text-[10px] font-bold leading-4 text-(--muted-foreground)',
   errorInline: 'text-xs text-(--error)',
-  inputLabel: 'text-sm font-medium leading-5 text-(--foreground)',
+  inputLabel: 'text-xs font-semibold leading-4 text-(--foreground)',
 };
 
 type TextProps = Omit<React.HTMLAttributes<HTMLElement>, 'className'> & {

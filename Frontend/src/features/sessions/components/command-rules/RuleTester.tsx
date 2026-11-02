@@ -1,7 +1,7 @@
 import { ExperimentOutlined } from '@ant-design/icons';
-import { Alert, Card, Input, Space } from 'antd';
+import { Alert, Input, Space } from 'antd';
 import { useState } from 'react';
-import { Button } from '@/components';
+import { Button, SectionCard } from '@/components';
 import { useTestCommand } from '@/features/sessions/hooks';
 
 /** Dry-runs a typed command against every active rule. */
@@ -9,8 +9,7 @@ export function RuleTester() {
   const [command, setCommand] = useState('');
   const test = useTestCommand();
   return (
-    <Card
-      size="small"
+    <SectionCard
       title={
         <>
           <ExperimentOutlined /> Try a command
@@ -42,7 +41,7 @@ export function RuleTester() {
           }
         />
       )}
-    </Card>
+    </SectionCard>
   );
 }
 

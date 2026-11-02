@@ -1,6 +1,6 @@
-import { Alert, Card, List, Space, Typography } from 'antd';
+import { Alert, List, Space, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { StatusTag } from '@/components';
+import { SectionCard, StatusTag } from '@/components';
 import { ROUTES } from '@/constants/enums/routes';
 import { StatusVariant } from '@/constants/enums/status';
 import { useAttention } from '@/features/dashboard/hooks';
@@ -19,7 +19,7 @@ export function AttentionPanel() {
   const { directory, break_glass: coverage, safes_needing_attention: safes } = data;
 
   return (
-    <Space orientation="vertical" size={12} className="w-full">
+    <Space orientation="vertical" size={8} className="w-full">
       {directory.unreachable && (
         <Alert
           type="error"
@@ -53,7 +53,7 @@ export function AttentionPanel() {
         />
       )}
       {safes.length > 0 && (
-        <Card size="small" title={`Safes needing attention (${safes.length})`}>
+        <SectionCard title={`Safes needing attention (${safes.length})`}>
           <List
             size="small"
             dataSource={safes}
@@ -70,7 +70,7 @@ export function AttentionPanel() {
               </List.Item>
             )}
           />
-        </Card>
+        </SectionCard>
       )}
     </Space>
   );

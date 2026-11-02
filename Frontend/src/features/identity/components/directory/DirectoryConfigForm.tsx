@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Alert, Card, Input, InputNumber, Select, Space, Switch, Typography } from 'antd';
+import { Alert, Input, InputNumber, Select, Space, Switch, Typography } from 'antd';
 import { Controller, useFieldArray, useForm, type Control, type FieldPath } from 'react-hook-form';
-import { Button, FormField } from '@/components';
+import { Button, FormField, SectionCard } from '@/components';
 import { Role } from '@/constants/enums/auth';
 import {
   DENY_DEFAULT_ROLE,
@@ -109,7 +109,7 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Card
+      <SectionCard
         title="Connection"
         extra={
           <Controller
@@ -126,11 +126,11 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
             )}
           />
         }
-        className="!mb-4"
+        className="!mb-2"
       >
         {url?.startsWith('ldap://') && !startTls && (
           <Alert
-            className="!mb-4"
+            className="!mb-2"
             type="warning"
             showIcon
             title="Plain ldap:// sends passwords unencrypted. Use ldaps:// or turn on StartTLS outside a lab."
@@ -201,9 +201,9 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
             )}
           />
         </FormField>
-      </Card>
+      </SectionCard>
 
-      <Card
+      <SectionCard
         title="Users"
         extra={
           <Space>
@@ -215,7 +215,7 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
             ))}
           </Space>
         }
-        className="!mb-4"
+        className="!mb-2"
       >
         <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
           <FormField label="User search base" htmlFor="user_base_dn" error={errors.user_base_dn?.message}>
@@ -257,9 +257,9 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
             />
           </FormField>
         </div>
-      </Card>
+      </SectionCard>
 
-      <Card title="Groups → WardX roles" className="!mb-4">
+      <SectionCard title="Groups → WardX roles" className="!mb-2">
         <Typography.Paragraph type="secondary">
           A user in several mapped groups gets the highest role. Roles are refreshed at every sign-in.
         </Typography.Paragraph>
@@ -295,7 +295,7 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
         <Button variant="admin" onClick={() => mappings.append({ group_dn: '', role: Role.USER })}>
           Add mapping
         </Button>
-        <div className="mt-4 max-w-sm">
+        <div className="mt-2 max-w-sm">
           <FormField label="Users in no mapped group" htmlFor="default_role">
             <Controller
               control={control}
@@ -312,9 +312,9 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
             />
           </FormField>
         </div>
-      </Card>
+      </SectionCard>
 
-      <Card title="Scheduled sync" className="!mb-4">
+      <SectionCard title="Scheduled sync" className="!mb-2">
         <Typography.Paragraph type="secondary">
           Checks every directory user with the service account. People who left the directory or every mapped group are
           disabled at once: signed out, check-outs revoked, live sessions killed.
@@ -349,7 +349,7 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
             />
           </FormField>
         </div>
-      </Card>
+      </SectionCard>
 
       <Button variant="primary" type="submit" loading={isPending}>
         Save

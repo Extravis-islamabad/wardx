@@ -4,18 +4,24 @@ import Text from '@/components/text';
 
 interface PageTitleProps {
   title: ReactNode;
-  /** One-line subtitle under the heading. */
+  /** One-line subtitle, set beside the heading to save a row. */
   description?: ReactNode;
   /** Right-aligned action bar — buttons, search, a segmented control. */
   actions?: ReactNode;
   className?: string;
 }
 
-/** The house page-heading block: an `h1` at the `h2` type scale, a caption, and an action bar. */
+/** The house page-heading row: a compact `h1`, its caption inline, and an action bar. */
 const PageTitle = ({ title, description, actions, className = '' }: PageTitleProps) => (
-  <Flex align="center" justify="space-between" wrap gap={12} className={className}>
-    <Flex vertical gap={4} className="min-w-0">
-      <Text as="h1" variant="h2">
+  <Flex
+    align="center"
+    justify="space-between"
+    wrap
+    gap={8}
+    className={`min-h-7 ${className}`}
+  >
+    <Flex align="baseline" gap={8} wrap className="min-w-0">
+      <Text as="h1" variant="h3_black">
         {title}
       </Text>
       {description ? (
@@ -25,7 +31,7 @@ const PageTitle = ({ title, description, actions, className = '' }: PageTitlePro
       ) : null}
     </Flex>
     {actions ? (
-      <Flex align="center" gap={8} wrap>
+      <Flex align="center" gap={6} wrap className="wx-page-actions">
         {actions}
       </Flex>
     ) : null}

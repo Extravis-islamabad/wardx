@@ -54,7 +54,7 @@ export function MfaEnrol({ onEnabled }: { onEnabled: (codes: string[]) => void }
         {
           title: 'Scan with Google Authenticator, Microsoft Authenticator, 1Password…',
           content: (
-            <Space align="start" size="large" wrap className="!my-3">
+            <Space align="start" size="middle" wrap className="!my-2">
               <QRCode
                 value={setup.otpauth_uri}
                 size={QR_SIZE}
@@ -73,7 +73,7 @@ export function MfaEnrol({ onEnabled }: { onEnabled: (codes: string[]) => void }
         {
           title: 'Enter the 6-digit code it shows',
           content: (
-            <Space.Compact className="!my-3">
+            <Space.Compact className="!my-2">
               <Input
                 aria-label="Code from app"
                 inputMode="numeric"

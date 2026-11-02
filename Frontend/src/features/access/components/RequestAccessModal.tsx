@@ -111,7 +111,7 @@ export function RequestAccessModal({ account, onClose, onCheckedOut }: RequestAc
             )}
           />
         </FormField>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           {needsApproval && ticketMode !== TicketMode.OFF && (
             <FormField
               label={`Ticket number (${ticketMode})`}

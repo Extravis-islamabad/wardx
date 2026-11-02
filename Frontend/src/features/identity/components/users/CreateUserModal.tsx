@@ -46,7 +46,7 @@ export function CreateUserModal({ open, onClose }: { open: boolean; onClose: () 
             )}
           />
         </FormField>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Full name" htmlFor="user-full-name" error={errors.full_name?.message}>
             <Controller
               control={control}
