@@ -11,6 +11,7 @@ DELETE /accounts/{account_id}        — delete an account and every secret vers
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -32,6 +33,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import AccountStatsResponse
 from src.contracts.schemas.responses.inventory.account_responses import (
     AccountResponse,
     SafeBriefResponse,
@@ -108,6 +110,19 @@ async def list_accounts(
         page=paging.page,
         page_size=paging.page_size,
     )
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[AccountStatsResponse],
+    dependencies=[Depends(require_permission(INVENTORY_VIEW))],
+    summary="KPI counts over the accounts you can list",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def account_stats(
+    service: AccountServiceDep, actor: ActorDep
+) -> APIResponse[AccountStatsResponse]:
+    return ok(AccountStatsResponse(**asdict(await service.stats(actor))))
 
 
 @router.get(

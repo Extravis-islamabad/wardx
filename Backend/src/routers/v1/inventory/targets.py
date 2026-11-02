@@ -10,6 +10,7 @@ DELETE /targets/{target_id}  — delete a target, its accounts and their secrets
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -27,6 +28,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import TargetStatsResponse
 from src.contracts.schemas.responses.inventory.target_responses import TargetResponse
 from src.core.enums import Platform
 from src.core.permissions import INVENTORY_MANAGE, INVENTORY_VIEW
@@ -92,6 +94,17 @@ async def list_targets(
         page=paging.page,
         page_size=paging.page_size,
     )
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[TargetStatsResponse],
+    dependencies=[Depends(require_permission(INVENTORY_VIEW))],
+    summary="KPI counts over every target",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def target_stats(service: TargetServiceDep) -> APIResponse[TargetStatsResponse]:
+    return ok(TargetStatsResponse(**asdict(await service.stats())))
 
 
 @router.get(

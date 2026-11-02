@@ -7,6 +7,7 @@ POST /audit/verify   — walk the hash chain and report the first broken link
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated
 
@@ -25,6 +26,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import AuditStatsResponse
 from src.core.permissions import AUDIT_VIEW
 from src.dependencies.audit import AuditServiceDep
 from src.dependencies.auth import require_permission
@@ -98,3 +100,14 @@ async def verify_chain(service: AuditServiceDep) -> APIResponse[ChainVerificatio
             reason=result.reason,
         )
     )
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[AuditStatsResponse],
+    dependencies=[Depends(require_permission(AUDIT_VIEW))],
+    summary="KPI counts over the audit trail",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def audit_event_stats(service: AuditServiceDep) -> APIResponse[AuditStatsResponse]:
+    return ok(AuditStatsResponse(**asdict(await service.stats())))

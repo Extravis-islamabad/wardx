@@ -75,22 +75,37 @@ def _to_dto(
     )
 
 
+def _conditions(filters: AccessRequestFilterDTO) -> list:
+    """The list's WHERE clause; ``status_counts`` counts over the same rows."""
+    conditions = []
+    if filters.requester_id is not None:
+        conditions.append(AccessRequest.requester_id == filters.requester_id)
+    if filters.status:
+        conditions.append(AccessRequest.status == filters.status)
+    if filters.safe_ids is not None:
+        in_safes = AccessRequest.account_id.in_(
+            select(Account.id).where(Account.safe_id.in_(filters.safe_ids))
+        )
+        if filters.include_requester_id is not None:
+            in_safes = or_(in_safes, AccessRequest.requester_id == filters.include_requester_id)
+        conditions.append(in_safes)
+    return conditions
+
+
 class AccessRequestRepository(BaseRepository):
+    async def status_counts(self, filters: AccessRequestFilterDTO) -> dict[str, int]:
+        """Counts by status over the rows ``list(filters)`` would page through."""
+        rows = await self._session.execute(
+            select(AccessRequest.status, func.count())
+            .where(*_conditions(filters))
+            .group_by(AccessRequest.status)
+        )
+        return dict(rows.all())
+
     async def list(
         self, filters: AccessRequestFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[AccessRequestDTO], int]:
-        conditions = []
-        if filters.requester_id is not None:
-            conditions.append(AccessRequest.requester_id == filters.requester_id)
-        if filters.status:
-            conditions.append(AccessRequest.status == filters.status)
-        if filters.safe_ids is not None:
-            in_safes = AccessRequest.account_id.in_(
-                select(Account.id).where(Account.safe_id.in_(filters.safe_ids))
-            )
-            if filters.include_requester_id is not None:
-                in_safes = or_(in_safes, AccessRequest.requester_id == filters.include_requester_id)
-            conditions.append(in_safes)
+        conditions = _conditions(filters)
         total = (
             await self._session.execute(
                 select(func.count()).select_from(AccessRequest).where(*conditions)

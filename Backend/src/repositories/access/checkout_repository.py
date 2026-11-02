@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, select, update
 
 from src.contracts.dto.access.checkout_dto import CheckoutDTO, CheckoutFilterDTO
+from src.contracts.dto.dashboard.stats_dto import CheckoutStatsDTO
 from src.core.enums import CheckoutStatus
 from src.models import Checkout
 from src.repositories.access.briefs import account_brief, user_brief
@@ -31,15 +32,43 @@ def _to_dto(row: Checkout) -> CheckoutDTO:
     )
 
 
+def _conditions(filters: CheckoutFilterDTO) -> list:
+    """The list's WHERE clause; ``stats`` counts over the same rows."""
+    conditions = []
+    if filters.user_id is not None:
+        conditions.append(Checkout.user_id == filters.user_id)
+    if filters.status:
+        conditions.append(Checkout.status == filters.status)
+    return conditions
+
+
 class CheckoutRepository(BaseRepository):
+    async def stats(self, filters: CheckoutFilterDTO, me: uuid.UUID) -> CheckoutStatsDTO:
+        """Counts by status over the rows ``list(filters)`` would page through."""
+        rows = await self._session.execute(
+            select(Checkout.status, func.count())
+            .where(*_conditions(filters))
+            .group_by(Checkout.status)
+        )
+        by_status = dict(rows.all())
+        mine_active = await self._session.scalar(
+            select(func.count())
+            .select_from(Checkout)
+            .where(Checkout.user_id == me, Checkout.status == CheckoutStatus.ACTIVE)
+        )
+        return CheckoutStatsDTO(
+            total=sum(by_status.values()),
+            active=by_status.get(CheckoutStatus.ACTIVE, 0),
+            returned=by_status.get(CheckoutStatus.RETURNED, 0),
+            expired=by_status.get(CheckoutStatus.EXPIRED, 0),
+            revoked=by_status.get(CheckoutStatus.REVOKED, 0),
+            mine_active=mine_active or 0,
+        )
+
     async def list(
         self, filters: CheckoutFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[CheckoutDTO], int]:
-        conditions = []
-        if filters.user_id is not None:
-            conditions.append(Checkout.user_id == filters.user_id)
-        if filters.status:
-            conditions.append(Checkout.status == filters.status)
+        conditions = _conditions(filters)
         total = (
             await self._session.execute(
                 select(func.count()).select_from(Checkout).where(*conditions)

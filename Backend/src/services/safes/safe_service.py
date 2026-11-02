@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import uuid
 
+from src.contracts.dto.dashboard.stats_dto import SafeStatsDTO
 from src.contracts.dto.safes.safe_dto import SafeDTO, SafeFilterDTO, SafeMemberDTO
 from src.core.context import Actor
 from src.core.enums import PrincipalType, Role, SafePermission
@@ -73,6 +74,11 @@ class SafeService:
         return await self._safes.list(
             SafeFilterDTO(search=search, ids=ids), page=page, page_size=page_size
         )
+
+    async def stats(self, actor: Actor) -> SafeStatsDTO:
+        """Counts over the safes ``list`` would show this actor (health is the router's)."""
+        ids = None if actor.can(SAFES_MANAGE) else await self._access.listable_safe_ids(actor)
+        return await self._safes.stats(ids)
 
     async def my_permissions(self, actor: Actor) -> dict[uuid.UUID, frozenset[str]]:
         return await self._access.permissions_by_safe(actor)

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from anyio import to_thread
 
+from src.contracts.dto.dashboard.stats_dto import SessionStatsDTO
 from src.contracts.dto.sessions.gateway_session_dto import (
     GatewaySessionDTO,
     GatewaySessionFilterDTO,
@@ -85,6 +86,13 @@ class SessionService:
             ),
             page=page,
             page_size=page_size,
+        )
+
+    async def stats(self, actor: Actor) -> SessionStatsDTO:
+        """Counts over the sessions ``list`` would show this actor."""
+        own = not actor.can(SESSIONS_VIEW_ALL)
+        return await self._sessions.stats(
+            GatewaySessionFilterDTO(user_id=actor.id if own else None), actor.id
         )
 
     async def get(self, actor: Actor, session_id: uuid.UUID) -> GatewaySessionDTO:

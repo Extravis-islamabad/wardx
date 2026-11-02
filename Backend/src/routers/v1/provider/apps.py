@@ -12,6 +12,7 @@ GET    /apps/{app_id}/fetches             — the app's recent fetches, from the
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -34,6 +35,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import AppStatsResponse
 from src.contracts.schemas.responses.provider.provider_responses import (
     AppFetchEventResponse,
     AppResponse,
@@ -135,6 +137,16 @@ async def list_apps(
         page=paging.page,
         page_size=paging.page_size,
     )
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[AppStatsResponse],
+    summary="KPI counts over every application identity",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def app_stats(service: AppServiceDep) -> APIResponse[AppStatsResponse]:
+    return ok(AppStatsResponse(**asdict(await service.stats())))
 
 
 @router.get(

@@ -19,6 +19,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import replace
 
+from src.contracts.dto.dashboard.stats_dto import AccountStatsDTO
 from src.contracts.dto.inventory.account_dto import AccountDTO, AccountFilterDTO
 from src.core.context import Actor
 from src.core.enums import DEFAULT_SAFE_ID, SafePermission
@@ -81,6 +82,10 @@ class AccountService:
         visible = await self._access.listable_safe_ids(actor)
         filters = replace(filters, safe_ids=visible)
         return await self._accounts.list(filters, page=page, page_size=page_size)
+
+    async def stats(self, actor: Actor) -> AccountStatsDTO:
+        """KPI counts over the accounts ``list`` would show this actor."""
+        return await self._accounts.stats(await self._access.listable_safe_ids(actor))
 
     async def list_any_safe(
         self,

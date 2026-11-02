@@ -22,6 +22,7 @@ import uuid
 from datetime import timedelta
 
 from src.contracts.dto.access.access_request_dto import AccessRequestDTO, AccessRequestFilterDTO
+from src.contracts.dto.dashboard.stats_dto import RequestStatsDTO
 from src.contracts.dto.safes.approval_policy_dto import RequestPolicyDTO
 from src.core.context import SYSTEM_ACTOR, Actor
 from src.core.enums import RequestStatus, SafePermission
@@ -90,6 +91,29 @@ class AccessRequestService:
                 include_requester_id=actor.id,
             )
         return await self._requests.list(filters, page=page, page_size=page_size)
+
+    async def stats(self, actor: Actor) -> RequestStatsDTO:
+        """Counts by status over the requests ``list`` would show this actor, plus the
+        size of their approval queue (``queue``'s own rules)."""
+        if actor.can(ACCESS_VIEW_ALL):
+            filters = AccessRequestFilterDTO()
+        else:
+            filters = AccessRequestFilterDTO(
+                safe_ids=await self._access.listable_safe_ids(actor),
+                include_requester_id=actor.id,
+            )
+        counts = await self._requests.status_counts(filters)
+        _, awaiting = await self.queue(actor, page=1, page_size=1)
+        return RequestStatsDTO(
+            total=sum(counts.values()),
+            pending=counts.get(RequestStatus.PENDING, 0),
+            approved=counts.get(RequestStatus.APPROVED, 0),
+            used=counts.get(RequestStatus.USED, 0),
+            denied=counts.get(RequestStatus.DENIED, 0),
+            expired=counts.get(RequestStatus.EXPIRED, 0),
+            cancelled=counts.get(RequestStatus.CANCELLED, 0),
+            awaiting_me=awaiting,
+        )
 
     async def queue(
         self, actor: Actor, *, page: int, page_size: int

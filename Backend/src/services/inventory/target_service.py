@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from src.contracts.dto.dashboard.stats_dto import TargetStatsDTO
 from src.contracts.dto.inventory.target_dto import TargetDTO, TargetFilterDTO
 from src.core.context import Actor
 from src.core.enums import DEFAULT_PORTS, Protocol, SafePermission
@@ -51,6 +52,9 @@ class TargetService:
         self, filters: TargetFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[TargetDTO], int]:
         return await self._targets.list(filters, page=page, page_size=page_size)
+
+    async def stats(self) -> TargetStatsDTO:
+        return await self._targets.stats()
 
     async def get(self, target_id: uuid.UUID) -> TargetDTO:
         target = await self._targets.get(target_id)

@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
+from src.contracts.dto.dashboard.stats_dto import AppStatsDTO
 from src.contracts.dto.provider.app_dto import AppDTO, NewAppSecretDTO
 from src.core.client_ip import parse_networks
 from src.core.context import Actor
@@ -34,6 +35,8 @@ CLIENT_ID_PREFIX = "wxa_"
 CLIENT_SECRET_PREFIX = "wxs_"
 _PREFIX_CHARS = 12
 MAX_ACTIVE_SECRETS = 2
+# The KPI window for "secrets expiring soon".
+SECRET_EXPIRY_WINDOW = timedelta(days=30)
 
 
 class InvalidAppSettings(AppError):
@@ -63,6 +66,10 @@ class AppService:
         self, *, search: str | None, page: int, page_size: int
     ) -> tuple[list[AppDTO], int]:
         return await self._apps.list(search=search, page=page, page_size=page_size)
+
+    async def stats(self) -> AppStatsDTO:
+        """Counts; a secret is "expiring" when it ends within SECRET_EXPIRY_WINDOW."""
+        return await self._apps.stats(utcnow(), SECRET_EXPIRY_WINDOW)
 
     async def get(self, app_id: uuid.UUID, *, lock: bool = False) -> AppDTO:
         app = await self._apps.get(app_id, lock=lock)

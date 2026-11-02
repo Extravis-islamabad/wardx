@@ -11,6 +11,7 @@ import uuid
 from typing import Any
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
+from src.contracts.dto.dashboard.stats_dto import AuditStatsDTO
 from src.core.context import Actor
 from src.core.enums import KeyPurpose
 from src.models import AuditEvent, utcnow
@@ -137,6 +138,9 @@ class AuditService:
                     False, total, result.last_hash, result.broken_at_seq, result.reason
                 )
             prev, after, keyed_seen = result.last_hash, rows[-1].seq, result.keyed_seen
+
+    async def stats(self) -> AuditStatsDTO:
+        return await self._repo.stats(utcnow())
 
     async def list_events(
         self, filters: AuditFilterDTO, *, page: int, page_size: int

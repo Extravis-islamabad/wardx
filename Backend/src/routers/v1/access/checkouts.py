@@ -9,6 +9,7 @@ POST /checkouts/{checkout_id}/checkin    — the holder returns it, or an admin 
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
@@ -30,6 +31,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import CheckoutStatsResponse
 from src.core.enums import CheckoutStatus
 from src.core.permissions import ACCESS_USE
 from src.dependencies.access import CheckoutServiceDep
@@ -151,3 +153,16 @@ async def checkin(
     checkout_id: uuid.UUID, service: CheckoutServiceDep, actor: ActorDep
 ) -> APIResponse[CheckoutResponse]:
     return ok(_to_response(await service.checkin(actor, checkout_id)))
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[CheckoutStatsResponse],
+    dependencies=[Depends(require_permission(ACCESS_USE))],
+    summary="KPI counts over the check-outs you can see",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def checkout_stats(
+    service: CheckoutServiceDep, actor: ActorDep
+) -> APIResponse[CheckoutStatsResponse]:
+    return ok(CheckoutStatsResponse(**asdict(await service.stats(actor))))

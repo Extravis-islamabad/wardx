@@ -5,13 +5,14 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 
+from src.contracts.dto.dashboard.stats_dto import UserStatsDTO
 from src.contracts.dto.identity.user_dto import UserDTO, UserFilterDTO
 from src.core.enums import Role
 from src.errors.exceptions import ConflictError
-from src.models import User
+from src.models import User, UserMfa
 from src.repositories.base import BaseRepository
 
 
@@ -58,6 +59,37 @@ class UserRepository(BaseRepository):
             .limit(page_size)
         )
         return [_to_dto(u) for u in rows], total
+
+    async def stats(self) -> UserStatsDTO:
+        """KPI counts over every user, one query."""
+        mfa = exists().where(UserMfa.user_id == User.id, UserMfa.enabled)
+        active = User.is_active
+        admin = User.role == Role.ADMIN
+        total, n_active, admins, approvers, directory, mfa_on, admins_no_mfa, locked = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(active),
+                    func.count().filter(active, admin),
+                    func.count().filter(active, User.role == Role.APPROVER),
+                    func.count().filter(User.auth_source == "ldap"),
+                    func.count().filter(mfa),
+                    func.count().filter(active, admin, ~mfa),
+                    func.count().filter(User.locked_until > func.now()),
+                ).select_from(User)
+            )
+        ).one()
+        return UserStatsDTO(
+            total=total,
+            active=n_active,
+            disabled=total - n_active,
+            admins=admins,
+            approvers=approvers,
+            directory=directory,
+            mfa_enabled=mfa_on,
+            admins_without_mfa=admins_no_mfa,
+            locked=locked,
+        )
 
     async def get(self, user_id: uuid.UUID, *, lock: bool = False) -> UserDTO | None:
         """The user; ``lock`` holds the row until the transaction ends."""

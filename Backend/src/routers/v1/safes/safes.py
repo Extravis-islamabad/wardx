@@ -2,6 +2,7 @@
 
 GET   /safes              — safes the caller can list (every safe with safes.manage)
 GET   /safes/health       — each active safe's health and break-glass coverage (safes.manage)
+GET   /safes/stats        — KPI counts over the safes the caller can list
 GET   /safes/{safe_id}    — one safe
 POST  /safes              — create a safe (safes.manage)
 PATCH /safes/{safe_id}    — rename, describe, activate or deactivate (safes.manage)
@@ -10,6 +11,7 @@ PATCH /safes/{safe_id}    — rename, describe, activate or deactivate (safes.ma
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict, replace
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
@@ -27,6 +29,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import SafeStatsResponse
 from src.contracts.schemas.responses.safes.safe_responses import (
     SafeHealthReportResponse,
     SafeResponse,
@@ -100,6 +103,28 @@ async def safe_health(service: SafeHealthServiceDep) -> APIResponse[SafeHealthRe
             safes=[health_response(s) for s in await service.safes(coverage)],
         )
     )
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[SafeStatsResponse],
+    dependencies=[Depends(require_permission(INVENTORY_VIEW))],
+    summary="KPI counts over the safes you can list",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def safe_stats(
+    service: SafeServiceDep, health: SafeHealthServiceDep, actor: ActorDep
+) -> APIResponse[SafeStatsResponse]:
+    stats = await service.stats(actor)
+    if actor.can(SAFES_MANAGE):
+        # Health is for safes.manage, which also lists every safe: the same rows.
+        states = [h.state for h in await health.safes()]
+        stats = replace(
+            stats,
+            break_glass_only=states.count("break_glass_only"),
+            unreachable=states.count("unreachable"),
+        )
+    return ok(SafeStatsResponse(**asdict(stats)))
 
 
 @router.get(
