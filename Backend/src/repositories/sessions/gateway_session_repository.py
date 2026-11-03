@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import func, or_, select, update
 
+from src.contracts.dto.dashboard.stats_dto import SessionStatsDTO
 from src.contracts.dto.sessions.gateway_session_dto import (
     GatewaySessionDTO,
     GatewaySessionFilterDTO,
@@ -64,24 +65,50 @@ def _command_dto(row: SessionCommand) -> SessionCommandDTO:
     )
 
 
+def _conditions(filters: GatewaySessionFilterDTO) -> list:
+    """The list's WHERE clause; ``stats`` counts over the same rows."""
+    conditions = []
+    if filters.user_id is not None:
+        conditions.append(GatewaySession.user_id == filters.user_id)
+    if filters.status:
+        conditions.append(GatewaySession.status == filters.status)
+    if filters.search:
+        like = f"%{filters.search.lower()}%"
+        conditions.append(
+            or_(
+                func.lower(GatewaySession.target_name).like(like),
+                func.lower(GatewaySession.account_username).like(like),
+                func.lower(GatewaySession.target_address).like(like),
+            )
+        )
+    return conditions
+
+
 class GatewaySessionRepository(BaseRepository):
+    async def stats(self, filters: GatewaySessionFilterDTO, me: uuid.UUID) -> SessionStatsDTO:
+        """Counts by status over the rows ``list(filters)`` would page through."""
+        rows = await self._session.execute(
+            select(GatewaySession.status, func.count())
+            .where(*_conditions(filters))
+            .group_by(GatewaySession.status)
+        )
+        by_status = dict(rows.all())
+        mine = await self._session.scalar(
+            select(func.count()).select_from(GatewaySession).where(GatewaySession.user_id == me)
+        )
+        return SessionStatsDTO(
+            total=sum(by_status.values()),
+            active=by_status.get("active", 0),
+            closed=by_status.get("closed", 0),
+            terminated=by_status.get("terminated", 0),
+            failed=by_status.get("failed", 0),
+            mine=mine or 0,
+        )
+
     async def list(
         self, filters: GatewaySessionFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[GatewaySessionDTO], int]:
-        conditions = []
-        if filters.user_id is not None:
-            conditions.append(GatewaySession.user_id == filters.user_id)
-        if filters.status:
-            conditions.append(GatewaySession.status == filters.status)
-        if filters.search:
-            like = f"%{filters.search.lower()}%"
-            conditions.append(
-                or_(
-                    func.lower(GatewaySession.target_name).like(like),
-                    func.lower(GatewaySession.account_username).like(like),
-                    func.lower(GatewaySession.target_address).like(like),
-                )
-            )
+        conditions = _conditions(filters)
         total = (
             await self._session.execute(
                 select(func.count()).select_from(GatewaySession).where(*conditions)

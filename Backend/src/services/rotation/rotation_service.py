@@ -15,6 +15,7 @@ import uuid
 from dataclasses import dataclass, replace
 from typing import Any
 
+from src.contracts.dto.dashboard.stats_dto import RotationStatsDTO
 from src.contracts.dto.rotation.rotation_dto import (
     MANUAL,
     PENDING,
@@ -219,6 +220,11 @@ class RotationService:
         return await self._jobs.list(
             replace(filters, safe_ids=visible), page=page, page_size=page_size
         )
+
+    async def job_stats(self, actor: Actor) -> RotationStatsDTO:
+        """Counts by status over the jobs ``list_jobs`` would show this actor."""
+        visible = await self._account_service.listable_safe_ids(actor)
+        return await self._jobs.stats(RotationFilterDTO(safe_ids=visible))
 
     async def get_job(self, actor: Actor, job_id: uuid.UUID) -> RotationJobDTO:
         job = await self._jobs.get(job_id, with_steps=True)

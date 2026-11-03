@@ -16,6 +16,7 @@ from typing import Any
 
 import structlog
 
+from src.contracts.dto.dashboard.stats_dto import UserStatsDTO
 from src.contracts.dto.identity.user_dto import UserDTO, UserFilterDTO
 from src.core.config import DEV_STATE_DIR, Settings
 from src.core.context import SYSTEM_ACTOR, Actor
@@ -41,6 +42,9 @@ class UserService:
         self, filters: UserFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[UserDTO], int]:
         return await self._users.list(filters, page=page, page_size=page_size)
+
+    async def stats(self) -> UserStatsDTO:
+        return await self._users.stats()
 
     async def get(self, user_id: uuid.UUID, *, lock: bool = False) -> UserDTO:
         user = await self._users.get(user_id, lock=lock)

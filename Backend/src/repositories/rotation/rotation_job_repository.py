@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
+from src.contracts.dto.dashboard.stats_dto import RotationStatsDTO
 from src.contracts.dto.rotation.rotation_dto import (
     CLAIMABLE_STATES,
     PENDING,
@@ -26,6 +27,21 @@ from src.contracts.dto.rotation.rotation_dto import (
 from src.errors.exceptions import ConflictError
 from src.models import Account, RotationJob, RotationJobStep, Target
 from src.repositories.base import BaseRepository
+
+
+def _conditions(filters: RotationFilterDTO) -> list:
+    """The list's WHERE clause (over jobs joined to their account); ``stats`` reuses it."""
+    conditions = []
+    if filters.status:
+        conditions.append(RotationJob.status == filters.status)
+    if filters.reason:
+        conditions.append(RotationJob.reason == filters.reason)
+    if filters.account_id:
+        conditions.append(RotationJob.account_id == filters.account_id)
+    if filters.safe_ids is not None:
+        conditions.append(Account.safe_id.in_(filters.safe_ids))
+    return conditions
+
 
 _TARGET_LOCK_BASE = 0x5741_5244_0700_0000
 _ACCOUNT_LOCK_BASE = 0x5741_5244_0800_0000
@@ -159,20 +175,22 @@ class RotationJobRepository(BaseRepository):
         )
         return _to_dto(row, None) if row else None
 
+    async def stats(self, filters: RotationFilterDTO) -> RotationStatsDTO:
+        """Counts by status over the rows ``list(filters)`` would page through."""
+        rows = await self._session.execute(
+            select(RotationJob.status, func.count())
+            .join(Account, Account.id == RotationJob.account_id)
+            .where(*_conditions(filters))
+            .group_by(RotationJob.status)
+        )
+        by_status = dict(rows.all())
+        return RotationStatsDTO(total=sum(by_status.values()), by_status=by_status)
+
     async def list(
         self, filters: RotationFilterDTO, *, page: int, page_size: int
     ) -> tuple[list[RotationJobDTO], int]:
-        conditions = []
-        if filters.status:
-            conditions.append(RotationJob.status == filters.status)
-        if filters.reason:
-            conditions.append(RotationJob.reason == filters.reason)
-        if filters.account_id:
-            conditions.append(RotationJob.account_id == filters.account_id)
-        if filters.safe_ids is not None:
-            conditions.append(Account.safe_id.in_(filters.safe_ids))
         base = select(RotationJob).join(Account, Account.id == RotationJob.account_id)
-        base = base.where(*conditions)
+        base = base.where(*_conditions(filters))
         total = await self._session.scalar(select(func.count()).select_from(base.subquery()))
         rows = (
             (

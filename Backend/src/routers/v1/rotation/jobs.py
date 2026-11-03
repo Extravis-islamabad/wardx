@@ -10,6 +10,7 @@ GET  /rotation/attention             — needs attention, out of sync, untrustwo
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -27,6 +28,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import RotationStatsResponse
 from src.contracts.schemas.responses.rotation.rotation_responses import (
     RotationAttentionResponse,
     RotationJobResponse,
@@ -66,6 +68,19 @@ async def list_jobs(
         page=paging.page,
         page_size=paging.page_size,
     )
+
+
+@router.get(
+    "/jobs/stats",
+    response_model=APIResponse[RotationStatsResponse],
+    dependencies=[Depends(require_permission(INVENTORY_VIEW))],
+    summary="Rotation-job counts by status, over the jobs you can see",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def job_stats(
+    service: RotationServiceDep, actor: ActorDep
+) -> APIResponse[RotationStatsResponse]:
+    return ok(RotationStatsResponse(**asdict(await service.job_stats(actor))))
 
 
 @router.get(

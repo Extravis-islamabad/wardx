@@ -9,7 +9,9 @@ from typing import Any
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
+from src.contracts.dto.dashboard.stats_dto import TargetStatsDTO
 from src.contracts.dto.inventory.target_dto import TargetDTO, TargetFilterDTO
+from src.core.enums import Protocol
 from src.errors.exceptions import ConflictError
 from src.models import Target
 from src.repositories.base import BaseRepository
@@ -69,6 +71,36 @@ class TargetRepository(BaseRepository):
             .limit(page_size)
         )
         return [_to_dto(r) for r in rows], total or 0
+
+    async def stats(self) -> TargetStatsDTO:
+        """KPI counts over every target, one query."""
+        total, active, platforms, unpinned, changed = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(Target.is_active),
+                    func.count(func.distinct(Target.platform)),
+                    # SSH targets never connected to: the first connection pins the key.
+                    func.count().filter(
+                        Target.protocol == Protocol.SSH, Target.ssh_host_key_fingerprint.is_(None)
+                    ),
+                    func.count().filter(
+                        or_(
+                            Target.host_key_mismatch_at.is_not(None),
+                            Target.tls_cert_mismatch_at.is_not(None),
+                        )
+                    ),
+                ).select_from(Target)
+            )
+        ).one()
+        return TargetStatsDTO(
+            total=total,
+            active=active,
+            inactive=total - active,
+            platforms=platforms,
+            host_key_unpinned=unpinned,
+            key_changed=changed,
+        )
 
     async def get(self, target_id: uuid.UUID, *, lock: bool = False) -> TargetDTO | None:
         row = await self._session.get(Target, target_id, with_for_update=lock or None)

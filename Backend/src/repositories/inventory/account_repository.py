@@ -9,15 +9,21 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
+from src.contracts.dto.dashboard.stats_dto import AccountStatsDTO
 from src.contracts.dto.inventory.account_dto import (
     AccountDTO,
     AccountFilterDTO,
     SafeBriefDTO,
     TargetBriefDTO,
 )
+from src.contracts.dto.rotation.rotation_dto import (
+    CONFIRMED_UNTRUSTWORTHY,
+    OUT_OF_SYNC,
+    VERIFY_UNTRUSTWORTHY,
+)
 from src.core.enums import CheckoutStatus
 from src.errors.exceptions import ConflictError
-from src.models import Account, Checkout, Target
+from src.models import Account, Checkout, Safe, Target
 from src.repositories.base import BaseRepository
 
 
@@ -102,6 +108,32 @@ class AccountRepository(BaseRepository):
         )
         counts = await self.active_checkout_counts([a.id for a in rows])
         return [_to_dto(a, counts.get(a.id, 0)) for a in rows], total or 0
+
+    async def stats(self, safe_ids: frozenset[uuid.UUID] | None) -> AccountStatsDTO:
+        """KPI counts over the accounts in ``safe_ids`` (None: every account), one query."""
+        scope = [] if safe_ids is None else [Account.safe_id.in_(safe_ids)]
+        in_use = Account.id.in_(
+            select(Checkout.account_id).where(Checkout.status == CheckoutStatus.ACTIVE)
+        )
+        unsynced = (OUT_OF_SYNC, VERIFY_UNTRUSTWORTHY, CONFIRMED_UNTRUSTWORTHY)
+        row = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(in_use),
+                    # Approval is the safe's policy, as in _to_dto.
+                    func.count().filter(Safe.approval_required),
+                    func.count().filter(Account.exclusive_checkout),
+                    func.count().filter(Account.secret_version == 0),
+                    func.count().filter(Account.sync_status.in_(unsynced)),
+                    func.count().filter(func.cardinality(Account.risk_flags) > 0),
+                )
+                .select_from(Account)
+                .join(Safe, Safe.id == Account.safe_id)
+                .where(*scope)
+            )
+        ).one()
+        return AccountStatsDTO(*row)
 
     async def get(self, account_id: uuid.UUID, *, lock: bool = False) -> AccountDTO | None:
         """The account with its active check-out count; ``lock`` holds the account row

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
+from src.contracts.dto.dashboard.stats_dto import AppStatsDTO
 from src.contracts.dto.provider.app_dto import AppDTO, AppSecretDTO, AppSecretHashDTO
 from src.errors.exceptions import ConflictError
 from src.models import App, AppSecret
@@ -60,6 +61,44 @@ class AppRepository(BaseRepository):
         for row in rows:
             out.setdefault(row.app_id, []).append(row)
         return out
+
+    async def stats(self, now: datetime, expiry_window: timedelta) -> AppStatsDTO:
+        """KPI counts over every application identity and its secrets.
+
+        "Active" is ``AppSecretDTO.is_active``: unrevoked and unexpired. "Usable" is the
+        router's rule: enabled, with an IP allowlist and at least one active secret."""
+        active_secret = (AppSecret.revoked_at.is_(None)) & or_(
+            AppSecret.expires_at.is_(None), AppSecret.expires_at > now
+        )
+        has_active = exists().where(AppSecret.app_id == App.id, active_secret)
+        usable = App.enabled & (func.cardinality(App.ip_allowlist) > 0) & has_active
+        total, enabled, unusable = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(App.enabled),
+                    func.count().filter(App.enabled, ~usable),
+                ).select_from(App)
+            )
+        ).one()
+        secrets, expiring = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(AppSecret.expires_at <= now + expiry_window),
+                )
+                .select_from(AppSecret)
+                .where(active_secret)
+            )
+        ).one()
+        return AppStatsDTO(
+            total=total,
+            enabled=enabled,
+            disabled=total - enabled,
+            active_secrets=secrets,
+            secrets_expiring=expiring,
+            enabled_unusable=unusable,
+        )
 
     async def list(
         self, *, search: str | None, page: int, page_size: int

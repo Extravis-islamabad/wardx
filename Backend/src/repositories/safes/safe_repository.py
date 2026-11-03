@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from src.contracts.dto.dashboard.stats_dto import SafeStatsDTO
 from src.contracts.dto.safes.safe_dto import SafeDTO, SafeFilterDTO
 from src.errors.exceptions import ConflictError
 from src.models import Account, Safe, SafeMember
@@ -69,6 +70,35 @@ class SafeRepository(BaseRepository):
             .limit(page_size)
         )
         return [_to_dto(s, a, m) for s, a, m in rows.all()], total or 0
+
+    async def stats(self, ids: frozenset[uuid.UUID] | None) -> SafeStatsDTO:
+        """Counts over the safes in ``ids`` (None: every safe). Health is the service's."""
+        scope = [] if ids is None else [Safe.id.in_(ids)]
+        safes = select(Safe.id).where(*scope)
+        total, app_fetch, approval = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(Safe.allow_app_fetch),
+                    func.count().filter(Safe.approval_required),
+                )
+                .select_from(Safe)
+                .where(*scope)
+            )
+        ).one()
+        accounts = await self._session.scalar(
+            select(func.count()).select_from(Account).where(Account.safe_id.in_(safes))
+        )
+        members = await self._session.scalar(
+            select(func.count()).select_from(SafeMember).where(SafeMember.safe_id.in_(safes))
+        )
+        return SafeStatsDTO(
+            total=total,
+            accounts=accounts or 0,
+            memberships=members or 0,
+            app_fetch_allowed=app_fetch,
+            approval_required=approval,
+        )
 
     async def get(self, safe_id: uuid.UUID, *, lock: bool = False) -> SafeDTO | None:
         accounts, members = _counts()

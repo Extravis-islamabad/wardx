@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
 from sqlalchemy import Row, and_, func, literal, or_, select, text, union
 
 from src.contracts.dto.audit.audit_event_dto import AuditEventDTO, AuditFilterDTO
+from src.contracts.dto.dashboard.stats_dto import AuditStatsDTO
 from src.models import AccessRequest, Account, AuditEvent, Checkout, GatewaySession, RotationJob
 from src.repositories.base import BaseRepository
 
@@ -105,6 +107,27 @@ class AuditEventRepository(BaseRepository):
                 .limit(limit)
             )
         ).all()
+
+    async def stats(self, now: datetime) -> AuditStatsDTO:
+        """KPI counts over the whole trail, one query; windows end at ``now``."""
+        day = AuditEvent.occurred_at >= now - timedelta(days=1)
+        week = AuditEvent.occurred_at >= now - timedelta(days=7)
+        row = (
+            await self._session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(day),
+                    func.count().filter(week),
+                    func.count().filter(
+                        day, AuditEvent.action == "auth.login", AuditEvent.outcome == "success"
+                    ),
+                    func.count().filter(day, AuditEvent.action == "secret.reveal"),
+                    func.count().filter(week, AuditEvent.action == "secret.emergency_reveal"),
+                    func.count().filter(week, AuditEvent.action == "session.command_blocked"),
+                ).select_from(AuditEvent)
+            )
+        ).one()
+        return AuditStatsDTO(*row)
 
     async def list(
         self, filters: AuditFilterDTO, *, page: int, page_size: int

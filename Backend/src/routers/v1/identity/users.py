@@ -13,6 +13,7 @@ DELETE /users/{user_id}/permissions/{codename} — revoke it
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, status
@@ -34,6 +35,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import UserStatsResponse
 from src.contracts.schemas.responses.identity.user_responses import UserResponse
 from src.core.permissions import USERS_MANAGE
 from src.dependencies.auth import ActorDep, require_permission
@@ -193,3 +195,14 @@ async def revoke_permission(
 ) -> APIResponse[None]:
     await service.revoke(actor, user_id, codename)
     return ok(None, "Revoked; a high-severity alert was raised")
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[UserStatsResponse],
+    dependencies=[Depends(require_permission(USERS_MANAGE))],
+    summary="KPI counts over every user",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def user_stats(service: UserServiceDep) -> APIResponse[UserStatsResponse]:
+    return ok(UserStatsResponse(**asdict(await service.stats())))

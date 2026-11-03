@@ -11,6 +11,7 @@ POST /requests/{request_id}/cancel     — the requester withdraws an open reque
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -33,6 +34,7 @@ from src.contracts.schemas.responses.common import (
     PaginatedAPIResponse,
     ok,
 )
+from src.contracts.schemas.responses.dashboard.stats_responses import RequestStatsResponse
 from src.core.enums import RequestStatus
 from src.core.permissions import ACCESS_USE
 from src.dependencies.access import AccessRequestServiceDep
@@ -141,3 +143,16 @@ async def cancel_request(
     request_id: uuid.UUID, service: AccessRequestServiceDep, actor: ActorDep
 ) -> APIResponse[AccessRequestResponse]:
     return ok(request_response(await service.cancel(actor, request_id)))
+
+
+@router.get(
+    "/stats",
+    response_model=APIResponse[RequestStatsResponse],
+    dependencies=[Depends(require_permission(ACCESS_USE))],
+    summary="KPI counts over the requests you can see, and your approval queue",
+    responses={**UNAUTHORIZED_RESPONSE, **FORBIDDEN_RESPONSE},
+)
+async def request_stats(
+    service: AccessRequestServiceDep, actor: ActorDep
+) -> APIResponse[RequestStatsResponse]:
+    return ok(RequestStatsResponse(**asdict(await service.stats(actor))))

@@ -32,6 +32,7 @@ from src.contracts.dto.access.checkout_dto import (
     CheckoutFilterDTO,
     RevealedSecretDTO,
 )
+from src.contracts.dto.dashboard.stats_dto import CheckoutStatsDTO
 from src.contracts.dto.safes.approval_policy_dto import RequestPolicyDTO
 from src.core.context import SYSTEM_ACTOR, Actor
 from src.core.enums import CheckoutStatus, RequestStatus, SafePermission
@@ -82,6 +83,13 @@ class CheckoutService:
             CheckoutFilterDTO(user_id=actor.id if own else None, status=status),
             page=page,
             page_size=page_size,
+        )
+
+    async def stats(self, actor: Actor) -> CheckoutStatsDTO:
+        """Counts over the check-outs ``list`` would show this actor."""
+        own = not actor.can(ACCESS_VIEW_ALL)
+        return await self._checkouts.stats(
+            CheckoutFilterDTO(user_id=actor.id if own else None), actor.id
         )
 
     async def get(self, checkout_id: uuid.UUID, *, lock: bool = False) -> CheckoutDTO:
