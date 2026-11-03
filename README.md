@@ -66,6 +66,15 @@ it is made. The same scan runs over the full history on every push and pull requ
 (`.github/workflows/gitleaks.yml`). A deliberate test literal that trips the scanner
 gets an inline `# gitleaks:allow` comment on that line only, never a file or rule ignore.
 
+## Run it with Docker
+
+```bash
+sh scripts/docker-init-env.sh   # .env with generated secrets
+docker compose up -d --build    # console on http://localhost:8080, gateway on :2222
+```
+
+See [docs/DOCKER.md](docs/DOCKER.md).
+
 ## Run it locally
 
 ```bash
