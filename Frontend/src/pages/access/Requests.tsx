@@ -11,6 +11,7 @@ import { RequestScope } from '@/features/access/constants';
 import { useCancelRequest, useCreateCheckout, useRequests } from '@/features/access/hooks';
 import type { AccessRequest } from '@/services/access-services';
 import { notify } from '@/utils/notify';
+import RequestKpis from '@/features/access/components/requests/RequestKpis';
 
 export default function Requests() {
   const { user, canAccess } = useAuth();
@@ -59,7 +60,7 @@ export default function Requests() {
   ];
 
   return (
-    <PageShell
+    <PageShell kpis={<RequestKpis />}
       title="Access requests"
       actions={
         <Segmented

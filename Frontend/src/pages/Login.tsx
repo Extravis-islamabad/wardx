@@ -14,7 +14,7 @@ export default function Login() {
     <PageShell bare className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <SafetyCertificateOutlined className="text-4xl text-(--primary)" />
+          <SafetyCertificateOutlined className="text-4xl text-(--primary)!" />
           <Text as="h1" variant="h1">
             WardX
           </Text>

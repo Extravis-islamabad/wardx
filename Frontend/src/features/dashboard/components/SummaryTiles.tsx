@@ -1,46 +1,33 @@
-import { Card, Col, Row, Statistic } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { KpiBar, KpiTone, toneIf } from '@/components';
 import { ROUTES } from '@/constants/enums/routes';
 import type { DashboardSummary } from '@/services/dashboard-services';
 
-interface Tile {
-  title: string;
-  value?: number;
-  to: ROUTES;
-  warn?: boolean;
-}
-
-const tilesFor = (data: DashboardSummary | undefined): Tile[] => [
-  { title: 'My active check-outs', value: data?.my_active_checkouts, to: ROUTES.CHECKOUTS },
-  { title: 'My open requests', value: data?.my_open_requests, to: ROUTES.REQUESTS },
-  { title: 'Pending approvals', value: data?.pending_requests, to: ROUTES.REQUESTS },
-  { title: 'Active check-outs (all)', value: data?.active_checkouts, to: ROUTES.CHECKOUTS },
-  { title: 'Targets', value: data?.targets, to: ROUTES.TARGETS },
-  { title: 'Privileged accounts', value: data?.accounts, to: ROUTES.ACCOUNTS },
-  {
-    title: 'Accounts without a secret',
-    value: data?.accounts_without_secret,
-    to: ROUTES.ACCOUNTS,
-    warn: !!data?.accounts_without_secret,
-  },
-];
-
+/** The dashboard KPI strip: one dense row of counters, each a link to its list. */
 export function SummaryTiles({ data, loading }: { data?: DashboardSummary; loading: boolean }) {
-  const navigate = useNavigate();
   return (
-    <Row gutter={[16, 16]}>
-      {tilesFor(data)?.map((t) => (
-        <Col key={t.title} xs={24} sm={12} lg={6}>
-          <Card hoverable loading={loading} onClick={() => navigate(t.to)}>
-            <Statistic
-              title={t.title}
-              value={t.value ?? 0}
-              styles={t.warn ? { content: { color: 'var(--warning)' } } : undefined}
-            />
-          </Card>
-        </Col>
-      ))}
-    </Row>
+    <KpiBar
+      items={[
+        { label: 'My check-outs', value: data?.my_active_checkouts, loading, to: ROUTES.CHECKOUTS },
+        { label: 'My open requests', value: data?.my_open_requests, loading, to: ROUTES.REQUESTS },
+        {
+          label: 'Pending approvals',
+          value: data?.pending_requests,
+          loading,
+          to: ROUTES.REQUESTS,
+          tone: toneIf(data?.pending_requests, KpiTone.WARNING),
+        },
+        { label: 'Active check-outs', value: data?.active_checkouts, loading, to: ROUTES.CHECKOUTS },
+        { label: 'Targets', value: data?.targets, loading, to: ROUTES.TARGETS },
+        { label: 'Privileged accounts', value: data?.accounts, loading, to: ROUTES.ACCOUNTS },
+        {
+          label: 'Accounts without a secret',
+          value: data?.accounts_without_secret,
+          loading,
+          to: ROUTES.ACCOUNTS,
+          tone: toneIf(data?.accounts_without_secret, KpiTone.WARNING),
+        },
+      ]}
+    />
   );
 }
 

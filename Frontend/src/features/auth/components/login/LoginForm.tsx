@@ -32,7 +32,7 @@ export function LoginForm() {
 
   return (
     <>
-      {error && <Alert className="!mb-4" type="error" showIcon title={error} />}
+      {error && <Alert className="!mb-2" type="error" showIcon title={error} />}
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormField label="Username" htmlFor="login-username" error={errors.username?.message}>
           <Controller

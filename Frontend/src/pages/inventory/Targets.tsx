@@ -9,6 +9,7 @@ import { HostKeyModal, TargetFormModal, TargetsTable } from '@/features/inventor
 import { useDeleteTarget, useResetTargetHostKey, useTargets } from '@/features/inventory/hooks';
 import type { Target } from '@/services/inventory-services';
 import { notify } from '@/utils/notify';
+import TargetKpis from '@/features/inventory/components/targets/TargetKpis';
 
 export default function Targets() {
   const { canAccess } = useAuth();
@@ -25,7 +26,7 @@ export default function Targets() {
   const [hostKeyTarget, setHostKeyTarget] = useState<Target | null>(null);
 
   return (
-    <PageShell
+    <PageShell kpis={<TargetKpis />}
       title="Targets"
       actions={
         <>

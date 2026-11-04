@@ -1,5 +1,5 @@
-import { Alert, Card, Descriptions, Space, Typography } from 'antd';
-import { StatusTag } from '@/components';
+import { Alert, Descriptions, Space, Typography } from 'antd';
+import { SectionCard, StatusTag } from '@/components';
 import { StatusVariant } from '@/constants/enums/status';
 import { useCluster } from '@/features/dashboard/hooks';
 import type { ClusterHealth } from '@/services/dashboard-services';
@@ -39,7 +39,7 @@ export function ClusterPanel() {
   const { leader, replication, dr, gateways, last_restore_drill: drill } = data;
   const degraded = replication.sync_state === 'degraded';
   return (
-    <Space orientation="vertical" size={12} className="w-full">
+    <Space orientation="vertical" size={8} className="w-full">
       {degraded && (
         <Alert
           type="error"
@@ -64,7 +64,7 @@ export function ClusterPanel() {
           description="Every gateway node must use the same host key file (HA_DR.md §5)."
         />
       )}
-      <Card size="small" title="Cluster">
+      <SectionCard title="Cluster">
         <Descriptions size="small" column={1}>
           <Descriptions.Item label="Scheduler leader">
             {leader ? (
@@ -124,7 +124,7 @@ export function ClusterPanel() {
             </Descriptions.Item>
           )}
         </Descriptions>
-      </Card>
+      </SectionCard>
     </Space>
   );
 }

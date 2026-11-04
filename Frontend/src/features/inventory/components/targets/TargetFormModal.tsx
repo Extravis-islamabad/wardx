@@ -87,7 +87,7 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
             )}
           />
         </FormField>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Protocol" htmlFor="target-protocol" error={errors.protocol?.message}>
             <Controller
               control={control}
@@ -108,7 +108,7 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
           </FormField>
         </div>
         {usesTlsApi(platform) && (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-x-3">
             <FormField
               label="API-SSL port"
               htmlFor="target-api-port"
@@ -162,7 +162,7 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
             )}
           />
         </FormField>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Min password length" htmlFor="target-minlen" hint="Blank: platform default" error={errors.min_length?.message}>
             <Controller
               control={control}

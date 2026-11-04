@@ -6,10 +6,10 @@ import type { AccessRequest, RequestLevel } from '@/services/access-services';
 import { fmtTime } from '@/utils/format';
 
 const ICON: Record<RequestLevel['state'], JSX.Element> = {
-  approved: <CheckCircleFilled className="text-(--success)" />,
-  denied: <CloseCircleFilled className="text-(--error)" />,
-  current: <ClockCircleOutlined className="text-(--warning)" />,
-  waiting: <MinusCircleOutlined className="text-(--muted-foreground)" />,
+  approved: <CheckCircleFilled className="text-(--success)!" />,
+  denied: <CloseCircleFilled className="text-(--error)!" />,
+  current: <ClockCircleOutlined className="text-(--warning)!" />,
+  waiting: <MinusCircleOutlined className="text-(--muted-foreground)!" />,
 };
 
 const approverLabel = (l: RequestLevel) =>

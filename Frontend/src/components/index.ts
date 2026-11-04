@@ -6,6 +6,8 @@ export { default as SuspenseBoundary, PageLoader } from './SuspenseBoundary';
 export { default as StatusTag } from './status/StatusTag';
 export { default as PageTitle } from './page-title';
 export { default as PageShell } from './page-shell';
+export { default as SectionCard } from './section-card';
+export { default as KpiBar, KpiTone, toneIf, type KpiItem } from './kpi-bar';
 export { default as ModalTitle } from './modal-title';
 export { default as ConfirmModal } from './modal/ConfirmModal';
 export { default as ErrorState } from './state/ErrorState';

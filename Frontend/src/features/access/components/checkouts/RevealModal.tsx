@@ -55,7 +55,7 @@ export function RevealModal({ checkout, onClose }: { checkout: Checkout | null; 
       <Box className="px-2 border-0">
         {error && <Alert type="error" showIcon title={error} />}
         {checkout && (
-          <Descriptions column={1} size="small" className="!mb-4">
+          <Descriptions column={1} size="small" className="!mb-2">
             <Descriptions.Item label="Target">
               {checkout.account?.target_name} ({checkout.account?.target_address})
             </Descriptions.Item>

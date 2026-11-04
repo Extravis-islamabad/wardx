@@ -23,7 +23,7 @@ export function SecretOnceModal({ created, onClose }: { created: NewAppSecret | 
       title={<ModalTitle>{`Client secret for ${created?.app.name ?? ''}`}</ModalTitle>}
       onCancel={onClose}
       footer={null}
-      maskClosable={false}
+      mask={{ closable: false }}
       destroyOnHidden
       width={620}
     >

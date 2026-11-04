@@ -5,6 +5,7 @@ import { Button, PageShell } from '@/components';
 import { usePagination } from '@/hooks';
 import { AuditTable, ChainVerificationResult } from '@/features/audit/components';
 import { useAuditEvents, useVerifyAuditChain } from '@/features/audit/hooks';
+import AuditKpis from '@/features/audit/components/AuditKpis';
 
 const AUDIT_PAGE_SIZE = 50;
 
@@ -15,7 +16,7 @@ export default function AuditTrail() {
   const verify = useVerifyAuditChain();
 
   return (
-    <PageShell
+    <PageShell kpis={<AuditKpis />}
       title="Audit trail"
       actions={
         <>

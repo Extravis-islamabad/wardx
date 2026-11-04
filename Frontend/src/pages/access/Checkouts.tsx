@@ -10,6 +10,7 @@ import { CheckoutScope } from '@/features/access/constants';
 import { useCheckin, useCheckouts } from '@/features/access/hooks';
 import type { Checkout } from '@/services/access-services';
 import { notify } from '@/utils/notify';
+import CheckoutKpis from '@/features/access/components/checkouts/CheckoutKpis';
 
 export default function Checkouts() {
   const { user, canAccess } = useAuth();
@@ -40,7 +41,7 @@ export default function Checkouts() {
   const checkingInMine = checkingIn?.user?.id === user?.id;
 
   return (
-    <PageShell
+    <PageShell kpis={<CheckoutKpis />}
       title="Check-outs"
       actions={
         <Segmented

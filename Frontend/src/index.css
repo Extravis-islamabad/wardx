@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
-/* antd owns component styling; Tailwind is for layout utilities. */
+/* antd owns component styling; Tailwind is for layout utilities. Global antd
+   overrides here are the MoneTX ones antd has no token for. */
 @layer base {
   html,
   body,
@@ -9,6 +10,135 @@
     min-height: 100%;
   }
   body {
-    background: var(--background);
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
   }
+
+  /* Scrollbar chrome follows the theme. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--muted);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  :focus-visible {
+    outline-color: var(--ring);
+  }
+}
+
+@layer components {
+  /* ── Sidebar nav ──────────────────────────────────────────────────────
+     WardX's mark on the shared NOC nav: the selected item carries a teal
+     rail on its left edge. */
+  .wardx-nav.ant-menu-dark .ant-menu-item-selected {
+    box-shadow: inset 3px 0 0 var(--nav-accent);
+  }
+  .wardx-nav.ant-menu-dark .ant-menu-item {
+    width: 100%;
+  }
+  /* A thin scrollbar on the dark rail, for short windows. */
+  .ant-layout-sider ::-webkit-scrollbar {
+    width: 4px;
+  }
+  .ant-layout-sider ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .ant-layout-sider ::-webkit-scrollbar-thumb {
+    background: var(--nav-hover-bg);
+  }
+
+  /* ── Modals ───────────────────────────────────────────────────────────
+     The Modal tokens zero the header padding (each modal supplies its own
+     through `ModalTitle`), so pin the close button to the same inset. */
+  .ant-modal-close {
+    top: 8px !important;
+    inset-inline-end: 12px !important;
+  }
+  /* A long modal scrolls its body under a fixed title, never the page behind it. */
+  .ant-modal .ant-modal-container {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 124px);
+  }
+  .ant-modal-centered .ant-modal .ant-modal-container {
+    max-height: calc(100dvh - 48px);
+  }
+  .ant-modal .ant-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .ant-modal .ant-modal-header {
+    margin-bottom: 0;
+  }
+}
+
+/* ── Page action bar ──────────────────────────────────────────────────
+   antd sizes Search / Input / Select to 100% of their parent; in the action
+   bar that pushed the buttons onto a second row. Give fields a fixed width
+   so the bar stays one row and every control shares the same height. */
+.wx-page-actions > .ant-input-search,
+.wx-page-actions > .ant-input-affix-wrapper,
+.wx-page-actions > .ant-input {
+  width: 220px;
+}
+.wx-page-actions > .ant-select {
+  min-width: 160px;
+}
+.wx-page-actions > .ant-picker-range {
+  width: 280px;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+.ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin: 8px 0 0;
+}
+
+/* ── Tooltips ─────────────────────────────────────────────────────────
+   Tooltip wears the card surface (see antdThemeConfig); antd has no border token. */
+.ant-tooltip .ant-tooltip-inner {
+  border: 1px solid var(--border);
+}
+
+/* ── Multi-select chips ─────────────────────────────────────────────── */
+.ant-select-multiple .ant-select-selection-item {
+  background: var(--muted);
+  border: 1px solid var(--border);
+}
+
+/* ── Disabled controls keep their border, so the field still reads as a field. */
+.ant-input-disabled,
+.ant-input-affix-wrapper-disabled,
+.ant-select-disabled .ant-select-selector,
+.ant-input-number-disabled {
+  border-color: var(--border) !important;
+}
+
+/* ── Toasts top-right, under the header ─────────────────────────────── */
+.ant-message {
+  top: 56px !important;
+}
+
+/* ── NOC utilities (shared with MoneTX) ─────────────────────────────── */
+/* Mono numerics and identifiers — hosts, IPs, account names, hashes. */
+.wx-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Compact uppercase label — beside values and in panel captions. */
+.wx-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
 }
