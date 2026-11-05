@@ -98,7 +98,7 @@ export function AppFormModal({ open, app, onClose, onCreated }: AppFormModalProp
             title="No allowed networks: this application cannot get a token until you add one."
           />
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField
             label="Fetches per minute"
             htmlFor="app-rate"

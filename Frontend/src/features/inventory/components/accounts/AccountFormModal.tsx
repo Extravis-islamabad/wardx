@@ -145,7 +145,7 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
             )}
           />
         </FormField>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Username" htmlFor="account-username" required error={errors.username?.message}>
             <Controller
               control={control}
@@ -180,7 +180,7 @@ export function AccountFormModal({ open, account, onClose }: AccountFormModalPro
             />
           </FormField>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Exclusive" htmlFor="account-exclusive">
             <Controller
               control={control}

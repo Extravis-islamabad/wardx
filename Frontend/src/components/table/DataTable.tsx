@@ -20,6 +20,8 @@ const DataTable = <T extends object>({
   ...rest
 }: IDataTableProps<T>) => (
   <Table<T>
+    // Dense by default; a caller can still pass its own size.
+    size="small"
     {...rest}
     // Stale rows must not sit under an error — they read as current data.
     dataSource={isError ? [] : dataSource}

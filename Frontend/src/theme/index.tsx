@@ -28,6 +28,21 @@ const readSavedMode = (): ThemeMode => {
   return ThemeMode.DARK;
 };
 
+/**
+ * Put the theme on `<html>` synchronously. `getAntdThemeConfig` reads the CSS
+ * variables, so the attribute must change before the render that builds it —
+ * not in an effect after, which would hand antd the previous theme's colours.
+ */
+const applyMode = (mode: ThemeMode) => {
+  document.documentElement.dataset.theme = mode;
+};
+
+const initialMode = (): ThemeMode => {
+  const mode = readSavedMode();
+  applyMode(mode);
+  return mode;
+};
+
 /** Hands `notify` the themed `App` notification instance. */
 const NotifyBridge = () => {
   const { notification } = AntdApp.useApp();
@@ -39,10 +54,9 @@ const NotifyBridge = () => {
 };
 
 const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [mode, setMode] = useState<ThemeMode>(readSavedMode);
+  const [mode, setMode] = useState<ThemeMode>(initialMode);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = mode;
     try {
       localStorage.setItem(THEME_STORAGE_KEY, mode);
     } catch {
@@ -53,14 +67,21 @@ const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const value = useMemo<ThemeContextValue>(
     () => ({
       mode,
-      toggle: () => setMode((m) => (m === ThemeMode.DARK ? ThemeMode.LIGHT : ThemeMode.DARK)),
+      toggle: () => {
+        const next = mode === ThemeMode.DARK ? ThemeMode.LIGHT : ThemeMode.DARK;
+        applyMode(next);
+        setMode(next);
+      },
     }),
     [mode],
   );
 
+  // Rebuilt per theme only; the attribute is already set, so the reads are current.
+  const antdTheme = useMemo(() => getAntdThemeConfig(mode), [mode]);
+
   return (
     <ThemeContext.Provider value={value}>
-      <ConfigProvider theme={getAntdThemeConfig(mode)}>
+      <ConfigProvider theme={antdTheme}>
         <AntdApp>
           <NotifyBridge />
           {children}

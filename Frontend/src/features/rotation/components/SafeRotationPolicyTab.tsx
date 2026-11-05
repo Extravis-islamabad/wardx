@@ -71,7 +71,7 @@ export function SafeRotationPolicyTab({ safeId, canEdit }: { safeId: string; can
         />
       </FormField>
       {window && (
-        <div className="flex flex-wrap items-center gap-3 pb-3">
+        <div className="flex flex-wrap items-center gap-2 pb-2">
           <Checkbox.Group
             disabled={ro}
             value={window.days}

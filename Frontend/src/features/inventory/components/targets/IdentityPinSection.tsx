@@ -87,10 +87,10 @@ export function IdentityPinSection<P extends IdentityProbe>({
   const alreadyPinned = probe?.matches_pin && !probe?.mismatch_at;
 
   return (
-    <div className="mb-4">
+    <div className="mb-2">
       <Typography.Title level={5}>{title}</Typography.Title>
       {reading && (
-        <div className="flex justify-center py-4">
+        <div className="flex justify-center py-2">
           <Spin />
         </div>
       )}
@@ -127,7 +127,7 @@ export function IdentityPinSection<P extends IdentityProbe>({
           ) : (
             <>
               <Alert className="!mt-3" type="warning" showIcon title="Compare before accepting" description={compareHint} />
-              <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="mt-2 flex items-center justify-between gap-2">
                 <Checkbox checked={compared} onChange={(e) => setCompared(e.target.checked)}>
                   I compared this fingerprint with the device and it matches.
                 </Checkbox>

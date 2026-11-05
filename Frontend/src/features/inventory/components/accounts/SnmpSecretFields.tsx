@@ -46,7 +46,7 @@ export function SnmpSecretFields({ value, onChange }: { value: SnmpSecret; onCha
   const priv = value.security_level === 'authPriv';
   return (
     <>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-x-3">
         <FormField label="Security name" htmlFor="snmp-user" required>
           <Input id="snmp-user" value={value.security_name} onChange={(e) => set({ security_name: e.target.value })} />
         </FormField>
@@ -61,7 +61,7 @@ export function SnmpSecretFields({ value, onChange }: { value: SnmpSecret; onCha
         </FormField>
       </div>
       {auth && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Auth protocol" htmlFor="snmp-auth-proto">
             <Select
               id="snmp-auth-proto"
@@ -82,7 +82,7 @@ export function SnmpSecretFields({ value, onChange }: { value: SnmpSecret; onCha
         </div>
       )}
       {priv && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-x-3">
           <FormField label="Privacy protocol" htmlFor="snmp-priv-proto">
             <Select
               id="snmp-priv-proto"

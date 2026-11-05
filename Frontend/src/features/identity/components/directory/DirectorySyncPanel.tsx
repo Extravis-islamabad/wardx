@@ -1,6 +1,6 @@
-import { Alert, Card, Space, Tooltip, Typography } from 'antd';
+import { Alert, Space, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
-import { Button, ConfirmModal, StatusTag } from '@/components';
+import { Button, ConfirmModal, SectionCard, StatusTag } from '@/components';
 import { SyncStatus } from '@/constants/enums/identity';
 import { StatusVariant } from '@/constants/enums/status';
 import { SYNC_STATUS_VARIANT } from '@/features/identity/constants';
@@ -23,9 +23,8 @@ export function DirectorySyncPanel({ config }: { config: DirectoryConfig }) {
   };
 
   return (
-    <Card
-      size="small"
-      className="!mt-4"
+    <SectionCard
+      className="!mt-2"
       title="Directory sync"
       extra={
         <Space>
@@ -101,7 +100,7 @@ export function DirectorySyncPanel({ config }: { config: DirectoryConfig }) {
           setConfirmingForce(false);
         }}
       />
-    </Card>
+    </SectionCard>
   );
 }
 

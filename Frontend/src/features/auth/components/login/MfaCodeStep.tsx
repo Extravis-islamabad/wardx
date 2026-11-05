@@ -32,7 +32,7 @@ export function MfaCodeStep() {
       <Text variant="caption" className="mb-4 text-center">
         Enter the 6-digit code from your authenticator app, or a recovery code.
       </Text>
-      {error && <Alert className="!mb-4" type="error" showIcon title={error} />}
+      {error && <Alert className="!mb-2" type="error" showIcon title={error} />}
       <form onSubmit={(e) => void submit(e)}>
         <FormField label="Authentication code" htmlFor="mfa-code" className="mb-6">
           <Input

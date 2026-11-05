@@ -30,7 +30,7 @@ const ErrorState = ({ error, title, onRetry, variant = ErrorStateVariant.BANNER 
       }
     />
   );
-  return variant === ErrorStateVariant.BLOCK ? <div className="py-6 text-left">{alert}</div> : alert;
+  return variant === ErrorStateVariant.BLOCK ? <div className="py-3 text-left">{alert}</div> : alert;
 };
 
 export default ErrorState;

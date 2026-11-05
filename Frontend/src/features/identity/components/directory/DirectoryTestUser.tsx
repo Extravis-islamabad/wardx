@@ -1,7 +1,7 @@
 import { SearchOutlined } from '@ant-design/icons';
-import { Alert, Card, Descriptions, Input, Space, Typography } from 'antd';
+import { Alert, Descriptions, Input, Space, Typography } from 'antd';
 import { useState } from 'react';
-import { Button, StatusTag } from '@/components';
+import { Button, SectionCard, StatusTag } from '@/components';
 import { StatusVariant } from '@/constants/enums/status';
 import { useTestDirectoryUser } from '@/features/identity/hooks';
 import { errorMessage } from '@/utils/notifyApiError';
@@ -12,7 +12,7 @@ export function DirectoryTestUser() {
   const test = useTestDirectoryUser();
   const r = test.data;
   return (
-    <Card size="small" title="Test a user (no password needed)">
+    <SectionCard title="Test a user (no password needed)">
       <Space.Compact block>
         <Input
           aria-label="Login name"
@@ -48,7 +48,7 @@ export function DirectoryTestUser() {
           </Descriptions.Item>
         </Descriptions>
       )}
-    </Card>
+    </SectionCard>
   );
 }
 

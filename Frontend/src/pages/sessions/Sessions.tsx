@@ -10,6 +10,7 @@ import { SessionScope } from '@/features/sessions/constants';
 import { useGatewayInfo, useSessions, useTerminateSession } from '@/features/sessions/hooks';
 import type { GatewaySession } from '@/services/sessions-services';
 import { notify } from '@/utils/notify';
+import SessionKpis from '@/features/sessions/components/sessions/SessionKpis';
 
 export default function Sessions() {
   const { canAccess } = useAuth();
@@ -31,7 +32,7 @@ export default function Sessions() {
   const { mutateAsync: terminate } = useTerminateSession();
 
   return (
-    <PageShell
+    <PageShell kpis={<SessionKpis />}
       title="Sessions"
       description={
         gateway.data && (

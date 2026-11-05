@@ -15,6 +15,7 @@ import { AccountRotationDrawer } from '@/features/rotation/components';
 import type { Checkout } from '@/services/access-services';
 import type { Account } from '@/services/inventory-services';
 import { notify } from '@/utils/notify';
+import AccountKpis from '@/features/inventory/components/accounts/AccountKpis';
 
 export default function Accounts() {
   const { canAccess } = useAuth();
@@ -38,7 +39,7 @@ export default function Accounts() {
   const { mutateAsync: removeAccount } = useDeleteAccount();
 
   return (
-    <PageShell
+    <PageShell kpis={<AccountKpis />}
       title="Privileged accounts"
       actions={
         <>

@@ -8,6 +8,7 @@ import { usePagination } from '@/hooks';
 import { SafeFormModal, SafeMembersDrawer, SafesTable } from '@/features/safes/components';
 import { useSafes } from '@/features/safes/hooks';
 import type { Safe } from '@/services/safes-services';
+import SafeKpis from '@/features/safes/components/SafeKpis';
 
 export default function Safes() {
   const { canAccess } = useAuth();
@@ -20,7 +21,7 @@ export default function Safes() {
   const safes = useSafes({ page, page_size, search: search || undefined });
 
   return (
-    <PageShell
+    <PageShell kpis={<SafeKpis />}
       title="Safes"
       description="Every account lives in one safe; its members decide who may list, use, retrieve or manage it."
       actions={

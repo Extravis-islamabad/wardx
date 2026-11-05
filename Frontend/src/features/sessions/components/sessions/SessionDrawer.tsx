@@ -34,7 +34,7 @@ export function SessionDrawer({ session, onClose }: { session: GatewaySession | 
     >
       {session && (
         <>
-          <Descriptions size="small" column={2} className="!mb-4">
+          <Descriptions size="small" column={2} className="!mb-2">
             <Descriptions.Item label="Status">
               <StatusTag label={session.status} />
               {/* The item content is a flex row, which drops a plain space between children. */}

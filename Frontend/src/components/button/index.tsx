@@ -12,14 +12,14 @@ type ButtonSize = 'small' | 'medium' | 'large';
 const variantClasses: Record<ButtonVariant, string> = {
   default: '',
   primary:
-    'bg-(--primary)! text-(--status-on-solid)! border-(--primary)! hover:bg-(--primary-hover)! hover:border-(--primary-hover)!',
+    'bg-(--primary)! text-(--primary-foreground)! border-(--primary)! hover:bg-(--primary-hover)! hover:border-(--primary-hover)!',
   outline: 'bg-transparent! border! border-(--border)! text-(--foreground)! hover:bg-(--muted)!',
   ghost: 'bg-transparent! border-0! text-(--primary)! hover:bg-(--muted)!',
   admin: 'bg-(--card)! border! border-(--border)! text-(--foreground)! hover:bg-(--muted)!',
   danger:
     'bg-(--danger)! text-(--status-on-solid)! border-(--danger)! hover:bg-(--danger-hover)! hover:border-(--danger-hover)!',
   success: 'bg-(--success)! text-(--status-on-solid)! border-(--success)! hover:opacity-90!',
-  warning: 'bg-(--warning)! text-(--status-on-solid)! border-(--warning)! hover:opacity-90!',
+  warning: 'bg-(--warning)! text-(--status-on-warning)! border-(--warning)! hover:opacity-90!',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

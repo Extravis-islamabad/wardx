@@ -1,26 +1,80 @@
-/* WardX dark theme tokens (the default). */
+/* WardX dark theme (the default). The MoneTX NOC palette with WardX's own
+   accent: a bright vault teal, carrying dark text on solid fills. */
 html[data-theme='dark'] {
-  --background: #141414;
-  --foreground: #e6e8ee;
-  --card: #1f1f1f;
-  --muted: #262626;
-  --muted-foreground: #8c8f99;
-  --border: #303030;
-  --primary: #5b6cff;
-  --primary-hover: #6d7cff;
+  /* Surfaces */
+  --background: #070a11;
+  --foreground: #d9e0ec;
+  --card: #111624;
+  /* Slightly lifted card surface for alternating blocks. */
+  --card-secondary: #171d2e;
+  --muted: #161c2d;
+  --muted-foreground: #7d8699;
+  --input: #0d111b;
+  --border: #2e3a55;
+  /* Modal / overlay scrim. */
+  --scrim: rgba(7, 10, 17, 0.72);
+
+  /* Accent — WardX teal. Bright on dark, so solid fills carry dark text. */
+  --primary: #2dd4bf;
+  --primary-hover: #5eead4;
+  --primary-foreground: #042f2e;
+  --ring: #2dd4bf;
   --danger: #dc2626;
   --danger-hover: #b91c1c;
-  --success: #3f9f47;
+
+  /* Status fills. Blue for info, so it never reads as the teal accent. */
+  --success: #409f47;
   --error: #ef4444;
-  --warning: #faad14;
-  --info: #22a5f1;
-  --status-info: #1677ff;
-  --status-primary: #7c3aed;
-  --status-neutral: #3a3a3a;
+  --warning: #f59e0b;
+  --info: #60a5fa;
+
+  /* Status as text: the fills are already bright on dark, except success. */
+  --success-text: #4ade80;
+  --warning-text: #f59e0b;
+  --error-text: #f87171;
+  --info-text: #60a5fa;
+
+  /* Status tag (badge) palette — drives StatusTag variants */
+  --status-info: #2563eb;
+  --status-primary: #2dd4bf;
+  --status-neutral: #2e3a55;
   --status-on-solid: #ffffff;
-  --status-on-neutral: #c7cad3;
-  --code-surface: rgba(0, 0, 0, 0.2);
+  --status-on-primary: #042f2e;
+  --status-on-warning: #0b1120;
+  --status-on-neutral: #aab3c5;
+
+  /* Navbar */
+  --nav-background: #0d111b;
+  --nav-foreground: #ffffff;
+  --nav-item-color: #7d8699;
+  --nav-hover-bg: #161c2d;
+  --nav-selected-bg: #161c2d;
+  --nav-selected-color: #5eead4;
+  --nav-accent: #2dd4bf;
+
+  /* Text hierarchy */
+  --text-primary: #d9e0ec;
+  --text-secondary: #aab3c5;
+  --text-tertiary: #7d8699;
+
+  /* Skeleton shimmer — antd's own stops vanish against these surfaces. */
+  --skeleton-from: #232c42;
+  --skeleton-to: #33405e;
+
+  /* Terminal — always dark regardless of app theme */
+  --terminal-bg: #0b0f14;
+  --terminal-fg: #2dd4bf;
+  --terminal-text: #d4d4d4;
+  --terminal-muted: #6b7280;
+
+  /* Surfaces for secrets and codes */
+  --code-surface: rgba(0, 0, 0, 0.3);
   --qr-background: #ffffff;
   --qr-foreground: #000000;
-  --nav-foreground: #ffffff;
+
+  /* Fonts — mono stack for numerics and secrets, sans for everything else */
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'Fira Code', 'SF Mono', 'Menlo', ui-monospace, monospace;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  color-scheme: dark;
 }

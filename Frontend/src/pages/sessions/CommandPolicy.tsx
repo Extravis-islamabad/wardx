@@ -8,6 +8,7 @@ import { useTargets } from '@/features/inventory/hooks';
 import { CommandRulesTable, RuleFormModal, RuleTester } from '@/features/sessions/components';
 import { useCommandRules, useDeleteCommandRule, useUpdateCommandRule } from '@/features/sessions/hooks';
 import type { CommandRule } from '@/services/sessions-services';
+import RuleKpis from '@/features/sessions/components/command-rules/RuleKpis';
 
 export default function CommandPolicy() {
   const { canAccess } = useAuth();
@@ -21,7 +22,7 @@ export default function CommandPolicy() {
   const targetName = (id: string) => targets.data?.data?.find((t) => t.id === id)?.name ?? 'target';
 
   return (
-    <PageShell
+    <PageShell kpis={<RuleKpis />}
       title="Command policy"
       description="Commands matching a rule are erased on the device before they run. Sessions with rules have arrow keys, history and tab completion turned off so commands cannot slip past."
       actions={

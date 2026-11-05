@@ -1,12 +1,13 @@
-import { Alert, Card, Space, Typography } from 'antd';
+import { Alert, Space, Typography } from 'antd';
 import { useState } from 'react';
-import { Button, PageShell, StatusTag } from '@/components';
+import { Button, PageShell, SectionCard, StatusTag } from '@/components';
 import { StatusVariant } from '@/constants/enums/status';
 import { useAuth } from '@/context/AuthContext';
 import { CodePromptModal, MfaEnrol, RecoveryCodesModal } from '@/features/auth/components';
 import { MfaPromptMode } from '@/features/auth/constants';
 import { useDisableMfa, useMfaStatus, useRegenerateRecoveryCodes } from '@/features/auth/hooks';
 import { notify } from '@/utils/notify';
+import SecurityKpis from '@/features/auth/components/security/SecurityKpis';
 
 export default function Security() {
   const { user, needsMfaEnrolment } = useAuth();
@@ -18,7 +19,7 @@ export default function Security() {
   const enabled = !!status.data?.enabled;
 
   return (
-    <PageShell title="Security">
+    <PageShell kpis={<SecurityKpis />} title="Security">
       {needsMfaEnrolment && (
         <Alert
           type="warning"
@@ -26,7 +27,7 @@ export default function Security() {
           title={`Your role (${user?.role}) requires multi-factor authentication. Set it up to continue using WardX.`}
         />
       )}
-      <Card
+      <SectionCard
         loading={status.isLoading}
         title={
           <Space>
@@ -62,7 +63,7 @@ export default function Security() {
             <MfaEnrol onEnabled={setCodes} />
           </>
         )}
-      </Card>
+      </SectionCard>
       <RecoveryCodesModal codes={codes} onDone={() => setCodes(null)} />
       <CodePromptModal
         open={prompt === MfaPromptMode.DISABLE}

@@ -1,6 +1,6 @@
-import { Card, List, Space, Typography } from 'antd';
+import { List, Space, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { StatusTag } from '@/components';
+import { SectionCard, StatusTag } from '@/components';
 import { ROUTES } from '@/constants/enums/routes';
 import { StatusVariant } from '@/constants/enums/status';
 import { useRotationAttention } from '@/features/rotation/hooks';
@@ -67,7 +67,7 @@ export function RotationAttentionPanel() {
   ];
   if (!rows.length) return null;
   return (
-    <Card size="small" title={`Password rotation needs attention (${rows.length})`}>
+    <SectionCard title={`Password rotation needs attention (${rows.length})`}>
       <List
         size="small"
         dataSource={rows}
@@ -81,7 +81,7 @@ export function RotationAttentionPanel() {
           </List.Item>
         )}
       />
-    </Card>
+    </SectionCard>
   );
 }
 

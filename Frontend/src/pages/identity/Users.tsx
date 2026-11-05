@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import type { UserUpdatePayload } from '@/services/identity-services';
 import type { User } from '@/services/auth-services';
 import { notify } from '@/utils/notify';
+import UserKpis from '@/features/identity/components/users/UserKpis';
 
 export default function Users() {
   const [creating, setCreating] = useState(false);
@@ -29,7 +30,7 @@ export default function Users() {
   };
 
   return (
-    <PageShell
+    <PageShell kpis={<UserKpis />}
       title="Users"
       actions={
         <>

@@ -16,7 +16,7 @@ export function RecoveryCodesModal({ codes, onDone }: { codes: string[] | null; 
     >
       <Box className="px-2 border-0">
         <Text className="mb-3">Each code signs you in once if you lose your phone. They are shown only now.</Text>
-        <div className="grid grid-cols-2 gap-2 rounded-lg bg-(--code-surface) p-4 font-mono text-base">
+        <div className="grid grid-cols-2 gap-2 bg-(--code-surface) p-3 font-mono text-base">
           {codes?.map((c) => (
             <span key={c}>{c}</span>
           ))}
