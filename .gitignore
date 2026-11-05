@@ -5,3 +5,6 @@
 
 # Docker deployment secrets (see .env.docker.example).
 /.env
+
+# Archify diagram workspace (generated locally).
+.archify/
