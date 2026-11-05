@@ -70,7 +70,7 @@ gets an inline `# gitleaks:allow` comment on that line only, never a file or rul
 
 ```bash
 sh scripts/docker-init-env.sh   # .env with generated secrets
-docker compose up -d --build    # console on http://localhost:8080, gateway on :2222
+docker compose up -d --build    # console on http://localhost:3741, gateway on :2222
 ```
 
 See [docs/DOCKER.md](docs/DOCKER.md).
@@ -82,7 +82,7 @@ See [docs/DOCKER.md](docs/DOCKER.md).
 cd Backend
 uv venv --python 3.11 .venv && uv pip install --python .venv/bin/python -r requirements-dev.txt
 cp .env.example .env                       # point WARDX_DATABASE_URL at an empty PostgreSQL 14+
-.venv/bin/uvicorn main:app --port 8000     # runs migrations, creates the first admin
+.venv/bin/uvicorn main:app --port 8741     # runs migrations, creates the first admin
 cat .wardx/initial-admin-password          # development only; set WARDX_BOOTSTRAP_ADMIN_PASSWORD otherwise
 
 # Session gateway (second process, same .env)
@@ -90,7 +90,7 @@ WARDX_APP_ROLE=gateway .venv/bin/python main.py   # listens on :2222
 
 # Frontend (Node 20+)
 cd Frontend
-npm install && npm run dev                 # http://localhost:5173, proxies /api to :8000
+npm install && npm run dev                 # http://localhost:3741, proxies /api to :8741
 ```
 
 No PostgreSQL handy? `pip install pgserver` gives an embedded one; the integration tests use it

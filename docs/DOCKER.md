@@ -7,7 +7,7 @@ One Compose file runs the whole product:
 | `db`      | postgres:16      | WardX database (`pg-data` volume)                         | internal only    |
 | `api`     | `Backend/`       | FastAPI + scheduler (`WARDX_APP_ROLE=api`); runs migrations and creates the first admin on start | internal only |
 | `gateway` | `Backend/`       | SSH session gateway (`WARDX_APP_ROLE=gateway`)            | `2222`           |
-| `web`     | `Frontend/`      | nginx serving the console, proxying `/api/` to `api`      | `8080`           |
+| `web`     | `Frontend/`      | nginx serving the console, proxying `/api/` to `api`      | `3741`           |
 
 `api` and `gateway` share the `wardx-data` volume (`/data`): recordings the gateway writes are
 replayed by the API, and the gateway's SSH host key is kept in `/data/keys`.
@@ -20,7 +20,7 @@ docker compose up -d --build
 docker compose ps                  # all four should become "healthy"
 ```
 
-Open `http://<host>:8080` and sign in as `admin`. Prefer to fill secrets yourself? Copy
+Open `http://<host>:3741` and sign in as `admin`. Prefer to fill secrets yourself? Copy
 `.env.docker.example` to `.env` and set `POSTGRES_PASSWORD`, `WARDX_JWT_SECRET`,
 `WARDX_VAULT_KEK` and `WARDX_BOOTSTRAP_ADMIN_PASSWORD`. Containers run with
 `WARDX_ENVIRONMENT=production`, so the API refuses to start without them.

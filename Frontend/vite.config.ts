@@ -9,8 +9,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
     server: {
-      port: 5173,
-      proxy: { '/api': env.VITE_API_PROXY || 'http://localhost:8000' },
+      port: 3741,
+      proxy: { '/api': env.VITE_API_PROXY || 'http://localhost:8741' },
     },
   };
 });
