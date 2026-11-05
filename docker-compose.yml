@@ -1,0 +1,78 @@
+# WardX production-style stack: PostgreSQL, API (+ scheduler), SSH session gateway, web console.
+#
+#   cp .env.docker.example .env      # then fill in the secrets (see docs/DOCKER.md)
+#   docker compose up -d --build
+#
+# Console: http://<host>:${WARDX_WEB_PORT:-8080}   Gateway: ssh -p ${WARDX_GATEWAY_PORT:-2222} ...
+name: wardx
+
+x-backend: &backend
+  build:
+    context: ./Backend
+  image: ${WARDX_IMAGE_BACKEND:-wardx-backend:latest}
+  restart: unless-stopped
+  env_file: .env
+  environment: &backend-env
+    WARDX_ENVIRONMENT: ${WARDX_ENVIRONMENT:-production}
+    WARDX_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-wardx}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-wardx}
+    WARDX_RECORDING_DIR: /data/recordings
+  volumes:
+    # API serves replays the gateway writes, so both mount the same volume.
+    - wardx-data:/data
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wardx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-wardx}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      # API + scheduler in one process; split with api_only + a scheduler service if needed.
+      WARDX_APP_ROLE: api
+    expose:
+      - "8000"
+
+  gateway:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      WARDX_APP_ROLE: gateway
+      WARDX_GATEWAY_PORT: 2222
+    ports:
+      - "${WARDX_GATEWAY_PORT:-2222}:2222"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./Frontend
+    image: ${WARDX_IMAGE_FRONTEND:-wardx-frontend:latest}
+    restart: unless-stopped
+    environment:
+      WARDX_API_UPSTREAM: http://api:8000
+    ports:
+      - "${WARDX_WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pg-data:
+  wardx-data:
