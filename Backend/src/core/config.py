@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_password: str = ""
 
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:3741"]
 
     # Roles that must enrol in MFA before using anything else, e.g. ["admin","approver"].
     mfa_required_roles: list[str] = []

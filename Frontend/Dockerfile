@@ -11,6 +11,6 @@ FROM nginx:1.27-alpine
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /src/dist /usr/share/nginx/html
 # Upstream for /api; override with the backend's address.
-ENV WARDX_API_UPSTREAM=http://api:8000
+ENV WARDX_API_UPSTREAM=http://api:8741
 EXPOSE 80
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 CMD wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1

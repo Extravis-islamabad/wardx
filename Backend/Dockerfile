@@ -28,14 +28,14 @@ RUN chmod 0755 /usr/local/bin/wardx-entrypoint \
 ENV WARDX_ENVIRONMENT=production \
     WARDX_APP_ROLE=api \
     WARDX_RECORDING_DIR=/data/recordings \
-    WARDX_API_PORT=8000
+    WARDX_API_PORT=8741
 
 USER wardx
 VOLUME ["/data"]
-EXPOSE 8000 2222
+EXPOSE 8741 2222
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-  CMD ["python", "-c", "import os,socket,sys,urllib.request as u; r=os.environ.get('WARDX_APP_ROLE','api'); p=os.environ.get('WARDX_API_PORT','8000'); g=int(os.environ.get('WARDX_GATEWAY_PORT','2222')); sys.exit(0) if r=='scheduler' else (socket.create_connection(('127.0.0.1',g),3).close() if r=='gateway' else u.urlopen(f'http://127.0.0.1:{p}/health',timeout=3))"]
+  CMD ["python", "-c", "import os,socket,sys,urllib.request as u; r=os.environ.get('WARDX_APP_ROLE','api'); p=os.environ.get('WARDX_API_PORT','8741'); g=int(os.environ.get('WARDX_GATEWAY_PORT','2222')); sys.exit(0) if r=='scheduler' else (socket.create_connection(('127.0.0.1',g),3).close() if r=='gateway' else u.urlopen(f'http://127.0.0.1:{p}/health',timeout=3))"]
 
 ENTRYPOINT ["wardx-entrypoint"]
 CMD ["python", "main.py"]

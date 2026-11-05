@@ -3,7 +3,7 @@
 #   cp .env.docker.example .env      # then fill in the secrets (see docs/DOCKER.md)
 #   docker compose up -d --build
 #
-# Console: http://<host>:${WARDX_WEB_PORT:-8080}   Gateway: ssh -p ${WARDX_GATEWAY_PORT:-2222} ...
+# Console: http://<host>:${WARDX_WEB_PORT:-3741}   Gateway: ssh -p ${WARDX_GATEWAY_PORT:-2222} ...
 name: wardx
 
 x-backend: &backend
@@ -46,7 +46,7 @@ services:
       # API + scheduler in one process; split with api_only + a scheduler service if needed.
       WARDX_APP_ROLE: api
     expose:
-      - "8000"
+      - "8741"
 
   gateway:
     <<: *backend
@@ -66,9 +66,9 @@ services:
     image: ${WARDX_IMAGE_FRONTEND:-wardx-frontend:latest}
     restart: unless-stopped
     environment:
-      WARDX_API_UPSTREAM: http://api:8000
+      WARDX_API_UPSTREAM: http://api:8741
     ports:
-      - "${WARDX_WEB_PORT:-8080}:80"
+      - "${WARDX_WEB_PORT:-3741}:80"
     depends_on:
       api:
         condition: service_healthy
