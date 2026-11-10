@@ -76,7 +76,7 @@ export function BaseLayout() {
           <SafetyCertificateOutlined className="text-lg text-(--nav-accent)!" />
           {collapsed ? null : (
             <Text as="span" variant="h3" className="font-bold! tracking-[0.5px] text-(--nav-foreground)!">
-              WardX
+              Monetx PAM
             </Text>
           )}
         </div>

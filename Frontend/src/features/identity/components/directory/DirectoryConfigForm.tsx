@@ -259,7 +259,7 @@ export function DirectoryConfigForm({ config }: { config: DirectoryConfig | null
         </div>
       </SectionCard>
 
-      <SectionCard title="Groups → WardX roles" className="!mb-2">
+      <SectionCard title="Groups → Monetx PAM roles" className="!mb-2">
         <Typography.Paragraph type="secondary">
           A user in several mapped groups gets the highest role. Roles are refreshed at every sign-in.
         </Typography.Paragraph>

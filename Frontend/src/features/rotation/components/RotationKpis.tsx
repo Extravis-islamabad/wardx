@@ -26,7 +26,7 @@ export function RotationKpis() {
           value: unverified,
           loading,
           tone: toneIf(unverified, KpiTone.WARNING),
-          hint: 'The device took a new password that WardX could not log in with yet',
+          hint: 'The device took a new password that Monetx PAM could not log in with yet',
         },
         {
           label: 'Needs attention',

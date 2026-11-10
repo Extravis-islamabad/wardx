@@ -9,7 +9,7 @@ export default function Directory() {
   return (
     <PageShell kpis={<DirectoryKpis />}
       title="Directory sign-in"
-      description="Let people sign in with their LDAP / Active Directory account. Local WardX accounts keep working and always win a name clash. MFA, lockout and auditing apply to directory users too."
+      description="Let people sign in with their LDAP / Active Directory account. Local Monetx PAM accounts keep working and always win a name clash. MFA, lockout and auditing apply to directory users too."
     >
       {config.isError ? (
         <ErrorState error={config.error} onRetry={() => void config.refetch()} />

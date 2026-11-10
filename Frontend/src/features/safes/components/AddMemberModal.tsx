@@ -83,7 +83,7 @@ export function AddMemberModal({ safe, onClose }: { safe: Safe | null; onClose: 
                   );
                 }}
                 options={[
-                  { value: PrincipalType.USER, label: 'WardX user' },
+                  { value: PrincipalType.USER, label: 'Monetx PAM user' },
                   { value: PrincipalType.GROUP, label: 'Directory group' },
                   { value: PrincipalType.APP, label: 'Application (MonetX)' },
                 ]}

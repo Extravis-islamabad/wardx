@@ -32,7 +32,7 @@ export function SecretOnceModal({ created, onClose }: { created: NewAppSecret | 
           className="!mb-3"
           type="warning"
           showIcon
-          title="Copy the client secret now. It is shown only once; WardX stores only a hash of it."
+          title="Copy the client secret now. It is shown only once; Monetx PAM stores only a hash of it."
           description="Put it in the collector's secret store or environment, never in MonetX's database or a ticket."
         />
         {created && (

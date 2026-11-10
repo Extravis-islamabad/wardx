@@ -22,7 +22,7 @@ export function ConnectModal({ account, onClose }: { account: Account | null; on
       destroyOnHidden
     >
       <Box className="px-2 border-0">
-        <Text className="mb-3">Run this in your terminal and sign in with your WardX password:</Text>
+        <Text className="mb-3">Run this in your terminal and sign in with your Monetx PAM password:</Text>
         <Typography.Paragraph code copyable className="!text-base">
           {command}
         </Typography.Paragraph>

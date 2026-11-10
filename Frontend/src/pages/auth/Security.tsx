@@ -24,7 +24,7 @@ export default function Security() {
         <Alert
           type="warning"
           showIcon
-          title={`Your role (${user?.role}) requires multi-factor authentication. Set it up to continue using WardX.`}
+          title={`Your role (${user?.role}) requires multi-factor authentication. Set it up to continue using Monetx PAM.`}
         />
       )}
       <SectionCard

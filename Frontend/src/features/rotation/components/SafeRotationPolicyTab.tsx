@@ -43,7 +43,7 @@ export function SafeRotationPolicyTab({ safeId, canEdit }: { safeId: string; can
         className="!mb-3"
         type="info"
         showIcon
-        title="Nothing rotates unless rotation is switched on for WardX and allowed on the target. A rotation never runs while anyone holds the account."
+        title="Nothing rotates unless rotation is switched on for Monetx PAM and allowed on the target. A rotation never runs while anyone holds the account."
       />
       <div className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
         <FormField label="Rotate after use" htmlFor="srp-after-use" hint="After every check-in, expiry, revoke or session end, once every holder released it">

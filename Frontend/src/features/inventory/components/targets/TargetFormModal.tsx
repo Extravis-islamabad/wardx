@@ -151,7 +151,7 @@ export function TargetFormModal({ open, target, onClose }: TargetFormModalProps)
           hint={
             target?.non_rotatable_reason
               ? `This target is ${target.non_rotatable_reason}.`
-              : 'Off by default. WardX also needs rotation switched on (WARDX_ROTATION_ENABLED).'
+              : 'Off by default. Monetx PAM also needs rotation switched on (WARDX_ROTATION_ENABLED).'
           }
         >
           <Controller

@@ -39,7 +39,7 @@ export function DirectoryTestUser() {
               {r.groups?.length ? r.groups.map((g) => <StatusTag key={g} label={g} variant={StatusVariant.OUTLINE} />) : '—'}
             </Space>
           </Descriptions.Item>
-          <Descriptions.Item label="WardX role">
+          <Descriptions.Item label="Monetx PAM role">
             {r.role ? (
               <StatusTag label={r.role} variant={StatusVariant.INFO} />
             ) : (

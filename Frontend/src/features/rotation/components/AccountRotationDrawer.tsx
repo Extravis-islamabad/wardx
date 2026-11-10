@@ -18,7 +18,7 @@ const DRAWER_SIZE = 960;
 function blockers(r: AccountRotation): string[] {
   const out: string[] = [];
   if (r.non_rotatable_reason) out.push(`This target is ${r.non_rotatable_reason}.`);
-  if (!r.rotation_enabled) out.push('Rotation is switched off on this WardX instance (WARDX_ROTATION_ENABLED).');
+  if (!r.rotation_enabled) out.push('Rotation is switched off on this Monetx PAM instance (WARDX_ROTATION_ENABLED).');
   if (!r.rotation_allowed) out.push('Rotation is not allowed on this target (edit the target to allow it).');
   if (r.identity_blocker) out.push(r.identity_blocker);
   else if (r.protocol === 'ssh' && !r.host_key_pinned) out.push('The target has no pinned SSH host key (Targets → Learn host key).');

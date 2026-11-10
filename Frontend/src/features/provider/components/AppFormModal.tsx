@@ -103,7 +103,7 @@ export function AppFormModal({ open, app, onClose, onCreated }: AppFormModalProp
             label="Fetches per minute"
             htmlFor="app-rate"
             error={errors.rate_limit_per_minute?.message}
-            hint="Across every WardX API worker"
+            hint="Across every Monetx PAM API worker"
           >
             <Controller
               control={control}
